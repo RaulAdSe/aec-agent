@@ -1,0 +1,2438 @@
+{
+  "metadata": {
+    "project_name": "BAUHAUS Leganés",
+    "project_id": "BAUHAUS-2024-001",
+    "level_name": "Planta Baja",
+    "level_number": 0,
+    "extraction_date": "2025-10-19 08:24:01.147912",
+    "source_file": "example_data_generator.py",
+    "building_use": "commercial"
+  },
+  "levels": [
+    {
+      "name": "Planta Baja",
+      "number": 0,
+      "height": 0.0,
+      "rooms": [
+        {
+          "id": "R001",
+          "name": "Lobby Principal",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              15.0,
+              0.0
+            ],
+            [
+              15.0,
+              8.0
+            ],
+            [
+              0.0,
+              8.0
+            ]
+          ],
+          "use_type": "lobby",
+          "area": 120.0,
+          "occupancy_load": 60,
+          "has_emergency_lighting": true,
+          "has_fire_detection": true,
+          "ceiling_height": 3.5
+        },
+        {
+          "id": "R002",
+          "name": "Área de Ventas",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              15.0,
+              0.0
+            ],
+            [
+              35.0,
+              0.0
+            ],
+            [
+              35.0,
+              20.0
+            ],
+            [
+              15.0,
+              20.0
+            ]
+          ],
+          "use_type": "retail",
+          "area": 400.0,
+          "occupancy_load": 200,
+          "has_emergency_lighting": true,
+          "has_fire_detection": true,
+          "ceiling_height": 4.0
+        },
+        {
+          "id": "R003",
+          "name": "Almacén",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              35.0,
+              0.0
+            ],
+            [
+              50.0,
+              0.0
+            ],
+            [
+              50.0,
+              15.0
+            ],
+            [
+              35.0,
+              15.0
+            ]
+          ],
+          "use_type": "storage",
+          "area": 225.0,
+          "occupancy_load": 15,
+          "has_emergency_lighting": true,
+          "has_fire_detection": true,
+          "ceiling_height": 6.0
+        },
+        {
+          "id": "R004",
+          "name": "Oficina Administración",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              15.0,
+              20.0
+            ],
+            [
+              25.0,
+              20.0
+            ],
+            [
+              25.0,
+              25.0
+            ],
+            [
+              15.0,
+              25.0
+            ]
+          ],
+          "use_type": "office",
+          "area": 50.0,
+          "occupancy_load": 10,
+          "has_emergency_lighting": true,
+          "has_fire_detection": true,
+          "ceiling_height": 2.8
+        },
+        {
+          "id": "R005",
+          "name": "Sala de Reuniones",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              25.0,
+              20.0
+            ],
+            [
+              35.0,
+              20.0
+            ],
+            [
+              35.0,
+              25.0
+            ],
+            [
+              25.0,
+              25.0
+            ]
+          ],
+          "use_type": "meeting_room",
+          "area": 50.0,
+          "occupancy_load": 12,
+          "has_emergency_lighting": true,
+          "has_fire_detection": true,
+          "ceiling_height": 2.8
+        },
+        {
+          "id": "R006",
+          "name": "Pasillo Principal",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              0.0,
+              8.0
+            ],
+            [
+              15.0,
+              8.0
+            ],
+            [
+              15.0,
+              12.0
+            ],
+            [
+              0.0,
+              12.0
+            ]
+          ],
+          "use_type": "corridor",
+          "area": 60.0,
+          "occupancy_load": 30,
+          "has_emergency_lighting": true,
+          "has_fire_detection": true,
+          "ceiling_height": 2.8
+        },
+        {
+          "id": "R007",
+          "name": "Escalera Principal",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              0.0,
+              12.0
+            ],
+            [
+              6.0,
+              12.0
+            ],
+            [
+              6.0,
+              18.0
+            ],
+            [
+              0.0,
+              18.0
+            ]
+          ],
+          "use_type": "stairs",
+          "area": 36.0,
+          "occupancy_load": 50,
+          "has_emergency_lighting": true,
+          "has_fire_detection": true,
+          "ceiling_height": 3.0
+        },
+        {
+          "id": "R008",
+          "name": "Aseos",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              6.0,
+              12.0
+            ],
+            [
+              12.0,
+              12.0
+            ],
+            [
+              12.0,
+              18.0
+            ],
+            [
+              6.0,
+              18.0
+            ]
+          ],
+          "use_type": "bathroom",
+          "area": 36.0,
+          "occupancy_load": 8,
+          "has_emergency_lighting": true,
+          "has_fire_detection": false,
+          "ceiling_height": 2.5
+        },
+        {
+          "id": "R009",
+          "name": "Cuarto Técnico",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              35.0,
+              15.0
+            ],
+            [
+              45.0,
+              15.0
+            ],
+            [
+              45.0,
+              20.0
+            ],
+            [
+              35.0,
+              20.0
+            ]
+          ],
+          "use_type": "technical",
+          "area": 50.0,
+          "occupancy_load": 2,
+          "has_emergency_lighting": true,
+          "has_fire_detection": true,
+          "ceiling_height": 2.5
+        },
+        {
+          "id": "R010",
+          "name": "Muelle de Carga",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              45.0,
+              0.0
+            ],
+            [
+              55.0,
+              0.0
+            ],
+            [
+              55.0,
+              15.0
+            ],
+            [
+              45.0,
+              15.0
+            ]
+          ],
+          "use_type": "loading",
+          "area": 150.0,
+          "occupancy_load": 10,
+          "has_emergency_lighting": true,
+          "has_fire_detection": true,
+          "ceiling_height": 5.0
+        }
+      ],
+      "doors": [
+        {
+          "id": "D001",
+          "position": [
+            7.5,
+            0.0
+          ],
+          "width": 1.8,
+          "height": 2.5,
+          "door_type": "double",
+          "is_egress": true,
+          "fire_rating": "EI-60",
+          "opening_direction": "outward",
+          "connected_rooms": [
+            "R001",
+            "exterior"
+          ]
+        },
+        {
+          "id": "D002",
+          "position": [
+            15.0,
+            4.0
+          ],
+          "width": 1.2,
+          "height": 2.1,
+          "door_type": "double",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": "inward",
+          "connected_rooms": [
+            "R001",
+            "R002"
+          ]
+        },
+        {
+          "id": "D003",
+          "position": [
+            35.0,
+            7.5
+          ],
+          "width": 0.9,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": "EI-60",
+          "opening_direction": null,
+          "connected_rooms": [
+            "R002",
+            "R003"
+          ]
+        },
+        {
+          "id": "D004",
+          "position": [
+            35.0,
+            20.0
+          ],
+          "width": 1.2,
+          "height": 2.1,
+          "door_type": "double",
+          "is_egress": true,
+          "fire_rating": "EI-60",
+          "opening_direction": "outward",
+          "connected_rooms": [
+            "R002",
+            "exterior"
+          ]
+        },
+        {
+          "id": "D005",
+          "position": [
+            15.0,
+            22.5
+          ],
+          "width": 0.9,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": [
+            "R002",
+            "R004"
+          ]
+        },
+        {
+          "id": "D006",
+          "position": [
+            25.0,
+            22.5
+          ],
+          "width": 0.9,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": [
+            "R004",
+            "R005"
+          ]
+        },
+        {
+          "id": "D007",
+          "position": [
+            7.5,
+            8.0
+          ],
+          "width": 1.0,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": [
+            "R001",
+            "R006"
+          ]
+        },
+        {
+          "id": "D008",
+          "position": [
+            3.0,
+            12.0
+          ],
+          "width": 1.0,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": true,
+          "fire_rating": "EI-30",
+          "opening_direction": null,
+          "connected_rooms": [
+            "R006",
+            "R007"
+          ]
+        },
+        {
+          "id": "D009",
+          "position": [
+            9.0,
+            12.0
+          ],
+          "width": 0.8,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": [
+            "R006",
+            "R008"
+          ]
+        },
+        {
+          "id": "D010",
+          "position": [
+            40.0,
+            15.0
+          ],
+          "width": 0.8,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": "EI-60",
+          "opening_direction": null,
+          "connected_rooms": [
+            "R003",
+            "R009"
+          ]
+        },
+        {
+          "id": "D011",
+          "position": [
+            50.0,
+            7.5
+          ],
+          "width": 2.5,
+          "height": 2.1,
+          "door_type": "sliding",
+          "is_egress": true,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": [
+            "R010",
+            "exterior"
+          ]
+        }
+      ],
+      "walls": [
+        {
+          "id": "W001",
+          "start": [
+            0.0,
+            0.0
+          ],
+          "end": [
+            55.0,
+            0.0
+          ],
+          "length": 55.0,
+          "thickness": 0.3,
+          "fire_rating": "EI-120",
+          "material": "brick",
+          "is_exterior": true
+        },
+        {
+          "id": "W002",
+          "start": [
+            55.0,
+            0.0
+          ],
+          "end": [
+            55.0,
+            25.0
+          ],
+          "length": 25.0,
+          "thickness": 0.3,
+          "fire_rating": "EI-120",
+          "material": "brick",
+          "is_exterior": true
+        },
+        {
+          "id": "W003",
+          "start": [
+            55.0,
+            25.0
+          ],
+          "end": [
+            0.0,
+            25.0
+          ],
+          "length": 55.0,
+          "thickness": 0.3,
+          "fire_rating": "EI-120",
+          "material": "brick",
+          "is_exterior": true
+        },
+        {
+          "id": "W004",
+          "start": [
+            0.0,
+            25.0
+          ],
+          "end": [
+            0.0,
+            0.0
+          ],
+          "length": 25.0,
+          "thickness": 0.3,
+          "fire_rating": "EI-120",
+          "material": "brick",
+          "is_exterior": true
+        },
+        {
+          "id": "W005",
+          "start": [
+            15.0,
+            0.0
+          ],
+          "end": [
+            15.0,
+            25.0
+          ],
+          "length": 25.0,
+          "thickness": 0.2,
+          "fire_rating": "EI-90",
+          "material": "concrete_block",
+          "is_exterior": false
+        },
+        {
+          "id": "W006",
+          "start": [
+            35.0,
+            0.0
+          ],
+          "end": [
+            35.0,
+            25.0
+          ],
+          "length": 25.0,
+          "thickness": 0.2,
+          "fire_rating": "EI-90",
+          "material": "concrete_block",
+          "is_exterior": false
+        },
+        {
+          "id": "W007",
+          "start": [
+            0.0,
+            8.0
+          ],
+          "end": [
+            15.0,
+            8.0
+          ],
+          "length": 15.0,
+          "thickness": 0.15,
+          "fire_rating": "EI-60",
+          "material": "drywall",
+          "is_exterior": false
+        },
+        {
+          "id": "W008",
+          "start": [
+            15.0,
+            20.0
+          ],
+          "end": [
+            35.0,
+            20.0
+          ],
+          "length": 20.0,
+          "thickness": 0.15,
+          "fire_rating": "EI-60",
+          "material": "drywall",
+          "is_exterior": false
+        },
+        {
+          "id": "W009",
+          "start": [
+            35.0,
+            15.0
+          ],
+          "end": [
+            50.0,
+            15.0
+          ],
+          "length": 15.0,
+          "thickness": 0.2,
+          "fire_rating": "EI-90",
+          "material": "concrete_block",
+          "is_exterior": false
+        },
+        {
+          "id": "W010",
+          "start": [
+            45.0,
+            0.0
+          ],
+          "end": [
+            45.0,
+            15.0
+          ],
+          "length": 15.0,
+          "thickness": 0.15,
+          "fire_rating": "EI-60",
+          "material": "drywall",
+          "is_exterior": false
+        },
+        {
+          "id": "W011",
+          "start": [
+            25.0,
+            20.0
+          ],
+          "end": [
+            25.0,
+            25.0
+          ],
+          "length": 5.0,
+          "thickness": 0.1,
+          "fire_rating": "EI-30",
+          "material": "drywall",
+          "is_exterior": false
+        },
+        {
+          "id": "W012",
+          "start": [
+            0.0,
+            12.0
+          ],
+          "end": [
+            15.0,
+            12.0
+          ],
+          "length": 15.0,
+          "thickness": 0.15,
+          "fire_rating": "EI-60",
+          "material": "concrete_block",
+          "is_exterior": false
+        },
+        {
+          "id": "W013",
+          "start": [
+            6.0,
+            12.0
+          ],
+          "end": [
+            6.0,
+            18.0
+          ],
+          "length": 6.0,
+          "thickness": 0.15,
+          "fire_rating": "EI-60",
+          "material": "concrete_block",
+          "is_exterior": false
+        },
+        {
+          "id": "W014",
+          "start": [
+            12.0,
+            12.0
+          ],
+          "end": [
+            12.0,
+            18.0
+          ],
+          "length": 6.0,
+          "thickness": 0.15,
+          "fire_rating": "EI-60",
+          "material": "concrete_block",
+          "is_exterior": false
+        },
+        {
+          "id": "W015",
+          "start": [
+            0.0,
+            18.0
+          ],
+          "end": [
+            12.0,
+            18.0
+          ],
+          "length": 12.0,
+          "thickness": 0.15,
+          "fire_rating": "EI-60",
+          "material": "concrete_block",
+          "is_exterior": false
+        }
+      ],
+      "fire_equipment": [
+        {
+          "id": "FE001",
+          "equipment_type": "extinguisher",
+          "position": [
+            7.5,
+            4.0
+          ],
+          "coverage_radius": 15.0,
+          "last_inspection": "2024-01-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE002",
+          "equipment_type": "extinguisher",
+          "position": [
+            25.0,
+            10.0
+          ],
+          "coverage_radius": 15.0,
+          "last_inspection": "2024-01-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE003",
+          "equipment_type": "extinguisher",
+          "position": [
+            42.5,
+            7.5
+          ],
+          "coverage_radius": 15.0,
+          "last_inspection": "2024-01-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE004",
+          "equipment_type": "extinguisher",
+          "position": [
+            20.0,
+            22.5
+          ],
+          "coverage_radius": 15.0,
+          "last_inspection": "2024-01-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE005",
+          "equipment_type": "extinguisher",
+          "position": [
+            7.5,
+            15.0
+          ],
+          "coverage_radius": 15.0,
+          "last_inspection": "2024-01-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE006",
+          "equipment_type": "extinguisher",
+          "position": [
+            50.0,
+            7.5
+          ],
+          "coverage_radius": 15.0,
+          "last_inspection": "2024-01-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE007",
+          "equipment_type": "hydrant",
+          "position": [
+            1.0,
+            10.0
+          ],
+          "coverage_radius": 25.0,
+          "last_inspection": "2024-02-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE008",
+          "equipment_type": "hydrant",
+          "position": [
+            30.0,
+            2.0
+          ],
+          "coverage_radius": 25.0,
+          "last_inspection": "2024-02-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE009",
+          "equipment_type": "hydrant",
+          "position": [
+            40.0,
+            18.0
+          ],
+          "coverage_radius": 25.0,
+          "last_inspection": "2024-02-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE010",
+          "equipment_type": "alarm",
+          "position": [
+            7.5,
+            4.0
+          ],
+          "coverage_radius": 10.0,
+          "last_inspection": "2024-03-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE011",
+          "equipment_type": "alarm",
+          "position": [
+            25.0,
+            10.0
+          ],
+          "coverage_radius": 10.0,
+          "last_inspection": "2024-03-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE012",
+          "equipment_type": "alarm",
+          "position": [
+            42.5,
+            7.5
+          ],
+          "coverage_radius": 10.0,
+          "last_inspection": "2024-03-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE013",
+          "equipment_type": "alarm",
+          "position": [
+            20.0,
+            22.5
+          ],
+          "coverage_radius": 10.0,
+          "last_inspection": "2024-03-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE014",
+          "equipment_type": "alarm",
+          "position": [
+            30.0,
+            22.5
+          ],
+          "coverage_radius": 10.0,
+          "last_inspection": "2024-03-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE015",
+          "equipment_type": "alarm",
+          "position": [
+            3.0,
+            15.0
+          ],
+          "coverage_radius": 10.0,
+          "last_inspection": "2024-03-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE016",
+          "equipment_type": "alarm",
+          "position": [
+            40.0,
+            17.5
+          ],
+          "coverage_radius": 10.0,
+          "last_inspection": "2024-03-01 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE017",
+          "equipment_type": "emergency_light",
+          "position": [
+            7.5,
+            1.0
+          ],
+          "coverage_radius": 5.0,
+          "last_inspection": "2024-01-30 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE018",
+          "equipment_type": "emergency_light",
+          "position": [
+            35.0,
+            19.0
+          ],
+          "coverage_radius": 5.0,
+          "last_inspection": "2024-01-30 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE019",
+          "equipment_type": "emergency_light",
+          "position": [
+            3.0,
+            13.0
+          ],
+          "coverage_radius": 5.0,
+          "last_inspection": "2024-01-30 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE020",
+          "equipment_type": "emergency_light",
+          "position": [
+            7.5,
+            9.0
+          ],
+          "coverage_radius": 5.0,
+          "last_inspection": "2024-01-30 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE021",
+          "equipment_type": "emergency_light",
+          "position": [
+            50.0,
+            1.0
+          ],
+          "coverage_radius": 5.0,
+          "last_inspection": "2024-01-30 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE022",
+          "equipment_type": "exit_sign",
+          "position": [
+            7.5,
+            0.5
+          ],
+          "coverage_radius": 20.0,
+          "last_inspection": "2024-02-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE023",
+          "equipment_type": "exit_sign",
+          "position": [
+            35.0,
+            19.5
+          ],
+          "coverage_radius": 20.0,
+          "last_inspection": "2024-02-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE024",
+          "equipment_type": "exit_sign",
+          "position": [
+            2.0,
+            12.5
+          ],
+          "coverage_radius": 20.0,
+          "last_inspection": "2024-02-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        },
+        {
+          "id": "FE025",
+          "equipment_type": "exit_sign",
+          "position": [
+            50.0,
+            0.5
+          ],
+          "coverage_radius": 20.0,
+          "last_inspection": "2024-02-15 00:00:00",
+          "status": "active",
+          "floor_level": "Planta Baja"
+        }
+      ],
+      "sectors": [
+        {
+          "id": "S001",
+          "name": "Sector Comercial Principal",
+          "boundary": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              35.0,
+              0.0
+            ],
+            [
+              35.0,
+              20.0
+            ],
+            [
+              15.0,
+              20.0
+            ],
+            [
+              15.0,
+              8.0
+            ],
+            [
+              0.0,
+              8.0
+            ]
+          ],
+          "area": 520.0,
+          "fire_resistance": "EI-90",
+          "rooms": [
+            "R001",
+            "R002"
+          ],
+          "max_evacuation_distance": 25.0,
+          "compartment_type": "general"
+        },
+        {
+          "id": "S002",
+          "name": "Sector Almacén",
+          "boundary": [
+            [
+              35.0,
+              0.0
+            ],
+            [
+              55.0,
+              0.0
+            ],
+            [
+              55.0,
+              25.0
+            ],
+            [
+              35.0,
+              25.0
+            ]
+          ],
+          "area": 500.0,
+          "fire_resistance": "EI-120",
+          "rooms": [
+            "R003",
+            "R009",
+            "R010"
+          ],
+          "max_evacuation_distance": 35.0,
+          "compartment_type": "risk_special"
+        },
+        {
+          "id": "S003",
+          "name": "Sector Oficinas",
+          "boundary": [
+            [
+              15.0,
+              20.0
+            ],
+            [
+              35.0,
+              20.0
+            ],
+            [
+              35.0,
+              25.0
+            ],
+            [
+              15.0,
+              25.0
+            ]
+          ],
+          "area": 100.0,
+          "fire_resistance": "EI-60",
+          "rooms": [
+            "R004",
+            "R005"
+          ],
+          "max_evacuation_distance": 15.0,
+          "compartment_type": "general"
+        },
+        {
+          "id": "S004",
+          "name": "Sector Circulación",
+          "boundary": [
+            [
+              0.0,
+              8.0
+            ],
+            [
+              15.0,
+              8.0
+            ],
+            [
+              15.0,
+              25.0
+            ],
+            [
+              0.0,
+              25.0
+            ]
+          ],
+          "area": 132.0,
+          "fire_resistance": "EI-60",
+          "rooms": [
+            "R006",
+            "R007",
+            "R008"
+          ],
+          "max_evacuation_distance": 20.0,
+          "compartment_type": "protected"
+        }
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "R001",
+      "name": "Lobby Principal",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          15.0,
+          0.0
+        ],
+        [
+          15.0,
+          8.0
+        ],
+        [
+          0.0,
+          8.0
+        ]
+      ],
+      "use_type": "lobby",
+      "area": 120.0,
+      "occupancy_load": 60,
+      "has_emergency_lighting": true,
+      "has_fire_detection": true,
+      "ceiling_height": 3.5
+    },
+    {
+      "id": "R002",
+      "name": "Área de Ventas",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          15.0,
+          0.0
+        ],
+        [
+          35.0,
+          0.0
+        ],
+        [
+          35.0,
+          20.0
+        ],
+        [
+          15.0,
+          20.0
+        ]
+      ],
+      "use_type": "retail",
+      "area": 400.0,
+      "occupancy_load": 200,
+      "has_emergency_lighting": true,
+      "has_fire_detection": true,
+      "ceiling_height": 4.0
+    },
+    {
+      "id": "R003",
+      "name": "Almacén",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          35.0,
+          0.0
+        ],
+        [
+          50.0,
+          0.0
+        ],
+        [
+          50.0,
+          15.0
+        ],
+        [
+          35.0,
+          15.0
+        ]
+      ],
+      "use_type": "storage",
+      "area": 225.0,
+      "occupancy_load": 15,
+      "has_emergency_lighting": true,
+      "has_fire_detection": true,
+      "ceiling_height": 6.0
+    },
+    {
+      "id": "R004",
+      "name": "Oficina Administración",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          15.0,
+          20.0
+        ],
+        [
+          25.0,
+          20.0
+        ],
+        [
+          25.0,
+          25.0
+        ],
+        [
+          15.0,
+          25.0
+        ]
+      ],
+      "use_type": "office",
+      "area": 50.0,
+      "occupancy_load": 10,
+      "has_emergency_lighting": true,
+      "has_fire_detection": true,
+      "ceiling_height": 2.8
+    },
+    {
+      "id": "R005",
+      "name": "Sala de Reuniones",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          25.0,
+          20.0
+        ],
+        [
+          35.0,
+          20.0
+        ],
+        [
+          35.0,
+          25.0
+        ],
+        [
+          25.0,
+          25.0
+        ]
+      ],
+      "use_type": "meeting_room",
+      "area": 50.0,
+      "occupancy_load": 12,
+      "has_emergency_lighting": true,
+      "has_fire_detection": true,
+      "ceiling_height": 2.8
+    },
+    {
+      "id": "R006",
+      "name": "Pasillo Principal",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          0.0,
+          8.0
+        ],
+        [
+          15.0,
+          8.0
+        ],
+        [
+          15.0,
+          12.0
+        ],
+        [
+          0.0,
+          12.0
+        ]
+      ],
+      "use_type": "corridor",
+      "area": 60.0,
+      "occupancy_load": 30,
+      "has_emergency_lighting": true,
+      "has_fire_detection": true,
+      "ceiling_height": 2.8
+    },
+    {
+      "id": "R007",
+      "name": "Escalera Principal",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          0.0,
+          12.0
+        ],
+        [
+          6.0,
+          12.0
+        ],
+        [
+          6.0,
+          18.0
+        ],
+        [
+          0.0,
+          18.0
+        ]
+      ],
+      "use_type": "stairs",
+      "area": 36.0,
+      "occupancy_load": 50,
+      "has_emergency_lighting": true,
+      "has_fire_detection": true,
+      "ceiling_height": 3.0
+    },
+    {
+      "id": "R008",
+      "name": "Aseos",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          6.0,
+          12.0
+        ],
+        [
+          12.0,
+          12.0
+        ],
+        [
+          12.0,
+          18.0
+        ],
+        [
+          6.0,
+          18.0
+        ]
+      ],
+      "use_type": "bathroom",
+      "area": 36.0,
+      "occupancy_load": 8,
+      "has_emergency_lighting": true,
+      "has_fire_detection": false,
+      "ceiling_height": 2.5
+    },
+    {
+      "id": "R009",
+      "name": "Cuarto Técnico",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          35.0,
+          15.0
+        ],
+        [
+          45.0,
+          15.0
+        ],
+        [
+          45.0,
+          20.0
+        ],
+        [
+          35.0,
+          20.0
+        ]
+      ],
+      "use_type": "technical",
+      "area": 50.0,
+      "occupancy_load": 2,
+      "has_emergency_lighting": true,
+      "has_fire_detection": true,
+      "ceiling_height": 2.5
+    },
+    {
+      "id": "R010",
+      "name": "Muelle de Carga",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          45.0,
+          0.0
+        ],
+        [
+          55.0,
+          0.0
+        ],
+        [
+          55.0,
+          15.0
+        ],
+        [
+          45.0,
+          15.0
+        ]
+      ],
+      "use_type": "loading",
+      "area": 150.0,
+      "occupancy_load": 10,
+      "has_emergency_lighting": true,
+      "has_fire_detection": true,
+      "ceiling_height": 5.0
+    }
+  ],
+  "doors": [
+    {
+      "id": "D001",
+      "position": [
+        7.5,
+        0.0
+      ],
+      "width": 1.8,
+      "height": 2.5,
+      "door_type": "double",
+      "is_egress": true,
+      "fire_rating": "EI-60",
+      "opening_direction": "outward",
+      "connected_rooms": [
+        "R001",
+        "exterior"
+      ]
+    },
+    {
+      "id": "D002",
+      "position": [
+        15.0,
+        4.0
+      ],
+      "width": 1.2,
+      "height": 2.1,
+      "door_type": "double",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": "inward",
+      "connected_rooms": [
+        "R001",
+        "R002"
+      ]
+    },
+    {
+      "id": "D003",
+      "position": [
+        35.0,
+        7.5
+      ],
+      "width": 0.9,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": "EI-60",
+      "opening_direction": null,
+      "connected_rooms": [
+        "R002",
+        "R003"
+      ]
+    },
+    {
+      "id": "D004",
+      "position": [
+        35.0,
+        20.0
+      ],
+      "width": 1.2,
+      "height": 2.1,
+      "door_type": "double",
+      "is_egress": true,
+      "fire_rating": "EI-60",
+      "opening_direction": "outward",
+      "connected_rooms": [
+        "R002",
+        "exterior"
+      ]
+    },
+    {
+      "id": "D005",
+      "position": [
+        15.0,
+        22.5
+      ],
+      "width": 0.9,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": [
+        "R002",
+        "R004"
+      ]
+    },
+    {
+      "id": "D006",
+      "position": [
+        25.0,
+        22.5
+      ],
+      "width": 0.9,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": [
+        "R004",
+        "R005"
+      ]
+    },
+    {
+      "id": "D007",
+      "position": [
+        7.5,
+        8.0
+      ],
+      "width": 1.0,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": [
+        "R001",
+        "R006"
+      ]
+    },
+    {
+      "id": "D008",
+      "position": [
+        3.0,
+        12.0
+      ],
+      "width": 1.0,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": true,
+      "fire_rating": "EI-30",
+      "opening_direction": null,
+      "connected_rooms": [
+        "R006",
+        "R007"
+      ]
+    },
+    {
+      "id": "D009",
+      "position": [
+        9.0,
+        12.0
+      ],
+      "width": 0.8,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": [
+        "R006",
+        "R008"
+      ]
+    },
+    {
+      "id": "D010",
+      "position": [
+        40.0,
+        15.0
+      ],
+      "width": 0.8,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": "EI-60",
+      "opening_direction": null,
+      "connected_rooms": [
+        "R003",
+        "R009"
+      ]
+    },
+    {
+      "id": "D011",
+      "position": [
+        50.0,
+        7.5
+      ],
+      "width": 2.5,
+      "height": 2.1,
+      "door_type": "sliding",
+      "is_egress": true,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": [
+        "R010",
+        "exterior"
+      ]
+    }
+  ],
+  "walls": [
+    {
+      "id": "W001",
+      "start": [
+        0.0,
+        0.0
+      ],
+      "end": [
+        55.0,
+        0.0
+      ],
+      "length": 55.0,
+      "thickness": 0.3,
+      "fire_rating": "EI-120",
+      "material": "brick",
+      "is_exterior": true
+    },
+    {
+      "id": "W002",
+      "start": [
+        55.0,
+        0.0
+      ],
+      "end": [
+        55.0,
+        25.0
+      ],
+      "length": 25.0,
+      "thickness": 0.3,
+      "fire_rating": "EI-120",
+      "material": "brick",
+      "is_exterior": true
+    },
+    {
+      "id": "W003",
+      "start": [
+        55.0,
+        25.0
+      ],
+      "end": [
+        0.0,
+        25.0
+      ],
+      "length": 55.0,
+      "thickness": 0.3,
+      "fire_rating": "EI-120",
+      "material": "brick",
+      "is_exterior": true
+    },
+    {
+      "id": "W004",
+      "start": [
+        0.0,
+        25.0
+      ],
+      "end": [
+        0.0,
+        0.0
+      ],
+      "length": 25.0,
+      "thickness": 0.3,
+      "fire_rating": "EI-120",
+      "material": "brick",
+      "is_exterior": true
+    },
+    {
+      "id": "W005",
+      "start": [
+        15.0,
+        0.0
+      ],
+      "end": [
+        15.0,
+        25.0
+      ],
+      "length": 25.0,
+      "thickness": 0.2,
+      "fire_rating": "EI-90",
+      "material": "concrete_block",
+      "is_exterior": false
+    },
+    {
+      "id": "W006",
+      "start": [
+        35.0,
+        0.0
+      ],
+      "end": [
+        35.0,
+        25.0
+      ],
+      "length": 25.0,
+      "thickness": 0.2,
+      "fire_rating": "EI-90",
+      "material": "concrete_block",
+      "is_exterior": false
+    },
+    {
+      "id": "W007",
+      "start": [
+        0.0,
+        8.0
+      ],
+      "end": [
+        15.0,
+        8.0
+      ],
+      "length": 15.0,
+      "thickness": 0.15,
+      "fire_rating": "EI-60",
+      "material": "drywall",
+      "is_exterior": false
+    },
+    {
+      "id": "W008",
+      "start": [
+        15.0,
+        20.0
+      ],
+      "end": [
+        35.0,
+        20.0
+      ],
+      "length": 20.0,
+      "thickness": 0.15,
+      "fire_rating": "EI-60",
+      "material": "drywall",
+      "is_exterior": false
+    },
+    {
+      "id": "W009",
+      "start": [
+        35.0,
+        15.0
+      ],
+      "end": [
+        50.0,
+        15.0
+      ],
+      "length": 15.0,
+      "thickness": 0.2,
+      "fire_rating": "EI-90",
+      "material": "concrete_block",
+      "is_exterior": false
+    },
+    {
+      "id": "W010",
+      "start": [
+        45.0,
+        0.0
+      ],
+      "end": [
+        45.0,
+        15.0
+      ],
+      "length": 15.0,
+      "thickness": 0.15,
+      "fire_rating": "EI-60",
+      "material": "drywall",
+      "is_exterior": false
+    },
+    {
+      "id": "W011",
+      "start": [
+        25.0,
+        20.0
+      ],
+      "end": [
+        25.0,
+        25.0
+      ],
+      "length": 5.0,
+      "thickness": 0.1,
+      "fire_rating": "EI-30",
+      "material": "drywall",
+      "is_exterior": false
+    },
+    {
+      "id": "W012",
+      "start": [
+        0.0,
+        12.0
+      ],
+      "end": [
+        15.0,
+        12.0
+      ],
+      "length": 15.0,
+      "thickness": 0.15,
+      "fire_rating": "EI-60",
+      "material": "concrete_block",
+      "is_exterior": false
+    },
+    {
+      "id": "W013",
+      "start": [
+        6.0,
+        12.0
+      ],
+      "end": [
+        6.0,
+        18.0
+      ],
+      "length": 6.0,
+      "thickness": 0.15,
+      "fire_rating": "EI-60",
+      "material": "concrete_block",
+      "is_exterior": false
+    },
+    {
+      "id": "W014",
+      "start": [
+        12.0,
+        12.0
+      ],
+      "end": [
+        12.0,
+        18.0
+      ],
+      "length": 6.0,
+      "thickness": 0.15,
+      "fire_rating": "EI-60",
+      "material": "concrete_block",
+      "is_exterior": false
+    },
+    {
+      "id": "W015",
+      "start": [
+        0.0,
+        18.0
+      ],
+      "end": [
+        12.0,
+        18.0
+      ],
+      "length": 12.0,
+      "thickness": 0.15,
+      "fire_rating": "EI-60",
+      "material": "concrete_block",
+      "is_exterior": false
+    }
+  ],
+  "fire_equipment": [
+    {
+      "id": "FE001",
+      "equipment_type": "extinguisher",
+      "position": [
+        7.5,
+        4.0
+      ],
+      "coverage_radius": 15.0,
+      "last_inspection": "2024-01-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE002",
+      "equipment_type": "extinguisher",
+      "position": [
+        25.0,
+        10.0
+      ],
+      "coverage_radius": 15.0,
+      "last_inspection": "2024-01-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE003",
+      "equipment_type": "extinguisher",
+      "position": [
+        42.5,
+        7.5
+      ],
+      "coverage_radius": 15.0,
+      "last_inspection": "2024-01-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE004",
+      "equipment_type": "extinguisher",
+      "position": [
+        20.0,
+        22.5
+      ],
+      "coverage_radius": 15.0,
+      "last_inspection": "2024-01-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE005",
+      "equipment_type": "extinguisher",
+      "position": [
+        7.5,
+        15.0
+      ],
+      "coverage_radius": 15.0,
+      "last_inspection": "2024-01-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE006",
+      "equipment_type": "extinguisher",
+      "position": [
+        50.0,
+        7.5
+      ],
+      "coverage_radius": 15.0,
+      "last_inspection": "2024-01-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE007",
+      "equipment_type": "hydrant",
+      "position": [
+        1.0,
+        10.0
+      ],
+      "coverage_radius": 25.0,
+      "last_inspection": "2024-02-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE008",
+      "equipment_type": "hydrant",
+      "position": [
+        30.0,
+        2.0
+      ],
+      "coverage_radius": 25.0,
+      "last_inspection": "2024-02-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE009",
+      "equipment_type": "hydrant",
+      "position": [
+        40.0,
+        18.0
+      ],
+      "coverage_radius": 25.0,
+      "last_inspection": "2024-02-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE010",
+      "equipment_type": "alarm",
+      "position": [
+        7.5,
+        4.0
+      ],
+      "coverage_radius": 10.0,
+      "last_inspection": "2024-03-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE011",
+      "equipment_type": "alarm",
+      "position": [
+        25.0,
+        10.0
+      ],
+      "coverage_radius": 10.0,
+      "last_inspection": "2024-03-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE012",
+      "equipment_type": "alarm",
+      "position": [
+        42.5,
+        7.5
+      ],
+      "coverage_radius": 10.0,
+      "last_inspection": "2024-03-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE013",
+      "equipment_type": "alarm",
+      "position": [
+        20.0,
+        22.5
+      ],
+      "coverage_radius": 10.0,
+      "last_inspection": "2024-03-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE014",
+      "equipment_type": "alarm",
+      "position": [
+        30.0,
+        22.5
+      ],
+      "coverage_radius": 10.0,
+      "last_inspection": "2024-03-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE015",
+      "equipment_type": "alarm",
+      "position": [
+        3.0,
+        15.0
+      ],
+      "coverage_radius": 10.0,
+      "last_inspection": "2024-03-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE016",
+      "equipment_type": "alarm",
+      "position": [
+        40.0,
+        17.5
+      ],
+      "coverage_radius": 10.0,
+      "last_inspection": "2024-03-01 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE017",
+      "equipment_type": "emergency_light",
+      "position": [
+        7.5,
+        1.0
+      ],
+      "coverage_radius": 5.0,
+      "last_inspection": "2024-01-30 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE018",
+      "equipment_type": "emergency_light",
+      "position": [
+        35.0,
+        19.0
+      ],
+      "coverage_radius": 5.0,
+      "last_inspection": "2024-01-30 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE019",
+      "equipment_type": "emergency_light",
+      "position": [
+        3.0,
+        13.0
+      ],
+      "coverage_radius": 5.0,
+      "last_inspection": "2024-01-30 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE020",
+      "equipment_type": "emergency_light",
+      "position": [
+        7.5,
+        9.0
+      ],
+      "coverage_radius": 5.0,
+      "last_inspection": "2024-01-30 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE021",
+      "equipment_type": "emergency_light",
+      "position": [
+        50.0,
+        1.0
+      ],
+      "coverage_radius": 5.0,
+      "last_inspection": "2024-01-30 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE022",
+      "equipment_type": "exit_sign",
+      "position": [
+        7.5,
+        0.5
+      ],
+      "coverage_radius": 20.0,
+      "last_inspection": "2024-02-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE023",
+      "equipment_type": "exit_sign",
+      "position": [
+        35.0,
+        19.5
+      ],
+      "coverage_radius": 20.0,
+      "last_inspection": "2024-02-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE024",
+      "equipment_type": "exit_sign",
+      "position": [
+        2.0,
+        12.5
+      ],
+      "coverage_radius": 20.0,
+      "last_inspection": "2024-02-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    },
+    {
+      "id": "FE025",
+      "equipment_type": "exit_sign",
+      "position": [
+        50.0,
+        0.5
+      ],
+      "coverage_radius": 20.0,
+      "last_inspection": "2024-02-15 00:00:00",
+      "status": "active",
+      "floor_level": "Planta Baja"
+    }
+  ],
+  "evacuation_routes": [
+    {
+      "id": "ER001",
+      "from_room": "R002",
+      "to_exit": "D001",
+      "path_nodes": [
+        [
+          25.0,
+          10.0
+        ],
+        [
+          15.0,
+          10.0
+        ],
+        [
+          15.0,
+          4.0
+        ],
+        [
+          7.5,
+          4.0
+        ],
+        [
+          7.5,
+          0.0
+        ]
+      ],
+      "distance": 22.5,
+      "is_accessible": true,
+      "has_emergency_lighting": true,
+      "width_minimum": 1.2
+    },
+    {
+      "id": "ER002",
+      "from_room": "R002",
+      "to_exit": "D004",
+      "path_nodes": [
+        [
+          25.0,
+          10.0
+        ],
+        [
+          35.0,
+          10.0
+        ],
+        [
+          35.0,
+          20.0
+        ]
+      ],
+      "distance": 20.0,
+      "is_accessible": true,
+      "has_emergency_lighting": true,
+      "width_minimum": 1.2
+    },
+    {
+      "id": "ER003",
+      "from_room": "R004",
+      "to_exit": "D001",
+      "path_nodes": [
+        [
+          20.0,
+          22.5
+        ],
+        [
+          15.0,
+          22.5
+        ],
+        [
+          15.0,
+          10.0
+        ],
+        [
+          7.5,
+          10.0
+        ],
+        [
+          7.5,
+          0.0
+        ]
+      ],
+      "distance": 30.0,
+      "is_accessible": true,
+      "has_emergency_lighting": true,
+      "width_minimum": 1.0
+    },
+    {
+      "id": "ER004",
+      "from_room": "R003",
+      "to_exit": "D011",
+      "path_nodes": [
+        [
+          42.5,
+          7.5
+        ],
+        [
+          50.0,
+          7.5
+        ]
+      ],
+      "distance": 7.5,
+      "is_accessible": true,
+      "has_emergency_lighting": true,
+      "width_minimum": 2.5
+    }
+  ],
+  "sectors": [
+    {
+      "id": "S001",
+      "name": "Sector Comercial Principal",
+      "boundary": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          35.0,
+          0.0
+        ],
+        [
+          35.0,
+          20.0
+        ],
+        [
+          15.0,
+          20.0
+        ],
+        [
+          15.0,
+          8.0
+        ],
+        [
+          0.0,
+          8.0
+        ]
+      ],
+      "area": 520.0,
+      "fire_resistance": "EI-90",
+      "rooms": [
+        "R001",
+        "R002"
+      ],
+      "max_evacuation_distance": 25.0,
+      "compartment_type": "general"
+    },
+    {
+      "id": "S002",
+      "name": "Sector Almacén",
+      "boundary": [
+        [
+          35.0,
+          0.0
+        ],
+        [
+          55.0,
+          0.0
+        ],
+        [
+          55.0,
+          25.0
+        ],
+        [
+          35.0,
+          25.0
+        ]
+      ],
+      "area": 500.0,
+      "fire_resistance": "EI-120",
+      "rooms": [
+        "R003",
+        "R009",
+        "R010"
+      ],
+      "max_evacuation_distance": 35.0,
+      "compartment_type": "risk_special"
+    },
+    {
+      "id": "S003",
+      "name": "Sector Oficinas",
+      "boundary": [
+        [
+          15.0,
+          20.0
+        ],
+        [
+          35.0,
+          20.0
+        ],
+        [
+          35.0,
+          25.0
+        ],
+        [
+          15.0,
+          25.0
+        ]
+      ],
+      "area": 100.0,
+      "fire_resistance": "EI-60",
+      "rooms": [
+        "R004",
+        "R005"
+      ],
+      "max_evacuation_distance": 15.0,
+      "compartment_type": "general"
+    },
+    {
+      "id": "S004",
+      "name": "Sector Circulación",
+      "boundary": [
+        [
+          0.0,
+          8.0
+        ],
+        [
+          15.0,
+          8.0
+        ],
+        [
+          15.0,
+          25.0
+        ],
+        [
+          0.0,
+          25.0
+        ]
+      ],
+      "area": 132.0,
+      "fire_resistance": "EI-60",
+      "rooms": [
+        "R006",
+        "R007",
+        "R008"
+      ],
+      "max_evacuation_distance": 20.0,
+      "compartment_type": "protected"
+    }
+  ]
+}
