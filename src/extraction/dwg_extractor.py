@@ -14,10 +14,20 @@ import json
 import logging
 from datetime import datetime
 
-from ..schemas import (
-    Project, ProjectMetadata, Room, Door, Wall, 
-    FireEquipment, Sector, Level
-)
+try:
+    from ..schemas import (
+        Project, ProjectMetadata, Room, Door, Wall, 
+        FireEquipment, Sector, Level
+    )
+except ImportError:
+    # Fallback for direct execution
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from schemas import (
+        Project, ProjectMetadata, Room, Door, Wall, 
+        FireEquipment, Sector, Level
+    )
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -315,7 +325,7 @@ class DWGExtractor:
                 block_name = entity.dxf.name.upper()
                 
                 # Check if it's a door block
-                if any(keyword in block_name for keyword in ['DOOR', 'PUERTA', 'GATE']):
+                if any(keyword in block_name for keyword in ['DOOR', 'PUERTA', 'GATE', 'PORTE']):
                     position = [entity.dxf.insert.x, entity.dxf.insert.y]
                     
                     # Try to get width from block attributes or scale
@@ -323,30 +333,77 @@ class DWGExtractor:
                     if entity.dxf.xscale:
                         width = abs(entity.dxf.xscale) * 0.9
                     
+                    # Check for width in attributes
+                    if hasattr(entity, 'attribs'):
+                        for attrib in entity.attribs:
+                            if attrib.dxf.tag.upper() in ['WIDTH', 'ANCHO', 'LARGO']:
+                                try:
+                                    width = float(attrib.dxf.text)
+                                    break
+                                except:
+                                    pass
+                    
                     # Determine door type
                     door_type = "single"
                     is_egress = False
+                    fire_rating = None
                     
                     if 'DOUBLE' in block_name or 'DOBLE' in block_name:
                         door_type = "double"
-                        width = 1.2
-                    elif 'EMERGENCY' in block_name or 'EMERGENCIA' in block_name:
+                        width = max(width, 1.2)  # Ensure minimum width for double doors
+                    elif 'EMERGENCY' in block_name or 'EMERGENCIA' in block_name or 'SALIDA' in block_name:
                         is_egress = True
                         door_type = "emergency"
+                        width = max(width, 0.8)  # Ensure minimum egress width
                     elif 'SLIDING' in block_name or 'CORRED' in block_name:
                         door_type = "sliding"
+                    elif 'FIRE' in block_name or 'FUEGO' in block_name:
+                        fire_rating = "EI-60"  # Default fire rating
+                    
+                    # Check layer for additional properties
+                    layer_name = entity.dxf.layer.upper()
+                    if 'EI' in layer_name:
+                        fire_rating = self._determine_fire_resistance(layer_name)
+                    if 'EGRESS' in layer_name or 'SALIDA' in layer_name:
+                        is_egress = True
                     
                     door = Door(
                         id=f"D{door_id:03d}",
                         position=position,
                         width=width,
                         door_type=door_type,
-                        is_egress=is_egress
+                        is_egress=is_egress,
+                        fire_rating=fire_rating
                     )
                     
                     self.doors.append(door)
                     door_id += 1
-                    logger.debug(f"Found {door_type} door at {position}")
+                    logger.debug(f"Found {door_type} door at {position} (width: {width}m)")
+            
+            # Also check for door symbols represented as lines or arcs
+            elif entity.dxftype() == 'LINE':
+                layer_name = entity.dxf.layer.upper()
+                if any(keyword in layer_name for keyword in ['DOOR', 'PUERTA', 'PORTE']):
+                    # Calculate door position as midpoint
+                    start = [entity.dxf.start.x, entity.dxf.start.y]
+                    end = [entity.dxf.end.x, entity.dxf.end.y]
+                    position = [(start[0] + end[0])/2, (start[1] + end[1])/2]
+                    
+                    # Estimate width from line length
+                    length = ((end[0] - start[0])**2 + (end[1] - start[1])**2)**0.5
+                    width = max(0.8, min(2.0, length))  # Reasonable door width range
+                    
+                    door = Door(
+                        id=f"D{door_id:03d}",
+                        position=position,
+                        width=width,
+                        door_type="single",
+                        is_egress='EGRESS' in layer_name or 'SALIDA' in layer_name
+                    )
+                    
+                    self.doors.append(door)
+                    door_id += 1
+                    logger.debug(f"Found door line at {position} (width: {width}m)")
     
     def _extract_rooms(self, msp, level_name: str):
         """Extract rooms from model space."""
