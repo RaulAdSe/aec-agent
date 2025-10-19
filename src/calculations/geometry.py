@@ -1,366 +1,392 @@
 """
-Geometry calculations for AEC Compliance Agent.
+Geometric calculations for AEC compliance verification.
 
-This module provides geometric operations for analyzing building floor plans,
-including room boundaries, distances, adjacencies, and spatial relationships.
+This module provides functions for calculating areas, distances, centroids,
+and other geometric properties needed for building code compliance checks.
 """
 
 import math
 from typing import List, Tuple, Optional
 from shapely.geometry import Polygon, Point, LineString
-from shapely.ops import nearest_points
+from shapely.ops import unary_union
 import numpy as np
 
-from ..schemas import Room, Door
+from src.schemas import Point2D, Point3D, Boundary, Room, Door
 
 
-def get_room_polygon(room: Room) -> Polygon:
+def calculate_polygon_area(points: List[Point2D]) -> float:
     """
-    Convert room boundary to Shapely polygon.
+    Calculate the area of a polygon using the shoelace formula.
     
     Args:
-        room: Room object with boundary points
-        
-    Returns:
-        Shapely Polygon object representing the room
-        
-    Raises:
-        ValueError: If room boundary is invalid
-    """
-    try:
-        if len(room.boundary) < 3:
-            raise ValueError(f"Room {room.id} boundary must have at least 3 points")
-        
-        # Ensure the polygon is closed (first point == last point)
-        boundary = room.boundary.copy()
-        if boundary[0] != boundary[-1]:
-            boundary.append(boundary[0])
-            
-        polygon = Polygon(boundary)
-        
-        if not polygon.is_valid:
-            # Try to fix invalid polygons
-            polygon = polygon.buffer(0)
-            if not polygon.is_valid:
-                raise ValueError(f"Room {room.id} has invalid boundary geometry")
-                
-        return polygon
-        
-    except Exception as e:
-        raise ValueError(f"Failed to create polygon for room {room.id}: {str(e)}")
-
-
-def calculate_room_area(room: Room) -> float:
-    """
-    Calculate room area in square meters.
-    
-    Args:
-        room: Room object
+        points: List of 2D points forming the polygon boundary
         
     Returns:
         Area in square meters
         
     Raises:
-        ValueError: If room boundary is invalid
+        ValueError: If polygon has less than 3 points
     """
-    try:
-        polygon = get_room_polygon(room)
-        return float(polygon.area)
-    except Exception as e:
-        raise ValueError(f"Failed to calculate area for room {room.id}: {str(e)}")
+    if len(points) < 3:
+        raise ValueError("Polygon must have at least 3 points")
+    
+    # Use Shapely for robust area calculation
+    polygon_points = [(p.x, p.y) for p in points]
+    polygon = Polygon(polygon_points)
+    
+    if not polygon.is_valid:
+        raise ValueError("Invalid polygon: self-intersecting or degenerate")
+    
+    return abs(polygon.area)
 
 
-def get_room_centroid(room: Room) -> Tuple[float, float]:
+def calculate_polygon_perimeter(points: List[Point2D]) -> float:
     """
-    Get room center point (centroid).
+    Calculate the perimeter of a polygon.
     
     Args:
-        room: Room object
+        points: List of 2D points forming the polygon boundary
         
     Returns:
-        Tuple of (x, y) coordinates for room center
-        
-    Raises:
-        ValueError: If room boundary is invalid
+        Perimeter in meters
     """
-    try:
-        polygon = get_room_polygon(room)
-        centroid = polygon.centroid
-        return (float(centroid.x), float(centroid.y))
-    except Exception as e:
-        raise ValueError(f"Failed to calculate centroid for room {room.id}: {str(e)}")
+    if len(points) < 3:
+        raise ValueError("Polygon must have at least 3 points")
+    
+    polygon_points = [(p.x, p.y) for p in points]
+    polygon = Polygon(polygon_points)
+    
+    if not polygon.is_valid:
+        raise ValueError("Invalid polygon: self-intersecting or degenerate")
+    
+    return polygon.length
 
 
-def calculate_perimeter(room: Room) -> float:
+def calculate_polygon_centroid(points: List[Point2D]) -> Point2D:
     """
-    Calculate room perimeter in meters.
+    Calculate the centroid (center of mass) of a polygon.
     
     Args:
-        room: Room object
+        points: List of 2D points forming the polygon boundary
         
     Returns:
-        Perimeter length in meters
+        Centroid as Point2D
         
     Raises:
-        ValueError: If room boundary is invalid
+        ValueError: If polygon has less than 3 points
     """
-    try:
-        polygon = get_room_polygon(room)
-        return float(polygon.length)
-    except Exception as e:
-        raise ValueError(f"Failed to calculate perimeter for room {room.id}: {str(e)}")
+    if len(points) < 3:
+        raise ValueError("Polygon must have at least 3 points")
+    
+    polygon_points = [(p.x, p.y) for p in points]
+    polygon = Polygon(polygon_points)
+    
+    if not polygon.is_valid:
+        raise ValueError("Invalid polygon: self-intersecting or degenerate")
+    
+    centroid = polygon.centroid
+    return Point2D(x=centroid.x, y=centroid.y)
 
 
-def point_in_room(point: Tuple[float, float], room: Room) -> bool:
+def calculate_distance_2d(point1: Point2D, point2: Point2D) -> float:
     """
-    Check if a point is inside a room.
+    Calculate Euclidean distance between two 2D points.
     
     Args:
-        point: Tuple of (x, y) coordinates
-        room: Room object
-        
-    Returns:
-        True if point is inside room, False otherwise
-        
-    Raises:
-        ValueError: If room boundary is invalid
-    """
-    try:
-        polygon = get_room_polygon(room)
-        shapely_point = Point(point[0], point[1])
-        return polygon.contains(shapely_point) or polygon.boundary.contains(shapely_point)
-    except Exception as e:
-        raise ValueError(f"Failed to check point in room {room.id}: {str(e)}")
-
-
-def distance_between_points(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
-    """
-    Calculate Euclidean distance between two points.
-    
-    Args:
-        p1: First point (x, y)
-        p2: Second point (x, y)
+        point1: First point
+        point2: Second point
         
     Returns:
         Distance in meters
     """
-    dx = p2[0] - p1[0]
-    dy = p2[1] - p1[1]
+    dx = point2.x - point1.x
+    dy = point2.y - point1.y
     return math.sqrt(dx * dx + dy * dy)
 
 
-def rooms_are_adjacent(room1: Room, room2: Room, threshold: float = 0.5) -> bool:
+def calculate_distance_3d(point1: Point3D, point2: Point3D) -> float:
     """
-    Check if two rooms share a wall (are adjacent).
-    
-    This function checks if the rooms' boundaries are close enough to be considered
-    adjacent, within the specified threshold distance.
+    Calculate Euclidean distance between two 3D points.
     
     Args:
-        room1: First room
-        room2: Second room
-        threshold: Maximum distance to consider rooms adjacent (meters)
+        point1: First point
+        point2: Second point
         
     Returns:
-        True if rooms are adjacent, False otherwise
-        
-    Raises:
-        ValueError: If room boundaries are invalid
+        Distance in meters
     """
-    try:
-        poly1 = get_room_polygon(room1)
-        poly2 = get_room_polygon(room2)
-        
-        # Check if polygons touch or overlap
-        if poly1.touches(poly2) or poly1.intersects(poly2):
-            return True
-            
-        # Check if the closest distance is within threshold
-        distance = poly1.distance(poly2)
-        return distance <= threshold
-        
-    except Exception as e:
-        raise ValueError(f"Failed to check adjacency between rooms {room1.id} and {room2.id}: {str(e)}")
+    dx = point2.x - point1.x
+    dy = point2.y - point1.y
+    dz = point2.z - point1.z
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
 
 
-def find_nearest_exit(position: Tuple[float, float], doors: List[Door]) -> Optional[Door]:
+def calculate_room_area(room: Room) -> float:
     """
-    Find the nearest egress door from a given position.
+    Calculate the area of a room.
     
     Args:
-        position: Starting position (x, y)
-        doors: List of available doors
+        room: Room object with boundary information
         
     Returns:
-        Nearest egress door, or None if no egress doors available
+        Area in square meters
+        
+    Note:
+        If room has a boundary, calculates from boundary.
+        Otherwise, returns the stored area value.
     """
-    egress_doors = [door for door in doors if door.is_egress]
-    
-    if not egress_doors:
-        return None
-        
-    nearest_door = None
-    min_distance = float('inf')
-    
-    for door in egress_doors:
-        door_position = (door.position[0], door.position[1])
-        distance = distance_between_points(position, door_position)
-        
-        if distance < min_distance:
-            min_distance = distance
-            nearest_door = door
-            
-    return nearest_door
+    if room.boundary and room.boundary.points:
+        return calculate_polygon_area(room.boundary.points)
+    else:
+        return room.area
 
 
-def get_room_boundary_segments(room: Room) -> List[LineString]:
+def calculate_room_centroid(room: Room) -> Optional[Point2D]:
     """
-    Get room boundary as list of line segments.
+    Calculate the centroid of a room.
     
     Args:
-        room: Room object
+        room: Room object with boundary information
         
     Returns:
-        List of LineString objects representing boundary segments
-        
-    Raises:
-        ValueError: If room boundary is invalid
+        Centroid as Point2D, or None if no boundary available
     """
-    try:
-        polygon = get_room_polygon(room)
-        coords = list(polygon.exterior.coords)
-        
-        segments = []
-        for i in range(len(coords) - 1):
-            segment = LineString([coords[i], coords[i + 1]])
-            segments.append(segment)
-            
-        return segments
-        
-    except Exception as e:
-        raise ValueError(f"Failed to get boundary segments for room {room.id}: {str(e)}")
+    if room.boundary and room.boundary.points:
+        return calculate_polygon_centroid(room.boundary.points)
+    return None
 
 
-def find_shared_boundary(room1: Room, room2: Room, tolerance: float = 0.1) -> Optional[LineString]:
+def calculate_room_perimeter(room: Room) -> Optional[float]:
     """
-    Find shared boundary between two adjacent rooms.
+    Calculate the perimeter of a room.
     
     Args:
-        room1: First room
-        room2: Second room
-        tolerance: Distance tolerance for considering boundaries shared
+        room: Room object with boundary information
         
     Returns:
-        LineString representing shared boundary, or None if not adjacent
-        
-    Raises:
-        ValueError: If room boundaries are invalid
+        Perimeter in meters, or None if no boundary available
     """
-    try:
-        poly1 = get_room_polygon(room1)
-        poly2 = get_room_polygon(room2)
-        
-        # Get the intersection of the boundaries
-        intersection = poly1.boundary.intersection(poly2.boundary)
-        
-        if intersection.is_empty:
-            return None
-            
-        # If intersection is a LineString, return it
-        if hasattr(intersection, 'geom_type') and intersection.geom_type == 'LineString':
-            return intersection
-            
-        # If intersection is a collection, find the longest LineString
-        if hasattr(intersection, 'geoms'):
-            longest_line = None
-            max_length = 0
-            
-            for geom in intersection.geoms:
-                if geom.geom_type == 'LineString' and geom.length > max_length:
-                    max_length = geom.length
-                    longest_line = geom
-                    
-            return longest_line
-            
-        return None
-        
-    except Exception as e:
-        raise ValueError(f"Failed to find shared boundary between rooms {room1.id} and {room2.id}: {str(e)}")
+    if room.boundary and room.boundary.points:
+        return calculate_polygon_perimeter(room.boundary.points)
+    return None
 
 
-def calculate_room_orientation(room: Room) -> float:
+def point_in_polygon(point: Point2D, polygon_points: List[Point2D]) -> bool:
     """
-    Calculate the primary orientation of a room in degrees.
-    
-    This finds the longest wall and returns its orientation relative to the x-axis.
+    Check if a point is inside a polygon using ray casting algorithm.
     
     Args:
-        room: Room object
+        point: Point to test
+        polygon_points: List of points forming the polygon boundary
         
     Returns:
-        Orientation in degrees (0-180)
-        
-    Raises:
-        ValueError: If room boundary is invalid
+        True if point is inside polygon, False otherwise
     """
-    try:
-        segments = get_room_boundary_segments(room)
-        
-        if not segments:
-            return 0.0
-            
-        # Find the longest segment
-        longest_segment = max(segments, key=lambda seg: seg.length)
-        
-        # Calculate orientation
-        coords = list(longest_segment.coords)
-        dx = coords[1][0] - coords[0][0]
-        dy = coords[1][1] - coords[0][1]
-        
-        # Calculate angle in degrees, normalized to 0-180
-        angle = math.degrees(math.atan2(dy, dx))
-        if angle < 0:
-            angle += 180
-            
-        return angle
-        
-    except Exception as e:
-        raise ValueError(f"Failed to calculate orientation for room {room.id}: {str(e)}")
-
-
-def get_room_bounding_box(room: Room) -> Tuple[float, float, float, float]:
-    """
-    Get the bounding box of a room.
+    if len(polygon_points) < 3:
+        return False
     
-    Args:
-        room: Room object
-        
-    Returns:
-        Tuple of (min_x, min_y, max_x, max_y)
-        
-    Raises:
-        ValueError: If room boundary is invalid
-    """
-    try:
-        polygon = get_room_polygon(room)
-        bounds = polygon.bounds
-        return bounds  # (min_x, min_y, max_x, max_y)
-        
-    except Exception as e:
-        raise ValueError(f"Failed to get bounding box for room {room.id}: {str(e)}")
+    # Use Shapely for robust point-in-polygon test
+    polygon_coords = [(p.x, p.y) for p in polygon_points]
+    polygon = Polygon(polygon_coords)
+    test_point = Point(point.x, point.y)
+    
+    return polygon.contains(test_point)
 
 
-def calculate_door_clearance_area(door: Door, clearance_radius: float = 1.5) -> Polygon:
+def calculate_door_clear_width(door: Door) -> float:
     """
-    Calculate the clearance area around a door for accessibility analysis.
+    Calculate the clear width of a door (actual usable width).
     
     Args:
         door: Door object
-        clearance_radius: Required clearance radius in meters
         
     Returns:
-        Polygon representing the clearance area
+        Clear width in millimeters
+        
+    Note:
+        For single doors, clear width is the door width.
+        For double doors, clear width is typically 2/3 of total width.
     """
-    door_point = Point(door.position[0], door.position[1])
-    clearance_area = door_point.buffer(clearance_radius)
-    return clearance_area
+    if door.door_type == "double":
+        # Double doors: clear width is typically 2/3 of total width
+        return door.width_mm * 0.67
+    else:
+        # Single doors: clear width is the door width
+        return door.width_mm
+
+
+def calculate_door_area(door: Door) -> float:
+    """
+    Calculate the area of a door opening.
+    
+    Args:
+        door: Door object
+        
+    Returns:
+        Door area in square meters
+    """
+    width_m = door.width_mm / 1000.0
+    height_m = door.height_mm / 1000.0
+    return width_m * height_m
+
+
+def calculate_corridor_width(corridor_points: List[Point2D]) -> float:
+    """
+    Calculate the effective width of a corridor.
+    
+    Args:
+        corridor_points: Points defining the corridor centerline
+        
+    Returns:
+        Effective corridor width in meters
+        
+    Note:
+        This is a simplified calculation. In practice, corridor width
+        would need to account for wall thickness and obstructions.
+    """
+    if len(corridor_points) < 2:
+        return 0.0
+    
+    # For now, assume a standard corridor width
+    # In a real implementation, this would analyze the corridor geometry
+    return 1.2  # 1.2 meters standard corridor width
+
+
+def calculate_egress_capacity(area_sqm: float, occupancy_type: str) -> int:
+    """
+    Calculate the maximum occupancy capacity for egress calculations.
+    
+    Args:
+        area_sqm: Area in square meters
+        occupancy_type: Type of occupancy (residential, commercial, etc.)
+        
+    Returns:
+        Maximum occupancy capacity
+        
+    Note:
+        This uses simplified occupancy factors. Real calculations would
+        reference specific building codes and occupancy classifications.
+    """
+    # Simplified occupancy factors (persons per square meter)
+    occupancy_factors = {
+        "residential": 0.05,  # 1 person per 20 sqm
+        "commercial": 0.1,    # 1 person per 10 sqm
+        "retail": 0.2,        # 1 person per 5 sqm
+        "office": 0.1,        # 1 person per 10 sqm
+        "assembly": 0.5,      # 1 person per 2 sqm
+        "storage": 0.02,      # 1 person per 50 sqm
+        "restroom": 0.1,      # 1 person per 10 sqm
+        "meeting": 0.2,       # 1 person per 5 sqm
+        "reception": 0.1,     # 1 person per 10 sqm
+    }
+    
+    factor = occupancy_factors.get(occupancy_type, 0.1)  # Default factor
+    return max(1, int(area_sqm * factor))
+
+
+def calculate_fire_rating_equivalent(rating: str) -> int:
+    """
+    Convert fire rating string to minutes.
+    
+    Args:
+        rating: Fire rating string (e.g., "RF_60")
+        
+    Returns:
+        Fire rating in minutes
+    """
+    rating_map = {
+        "no_rating": 0,
+        "RF_30": 30,
+        "RF_60": 60,
+        "RF_90": 90,
+        "RF_120": 120,
+    }
+    
+    return rating_map.get(rating, 0)
+
+
+def calculate_wall_length(wall_start: Point3D, wall_end: Point3D) -> float:
+    """
+    Calculate the length of a wall.
+    
+    Args:
+        wall_start: Wall start point
+        wall_end: Wall end point
+        
+    Returns:
+        Wall length in meters
+    """
+    return calculate_distance_3d(wall_start, wall_end)
+
+
+def calculate_wall_area(wall_start: Point3D, wall_end: Point3D, height_mm: float) -> float:
+    """
+    Calculate the area of a wall.
+    
+    Args:
+        wall_start: Wall start point
+        wall_end: Wall end point
+        height_mm: Wall height in millimeters
+        
+    Returns:
+        Wall area in square meters
+    """
+    length_m = calculate_wall_length(wall_start, wall_end)
+    height_m = height_mm / 1000.0
+    return length_m * height_m
+
+
+def calculate_intersection_area(polygon1_points: List[Point2D], polygon2_points: List[Point2D]) -> float:
+    """
+    Calculate the intersection area between two polygons.
+    
+    Args:
+        polygon1_points: First polygon points
+        polygon2_points: Second polygon points
+        
+    Returns:
+        Intersection area in square meters
+    """
+    if len(polygon1_points) < 3 or len(polygon2_points) < 3:
+        return 0.0
+    
+    try:
+        poly1 = Polygon([(p.x, p.y) for p in polygon1_points])
+        poly2 = Polygon([(p.x, p.y) for p in polygon2_points])
+        
+        if not poly1.is_valid or not poly2.is_valid:
+            return 0.0
+        
+        intersection = poly1.intersection(poly2)
+        return abs(intersection.area)
+    
+    except Exception:
+        return 0.0
+
+
+def calculate_union_area(polygon1_points: List[Point2D], polygon2_points: List[Point2D]) -> float:
+    """
+    Calculate the union area of two polygons.
+    
+    Args:
+        polygon1_points: First polygon points
+        polygon2_points: Second polygon points
+        
+    Returns:
+        Union area in square meters
+    """
+    if len(polygon1_points) < 3 or len(polygon2_points) < 3:
+        return 0.0
+    
+    try:
+        poly1 = Polygon([(p.x, p.y) for p in polygon1_points])
+        poly2 = Polygon([(p.x, p.y) for p in polygon2_points])
+        
+        if not poly1.is_valid or not poly2.is_valid:
+            return 0.0
+        
+        union = unary_union([poly1, poly2])
+        return abs(union.area)
+    
+    except Exception:
+        return 0.0

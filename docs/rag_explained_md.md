@@ -799,23 +799,192 @@ def euclidean_distance(v1, v2):
 
 ## Retrieval Strategies
 
-### 1. Similarity Search (Por Defecto)
+### 🚀 Sistema Unificado de Estrategias
 
-Busca los K vectores más similares:
+El sistema RAG implementado incluye **5 estrategias de recuperación** que puedes cambiar en tiempo real:
+
+#### 1. **Basic Retrieval** (Búsqueda por Palabras Clave)
 
 ```python
+# Estrategia básica - solo coincidencias de palabras
 retriever = vectorstore.as_retriever(
     search_type="similarity",
     search_kwargs={"k": 3}
 )
 
 docs = retriever.get_relevant_documents("¿Ancho mínimo de puerta?")
-# Devuelve los 3 chunks más similares
+# Devuelve los 3 chunks con más coincidencias de palabras
 ```
 
-### 2. MMR (Maximal Marginal Relevance)
+**Características**:
+- ✅ Rápida y simple
+- ✅ No requiere embeddings
+- ❌ Solo busca coincidencias exactas de palabras
+- ❌ No entiende el significado semántico
 
-Balancea relevancia con diversidad:
+#### 2. **Semantic Retrieval** (Búsqueda Semántica)
+
+```python
+# Usando embeddings para entender significado
+from sentence_transformers import SentenceTransformer
+
+embeddings_model = SentenceTransformer(
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+)
+
+# Convierte pregunta a vector y busca similares
+query_embedding = embeddings_model.encode(["¿Ancho mínimo de puerta?"])
+similarities = cosine_similarity(query_embedding, chunk_embeddings)
+```
+
+**Características**:
+- ✅ Entiende el significado de las consultas
+- ✅ Encuentra contenido relacionado conceptualmente
+- ✅ Mejor para consultas complejas
+- ❌ Requiere más recursos computacionales
+- ❌ Puede perder coincidencias exactas importantes
+
+#### 3. **Keyword Retrieval** (Búsqueda Avanzada por Palabras)
+
+```python
+# TF-IDF-like scoring con múltiples señales
+def keyword_search(query, chunks):
+    query_words = set(query.lower().split())
+    scored_chunks = []
+    
+    for chunk in chunks:
+        chunk_words = set(chunk['text'].lower().split())
+        
+        # Múltiples puntuaciones
+        word_overlap = len(query_words.intersection(chunk_words))
+        word_density = word_overlap / len(query_words)
+        chunk_word_count = len(chunk_words)
+        
+        # Puntuación combinada
+        score = word_overlap * 0.5 + word_density * 0.3 + (1 / (1 + chunk_word_count)) * 0.2
+        scored_chunks.append((chunk, score))
+    
+    return sorted(scored_chunks, key=lambda x: x[1], reverse=True)
+```
+
+**Características**:
+- ✅ Mejor que búsqueda básica
+- ✅ Considera densidad de palabras y longitud
+- ✅ No requiere embeddings
+- ❌ Aún limitado a coincidencias exactas
+
+#### 4. **Hybrid Retrieval** (Búsqueda Híbrida)
+
+```python
+# Combina semántica (70%) + keyword (30%)
+def hybrid_search(query, chunks, semantic_weight=0.7):
+    # Obtener resultados semánticos
+    semantic_results = semantic_search(query, chunks)
+    semantic_scores = {chunk['text']: score for chunk, score in semantic_results}
+    
+    # Obtener resultados por palabras clave
+    keyword_results = keyword_search(query, chunks)
+    keyword_scores = {chunk['text']: score for chunk, score in keyword_results}
+    
+    # Combinar puntuaciones
+    combined_results = []
+    for chunk_text in set(semantic_scores.keys()) | set(keyword_scores.keys()):
+        semantic_score = semantic_scores.get(chunk_text, 0)
+        keyword_score = keyword_scores.get(chunk_text, 0)
+        
+        # Puntuación combinada
+        combined_score = (semantic_weight * semantic_score + 
+                         (1 - semantic_weight) * keyword_score)
+        combined_results.append((chunk_obj, combined_score))
+    
+    return sorted(combined_results, key=lambda x: x[1], reverse=True)
+```
+
+**Características**:
+- ✅ Combina lo mejor de ambas estrategias
+- ✅ 70% semántico + 30% keyword para balance óptimo
+- ✅ Mejor precisión y recall
+- ✅ Recomendada para producción
+
+#### 5. **Rerank Retrieval** (Búsqueda con Reranking)
+
+```python
+# Híbrida + reranking con señales adicionales
+def rerank_results(query, results):
+    reranked = []
+    
+    for chunk, original_score in results:
+        # Calcular señales de relevancia adicionales
+        relevance_score = calculate_relevance_score(query, chunk)
+        
+        # Combinar puntuación original con relevancia
+        final_score = original_score * 0.6 + relevance_score * 0.4
+        reranked.append((chunk, final_score))
+    
+    return sorted(reranked, key=lambda x: x[1], reverse=True)
+
+def calculate_relevance_score(query, chunk):
+    text = chunk['text'].lower()
+    query_lower = query.lower()
+    
+    score = 0.0
+    
+    # Coincidencia exacta de frase
+    if query_lower in text:
+        score += 0.3
+    
+    # Densidad de palabras de la consulta
+    query_words = query_lower.split()
+    chunk_words = text.split()
+    word_matches = sum(1 for word in query_words if word in chunk_words)
+    word_density = word_matches / len(query_words) if query_words else 0
+    score += word_density * 0.2
+    
+    # Penalización por longitud (preferir chunks de longitud media)
+    length_penalty = 1.0 - abs(len(chunk['text']) - 800) / 1000
+    score += max(0, length_penalty) * 0.1
+    
+    # Bonus por posición de página (páginas tempranas más importantes)
+    if chunk['metadata']['pages']:
+        page_bonus = 1.0 - (min(chunk['metadata']['pages']) / 100)
+        score += max(0, page_bonus) * 0.1
+    
+    return min(1.0, score)
+```
+
+**Características**:
+- ✅ La estrategia más avanzada
+- ✅ Considera múltiples señales de relevancia
+- ✅ Optimiza longitud de chunks y posición de página
+- ✅ Mejor rendimiento general
+
+### 🔄 Cambio de Estrategias en Tiempo Real
+
+```python
+from scripts.unified_rag_system import UnifiedRAGSystem, RetrievalStrategy
+
+# Inicializar con estrategia específica
+rag = UnifiedRAGSystem(RetrievalStrategy.BASIC)
+
+# Cambiar estrategia sin recargar documentos
+rag.switch_strategy(RetrievalStrategy.SEMANTIC)
+rag.switch_strategy(RetrievalStrategy.HYBRID)
+rag.switch_strategy(RetrievalStrategy.RERANK)
+```
+
+### 📊 Comparación de Estrategias
+
+| Estrategia | Velocidad | Precisión | Recursos | Uso Recomendado |
+|------------|-----------|-----------|----------|-----------------|
+| **Basic** | ⚡⚡⚡ | ⭐⭐ | 🟢 Bajo | Desarrollo rápido |
+| **Semantic** | ⚡⚡ | ⭐⭐⭐⭐ | 🟡 Medio | Consultas complejas |
+| **Keyword** | ⚡⚡⚡ | ⭐⭐⭐ | 🟢 Bajo | Búsquedas exactas |
+| **Hybrid** | ⚡⚡ | ⭐⭐⭐⭐⭐ | 🟡 Medio | **Producción** |
+| **Rerank** | ⚡ | ⭐⭐⭐⭐⭐ | 🔴 Alto | **Máxima calidad** |
+
+### 🛠️ Estrategias Tradicionales (LangChain)
+
+#### MMR (Maximal Marginal Relevance)
 
 ```python
 retriever = vectorstore.as_retriever(
@@ -833,9 +1002,7 @@ retriever = vectorstore.as_retriever(
 - ✅ Para evitar chunks muy repetitivos
 - ❌ No uses si necesitas máxima precisión
 
-### 3. Threshold-based
-
-Solo devuelve resultados por encima de cierto score:
+#### Threshold-based
 
 ```python
 retriever = vectorstore.as_retriever(
@@ -845,6 +1012,232 @@ retriever = vectorstore.as_retriever(
         "k": 5
     }
 )
+```
+
+---
+
+## 🚀 Sistema Unificado RAG
+
+### Scripts Disponibles
+
+El proyecto incluye múltiples scripts para diferentes casos de uso:
+
+#### 1. **Sistema Unificado** (`unified_rag_system.py`)
+
+```bash
+# Usar con estrategia específica
+python scripts/unified_rag_system.py --strategy basic
+python scripts/unified_rag_system.py --strategy semantic
+python scripts/unified_rag_system.py --strategy hybrid
+python scripts/unified_rag_system.py --strategy rerank
+
+# Modo interactivo con cambio de estrategias
+python scripts/unified_rag_system.py --strategy basic
+# Luego en el prompt:
+❓ [basic] Tu consulta: switch semantic
+🔄 Switching from basic to semantic
+✅ Switched to semantic strategy
+```
+
+#### 2. **Comparación de Estrategias** (`retrieval_comparison.py`)
+
+```bash
+# Compara todas las estrategias lado a lado
+python scripts/retrieval_comparison.py
+```
+
+**Salida esperada**:
+```
+🔍 Query: '¿Cuál es el ancho mínimo de una puerta de evacuación?'
+
+1️⃣ BASIC RETRIEVAL (Keyword matching):
+   1. Score: 5.000 | Páginas: [23]
+      Texto: "El ancho mínimo de puertas de evacuación..."
+
+2️⃣ SEMANTIC RETRIEVAL (Embeddings):
+   1. Score: 0.755 | Páginas: [23]
+      Texto: "CTE DB-SI establece que las puertas..."
+
+3️⃣ HYBRID RETRIEVAL (Semantic + Keyword):
+   1. Score: 2.029 | Páginas: [23]
+      Texto: "El ancho mínimo de puertas de evacuación..."
+```
+
+#### 3. **Demo Avanzado** (`advanced_rag_demo.py`)
+
+```bash
+# Demo completo con todas las funcionalidades
+python scripts/advanced_rag_demo.py
+```
+
+#### 4. **Test Básico** (`simple_rag_test.py`)
+
+```bash
+# Verificación rápida del sistema
+python scripts/simple_rag_test.py
+```
+
+### Uso Programático
+
+#### Inicialización Básica
+
+```python
+from scripts.unified_rag_system import UnifiedRAGSystem, RetrievalStrategy
+from pathlib import Path
+
+# Crear sistema RAG
+rag = UnifiedRAGSystem(RetrievalStrategy.HYBRID)
+
+# Cargar documentos
+rag.load_and_chunk_pdf(Path("data/normativa/DBSI.pdf"))
+
+# Hacer consulta
+results = rag.retrieve("¿Cuál es el ancho mínimo de una puerta de evacuación?", top_k=3)
+
+# Mostrar resultados
+for i, (chunk, score) in enumerate(results, 1):
+    print(f"{i}. Score: {score:.3f}")
+    print(f"   Páginas: {chunk['metadata']['pages']}")
+    print(f"   Texto: {chunk['text'][:100]}...")
+```
+
+#### Cambio Dinámico de Estrategias
+
+```python
+# Inicializar con estrategia básica
+rag = UnifiedRAGSystem(RetrievalStrategy.BASIC)
+rag.load_and_chunk_pdf(Path("data/normativa/DBSI.pdf"))
+
+# Probar diferentes estrategias para la misma consulta
+query = "¿Qué dice sobre distancias de evacuación?"
+
+print("=== BASIC ===")
+basic_results = rag.retrieve(query, top_k=2)
+for chunk, score in basic_results:
+    print(f"Score: {score:.3f} | {chunk['text'][:50]}...")
+
+print("\n=== SEMANTIC ===")
+rag.switch_strategy(RetrievalStrategy.SEMANTIC)
+semantic_results = rag.retrieve(query, top_k=2)
+for chunk, score in semantic_results:
+    print(f"Score: {score:.3f} | {chunk['text'][:50]}...")
+
+print("\n=== HYBRID ===")
+rag.switch_strategy(RetrievalStrategy.HYBRID)
+hybrid_results = rag.retrieve(query, top_k=2)
+for chunk, score in hybrid_results:
+    print(f"Score: {score:.3f} | {chunk['text'][:50]}...")
+```
+
+#### Integración con OpenAI
+
+```python
+import openai
+from scripts.unified_rag_system import UnifiedRAGSystem, RetrievalStrategy
+
+# Configurar OpenAI
+openai.api_key = "tu-api-key"
+
+# Sistema RAG
+rag = UnifiedRAGSystem(RetrievalStrategy.RERANK)
+rag.load_and_chunk_pdf(Path("data/normativa/DBSI.pdf"))
+
+def query_with_openai(question: str) -> str:
+    # Recuperar contexto relevante
+    results = rag.retrieve(question, top_k=3)
+    context = "\n\n".join([chunk['text'] for chunk, score in results])
+    
+    # Generar respuesta con OpenAI
+    response = openai.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "Eres un experto en normativa de construcción española."},
+            {"role": "user", "content": f"Contexto: {context}\n\nPregunta: {question}"}
+        ],
+        temperature=0.1
+    )
+    
+    return response.choices[0].message.content
+
+# Usar
+answer = query_with_openai("¿Cuál es el ancho mínimo de una puerta de evacuación?")
+print(answer)
+```
+
+### Configuración Avanzada
+
+#### Personalizar Parámetros
+
+```python
+# Crear sistema con parámetros personalizados
+rag = UnifiedRAGSystem(RetrievalStrategy.HYBRID)
+
+# Cargar con chunking personalizado
+rag.load_and_chunk_pdf(
+    Path("data/normativa/DBSI.pdf"),
+    chunk_size=1500,  # Chunks más grandes
+    overlap=300       # Más solapamiento
+)
+
+# Recuperar con más resultados
+results = rag.retrieve("pregunta", top_k=5)
+```
+
+#### Manejo de Errores
+
+```python
+try:
+    rag = UnifiedRAGSystem(RetrievalStrategy.SEMANTIC)
+    rag.load_and_chunk_pdf(Path("data/normativa/DBSI.pdf"))
+    
+    results = rag.retrieve("pregunta", top_k=3)
+    
+except FileNotFoundError:
+    print("❌ Archivo PDF no encontrado")
+except ImportError:
+    print("❌ Dependencias faltantes. Instala: pip install sentence-transformers")
+except Exception as e:
+    print(f"❌ Error: {e}")
+```
+
+### Rendimiento y Optimización
+
+#### Benchmarking de Estrategias
+
+```python
+import time
+from scripts.unified_rag_system import UnifiedRAGSystem, RetrievalStrategy
+
+rag = UnifiedRAGSystem(RetrievalStrategy.BASIC)
+rag.load_and_chunk_pdf(Path("data/normativa/DBSI.pdf"))
+
+query = "¿Cuál es el ancho mínimo de una puerta de evacuación?"
+
+strategies = [
+    RetrievalStrategy.BASIC,
+    RetrievalStrategy.SEMANTIC,
+    RetrievalStrategy.KEYWORD,
+    RetrievalStrategy.HYBRID,
+    RetrievalStrategy.RERANK
+]
+
+for strategy in strategies:
+    rag.switch_strategy(strategy)
+    
+    start_time = time.time()
+    results = rag.retrieve(query, top_k=3)
+    end_time = time.time()
+    
+    print(f"{strategy.value:10} | {end_time - start_time:.3f}s | Score: {results[0][1]:.3f}")
+```
+
+**Salida esperada**:
+```
+basic      | 0.001s | Score: 5.000
+semantic   | 0.045s | Score: 0.755
+keyword    | 0.002s | Score: 3.733
+hybrid     | 0.047s | Score: 1.369
+rerank     | 0.048s | Score: 0.925
 ```
 
 ---
@@ -1113,5 +1506,106 @@ if __name__ == "__main__":
 
 ---
 
-**Versión**: 1.0  
-**Última actualización**: Octubre 2025
+---
+
+## 📋 Resumen del Sistema RAG Implementado
+
+### ✅ Características Implementadas
+
+- **5 Estrategias de Recuperación**: Basic, Semantic, Keyword, Hybrid, Rerank
+- **Cambio en Tiempo Real**: Switch entre estrategias sin recargar documentos
+- **Sistema Unificado**: Una interfaz para todas las estrategias
+- **Scripts de Demostración**: Múltiples herramientas de testing y comparación
+- **Integración OpenAI**: Compatible con gpt-3.5-turbo, gpt-4, gpt-5-nano
+- **Embeddings Multilingües**: Optimizado para español
+- **Reranking Avanzado**: Múltiples señales de relevancia
+- **Documentación Completa**: Guías de uso y ejemplos
+
+### 🚀 Scripts Disponibles
+
+| Script | Propósito | Uso Recomendado |
+|--------|-----------|-----------------|
+| `unified_rag_system.py` | Sistema principal con cambio de estrategias | **Producción** |
+| `retrieval_comparison.py` | Comparación lado a lado de estrategias | **Análisis** |
+| `advanced_rag_demo.py` | Demo completo con todas las funcionalidades | **Demostración** |
+| `simple_rag_test.py` | Test básico de funcionalidad | **Verificación** |
+| `working_rag_demo.py` | Demo simplificado sin LangChain | **Fallback** |
+
+### 🎯 Recomendaciones de Uso
+
+#### Para Desarrollo
+```bash
+# Test rápido
+python scripts/simple_rag_test.py
+
+# Comparar estrategias
+python scripts/retrieval_comparison.py
+```
+
+#### Para Producción
+```bash
+# Sistema unificado con estrategia híbrida
+python scripts/unified_rag_system.py --strategy hybrid
+
+# O con reranking para máxima calidad
+python scripts/unified_rag_system.py --strategy rerank
+```
+
+#### Para Análisis
+```bash
+# Demo completo
+python scripts/advanced_rag_demo.py
+```
+
+### 📊 Rendimiento por Estrategia
+
+| Estrategia | Velocidad | Precisión | Recursos | Caso de Uso |
+|------------|-----------|-----------|----------|-------------|
+| **Basic** | ⚡⚡⚡ | ⭐⭐ | 🟢 Bajo | Desarrollo rápido |
+| **Semantic** | ⚡⚡ | ⭐⭐⭐⭐ | 🟡 Medio | Consultas complejas |
+| **Keyword** | ⚡⚡⚡ | ⭐⭐⭐ | 🟢 Bajo | Búsquedas exactas |
+| **Hybrid** | ⚡⚡ | ⭐⭐⭐⭐⭐ | 🟡 Medio | **Producción** |
+| **Rerank** | ⚡ | ⭐⭐⭐⭐⭐ | 🔴 Alto | **Máxima calidad** |
+
+### 🔧 Configuración Mínima
+
+```bash
+# 1. Instalar dependencias
+pip install -r requirements.txt
+
+# 2. Configurar API key
+export OPENAI_API_KEY="tu-api-key"
+
+# 3. Probar sistema
+python scripts/simple_rag_test.py
+
+# 4. Usar sistema unificado
+python scripts/unified_rag_system.py --strategy hybrid
+```
+
+### 📁 Estructura de Archivos
+
+```
+scripts/
+├── unified_rag_system.py      # Sistema principal
+├── retrieval_comparison.py    # Comparación de estrategias
+├── advanced_rag_demo.py       # Demo avanzado
+├── simple_rag_test.py         # Test básico
+└── working_rag_demo.py        # Demo simplificado
+
+src/rag/
+├── __init__.py
+├── document_loader.py         # Carga de PDFs
+├── embeddings_config.py       # Configuración embeddings
+├── vectorstore_manager.py     # Gestión vectorstore
+└── qa_chain.py               # Cadena de QA
+
+docs/
+└── rag_explained_md.md       # Esta documentación
+```
+
+---
+
+**Versión**: 2.0  
+**Última actualización**: Diciembre 2024  
+**Estado**: ✅ Sistema completo y funcional

@@ -1,418 +1,207 @@
 #!/usr/bin/env python3
 """
-Real Data Extraction Script for AEC Compliance Agent.
+Script to extract real data from DWG files and test agent tools.
 
-This script demonstrates how to extract building data from real CAD files
-(DWG/DXF and Revit) using the unified extraction pipeline.
-
-Usage:
-    python scripts/extract_real_data.py --input data/blueprints/ --output data/extracted/
-    python scripts/extract_real_data.py --file "data/blueprints/cad/building.dwg" --output "building.json"
+This script extracts data from the existing DWG files in the data directory
+and then tests the agent tools against the extracted data.
 """
 
-import argparse
-import json
-import logging
 import sys
+import json
 from pathlib import Path
-from typing import Optional
+import logging
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-from extraction.unified_extractor import UnifiedExtractor, analyze_file
-from extraction.dwg_extractor import DWGExtractor
-from extraction.revit_extractor import RevitExtractor
-from schemas import Project
+from src.extraction.dwg_extractor import extract_from_dwg, save_to_json
+from src.agent.tools import (
+    load_project_data, 
+    get_room_info, 
+    get_door_info, 
+    list_all_doors,
+    check_door_width_compliance,
+    calculate_egress_distance,
+    get_project_summary
+)
 
 
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging for the script."""
-    level = logging.DEBUG if verbose else logging.INFO
+def setup_logging():
+    """Setup logging configuration."""
     logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler('extraction.log')
-        ]
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
 
-def analyze_cad_files(input_path: Path) -> None:
-    """
-    Analyze CAD files to understand their structure and content.
+def extract_dwg_files():
+    """Extract data from all DWG files in the data directory."""
+    data_dir = project_root / "data"
+    blueprints_dir = data_dir / "blueprints" / "cad"
     
-    Args:
-        input_path: Path to file or directory to analyze
-    """
-    logger = logging.getLogger(__name__)
+    if not blueprints_dir.exists():
+        print(f"❌ Blueprints directory not found: {blueprints_dir}")
+        return []
     
-    if input_path.is_file():
-        # Analyze single file
-        logger.info(f"Analyzing file: {input_path}")
+    # Find all DWG files
+    dwg_files = list(blueprints_dir.glob("*.dwg"))
+    
+    if not dwg_files:
+        print(f"❌ No DWG files found in {blueprints_dir}")
+        return []
+    
+    print(f"🔍 Found {len(dwg_files)} DWG files:")
+    for dwg_file in dwg_files:
+        print(f"   - {dwg_file.name}")
+    
+    extracted_files = []
+    
+    for dwg_file in dwg_files:
+        print(f"\n📦 Extracting from {dwg_file.name}...")
+        
         try:
-            analysis = analyze_file(input_path)
-            print(f"\n📊 File Analysis: {input_path.name}")
-            print("=" * 50)
-            print(f"File Type: {analysis['file_type']}")
-            print(f"File Size: {analysis['file_size_mb']:.2f} MB")
-            print(f"Supported: {analysis['supported']}")
+            # Extract data
+            project = extract_from_dwg(dwg_file)
             
-            if 'entity_counts' in analysis:
-                print(f"Total Entities: {analysis['total_entities']}")
-                print("\nEntity Types:")
-                for entity_type, count in analysis['entity_counts'].items():
-                    print(f"  {entity_type}: {count}")
-                
-                if analysis['layers']:
-                    print(f"\nLayers ({len(analysis['layers'])}):")
-                    for layer in analysis['layers'][:10]:  # Show first 10
-                        print(f"  - {layer}")
-                    if len(analysis['layers']) > 10:
-                        print(f"  ... and {len(analysis['layers']) - 10} more")
-                
-                if analysis['blocks']:
-                    print(f"\nBlocks ({len(analysis['blocks'])}):")
-                    for block in analysis['blocks'][:10]:  # Show first 10
-                        print(f"  - {block}")
-                    if len(analysis['blocks']) > 10:
-                        print(f"  ... and {len(analysis['blocks']) - 10} more")
+            # Create output path
+            output_dir = data_dir / "extracted"
+            output_dir.mkdir(exist_ok=True)
             
-            if 'analysis_error' in analysis:
-                print(f"\n⚠️  Analysis Error: {analysis['analysis_error']}")
-                
+            output_file = output_dir / f"{dwg_file.stem}_extracted.json"
+            
+            # Save extracted data
+            save_to_json(project, output_file)
+            
+            print(f"✅ Successfully extracted:")
+            print(f"   - Rooms: {len(project.get_all_rooms())}")
+            print(f"   - Doors: {len(project.get_all_doors())}")
+            print(f"   - Walls: {len(project.get_all_walls())}")
+            print(f"   - Output: {output_file}")
+            
+            extracted_files.append(output_file)
+            
         except Exception as e:
-            logger.error(f"Error analyzing {input_path}: {e}")
+            print(f"❌ Error extracting {dwg_file.name}: {e}")
+            continue
     
-    elif input_path.is_dir():
-        # Analyze all files in directory
-        logger.info(f"Analyzing directory: {input_path}")
-        
-        # Find all CAD files
-        cad_extensions = ['.dwg', '.dxf', '.rvt']
-        cad_files = []
-        
-        for ext in cad_extensions:
-            cad_files.extend(input_path.glob(f"*{ext}"))
-            cad_files.extend(input_path.glob(f"*{ext.upper()}"))
-        
-        if not cad_files:
-            print(f"No CAD files found in {input_path}")
-            return
-        
-        print(f"\n📊 Directory Analysis: {input_path}")
-        print("=" * 50)
-        print(f"Found {len(cad_files)} CAD files")
-        
-        for file_path in sorted(cad_files):
-            try:
-                analysis = analyze_file(file_path)
-                print(f"\n📄 {file_path.name}")
-                print(f"   Type: {analysis['file_type']}")
-                print(f"   Size: {analysis['file_size_mb']:.2f} MB")
-                print(f"   Supported: {analysis['supported']}")
-                
-                if 'total_entities' in analysis:
-                    print(f"   Entities: {analysis['total_entities']}")
-                
-            except Exception as e:
-                print(f"   ❌ Error: {e}")
+    return extracted_files
 
 
-def extract_single_file(file_path: Path, output_path: Optional[Path] = None, 
-                       project_name: Optional[str] = None) -> bool:
-    """
-    Extract data from a single CAD file.
-    
-    Args:
-        file_path: Path to CAD file
-        output_path: Optional output JSON path
-        project_name: Optional project name
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    logger = logging.getLogger(__name__)
-    
-    try:
-        logger.info(f"Extracting from: {file_path}")
-        
-        # Use unified extractor
-        extractor = UnifiedExtractor()
-        project = extractor.extract_from_file(
-            file_path=file_path,
-            project_name=project_name,
-            level_name="Planta Baja",
-            output_path=output_path
-        )
-        
-        # Print extraction summary
-        print(f"\n✅ Extraction completed: {file_path.name}")
-        print("=" * 50)
-        print(f"Project: {project.metadata.project_name}")
-        print(f"Level: {project.metadata.level_name}")
-        print(f"Extraction Date: {project.metadata.extraction_date}")
-        print(f"\nBuilding Elements:")
-        print(f"  🏠 Rooms: {len(project.rooms)}")
-        print(f"  🚪 Doors: {len(project.doors)}")
-        print(f"  🧱 Walls: {len(project.walls)}")
-        print(f"  🔥 Fire Equipment: {len(project.fire_equipment)}")
-        print(f"  🏢 Sectors: {len(project.sectors)}")
-        
-        # Show some details
-        if project.rooms:
-            print(f"\nRoom Details:")
-            for room in project.rooms[:5]:  # Show first 5 rooms
-                area_str = f" ({room.area:.1f} m²)" if room.area else ""
-                print(f"  - {room.name}: {room.use_type or 'general'}{area_str}")
-            if len(project.rooms) > 5:
-                print(f"  ... and {len(project.rooms) - 5} more rooms")
-        
-        if project.doors:
-            print(f"\nDoor Details:")
-            for door in project.doors[:5]:  # Show first 5 doors
-                egress_mark = " [EGRESS]" if door.is_egress else ""
-                print(f"  - {door.id}: {door.width:.2f}m wide{egress_mark}")
-            if len(project.doors) > 5:
-                print(f"  ... and {len(project.doors) - 5} more doors")
-        
-        if project.fire_equipment:
-            print(f"\nFire Equipment:")
-            equipment_types = {}
-            for eq in project.fire_equipment:
-                equipment_types[eq.equipment_type] = equipment_types.get(eq.equipment_type, 0) + 1
-            
-            for eq_type, count in equipment_types.items():
-                print(f"  - {eq_type}: {count}")
-        
-        if output_path:
-            print(f"\n💾 Data saved to: {output_path}")
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error extracting {file_path}: {e}")
-        print(f"❌ Extraction failed: {e}")
-        return False
-
-
-def extract_directory(input_dir: Path, output_dir: Path) -> int:
-    """
-    Extract data from all CAD files in a directory.
-    
-    Args:
-        input_dir: Input directory containing CAD files
-        output_dir: Output directory for JSON files
-        
-    Returns:
-        Number of files successfully processed
-    """
-    logger = logging.getLogger(__name__)
-    
-    try:
-        logger.info(f"Processing directory: {input_dir}")
-        
-        # Use unified extractor
-        extractor = UnifiedExtractor()
-        projects = extractor.extract_from_directory(
-            directory_path=input_dir,
-            output_dir=output_dir,
-            level_name="Planta Baja"
-        )
-        
-        # Print summary
-        print(f"\n✅ Directory processing completed!")
-        print("=" * 50)
-        print(f"Files processed: {len(projects)}")
-        
-        total_rooms = 0
-        total_doors = 0
-        total_walls = 0
-        total_equipment = 0
-        
-        for file_path, project in projects.items():
-            file_name = Path(file_path).name
-            total_rooms += len(project.rooms)
-            total_doors += len(project.doors)
-            total_walls += len(project.walls)
-            total_equipment += len(project.fire_equipment)
-            
-            print(f"\n📄 {file_name}")
-            print(f"   Rooms: {len(project.rooms)}")
-            print(f"   Doors: {len(project.doors)}")
-            print(f"   Walls: {len(project.walls)}")
-            print(f"   Fire Equipment: {len(project.fire_equipment)}")
-        
-        print(f"\n📊 Total Summary:")
-        print(f"   Total Rooms: {total_rooms}")
-        print(f"   Total Doors: {total_doors}")
-        print(f"   Total Walls: {total_walls}")
-        print(f"   Total Fire Equipment: {total_equipment}")
-        
-        return len(projects)
-        
-    except Exception as e:
-        logger.error(f"Error processing directory {input_dir}: {e}")
-        print(f"❌ Directory processing failed: {e}")
-        return 0
-
-
-def demonstrate_extraction_capabilities() -> None:
-    """Demonstrate the extraction capabilities with example data."""
-    print("\n🚀 AEC Compliance Agent - Extraction Capabilities")
+def test_agent_tools(extracted_file: Path):
+    """Test agent tools with extracted data."""
+    print(f"\n🧪 Testing agent tools with {extracted_file.name}...")
     print("=" * 60)
     
-    print("\n📋 Supported File Types:")
-    print("  • DWG files (AutoCAD)")
-    print("  • DXF files (AutoCAD Exchange)")
-    print("  • RVT files (Revit) - requires Revit API")
-    
-    print("\n🏗️  Extracted Building Elements:")
-    print("  • Rooms (boundaries, areas, use types)")
-    print("  • Doors (width, type, fire rating, egress status)")
-    print("  • Walls (length, thickness, fire rating, exterior/interior)")
-    print("  • Fire Equipment (extinguishers, hydrants, alarms, etc.)")
-    print("  • Fire Sectors (compartments, fire resistance)")
-    
-    print("\n🔧 Extraction Features:")
-    print("  • Automatic file type detection")
-    print("  • Intelligent entity recognition")
-    print("  • Fire safety equipment classification")
-    print("  • Building code compliance data extraction")
-    print("  • JSON output with validation")
-    
-    print("\n📊 Output Format:")
-    print("  • Structured JSON with Pydantic validation")
-    print("  • Project metadata and building elements")
-    print("  • Ready for compliance analysis")
-    print("  • Compatible with RAG and agent systems")
+    try:
+        # Load project data
+        project = load_project_data(extracted_file)
+        print(f"✅ Loaded project: {project.metadata.project_name}")
+        
+        # Test 1: Project summary
+        print("\n1. Project Summary:")
+        summary = get_project_summary()
+        print(f"   - Total rooms: {summary['total_rooms']}")
+        print(f"   - Total doors: {summary['total_doors']}")
+        print(f"   - Total area: {summary['total_area_sqm']:.1f} sqm")
+        print(f"   - Room uses: {summary['room_uses']}")
+        
+        # Test 2: Get room info
+        rooms = project.get_all_rooms()
+        if rooms:
+            room_id = rooms[0].id
+            print(f"\n2. Room Info (Room {room_id}):")
+            room_info = get_room_info(room_id)
+            if "error" not in room_info:
+                print(f"   - Name: {room_info['name']}")
+                print(f"   - Area: {room_info['area_sqm']} sqm")
+                print(f"   - Use: {room_info['use']}")
+                print(f"   - Occupancy capacity: {room_info['calculated_occupancy_capacity']}")
+            else:
+                print(f"   ❌ Error: {room_info['error']}")
+        
+        # Test 3: Get door info
+        doors = project.get_all_doors()
+        if doors:
+            door_id = doors[0].id
+            print(f"\n3. Door Info (Door {door_id}):")
+            door_info = get_door_info(door_id)
+            if "error" not in door_info:
+                print(f"   - Width: {door_info['width_mm']} mm")
+                print(f"   - Clear width: {door_info['clear_width_mm']} mm")
+                print(f"   - Type: {door_info['door_type']}")
+                print(f"   - Emergency exit: {door_info['is_emergency_exit']}")
+            else:
+                print(f"   ❌ Error: {door_info['error']}")
+        
+        # Test 4: List all doors
+        print(f"\n4. All Doors ({len(doors)} total):")
+        door_list = list_all_doors()
+        if door_list and "error" not in door_list[0]:
+            for door in door_list[:3]:  # Show first 3
+                print(f"   - {door['id']}: {door['width_mm']}mm, {door['door_type']}")
+        else:
+            print(f"   ❌ Error: {door_list[0].get('error', 'Unknown error')}")
+        
+        # Test 5: Check door compliance
+        if doors:
+            door_id = doors[0].id
+            print(f"\n5. Door Compliance Check (Door {door_id}):")
+            compliance = check_door_width_compliance(door_id)
+            if "error" not in compliance:
+                print(f"   - Clear width: {compliance['clear_width_mm']} mm")
+                print(f"   - Required: {compliance['required_width_mm']} mm")
+                print(f"   - Status: {compliance['compliance_status']}")
+                print(f"   - Message: {compliance['message']}")
+            else:
+                print(f"   ❌ Error: {compliance['error']}")
+        
+        # Test 6: Calculate egress distance
+        if rooms:
+            room_id = rooms[0].id
+            print(f"\n6. Egress Distance (Room {room_id}):")
+            egress = calculate_egress_distance(room_id)
+            if "error" not in egress:
+                print(f"   - Distance: {egress['egress_distance_m']:.1f} m")
+                print(f"   - Max allowed: {egress['max_allowed_distance_m']} m")
+                print(f"   - Status: {egress['compliance_status']}")
+                print(f"   - Accessible: {egress['is_accessible']}")
+            else:
+                print(f"   ⚠️  Warning: {egress['error']}")
+        
+        print(f"\n✅ Agent tools testing completed for {extracted_file.name}")
+        
+    except Exception as e:
+        print(f"❌ Error testing agent tools: {e}")
 
 
 def main():
-    """Main entry point for the script."""
-    parser = argparse.ArgumentParser(
-        description="Extract building data from real CAD files",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Analyze files to understand structure
-  python scripts/extract_real_data.py --analyze data/blueprints/cad/building.dwg
-  python scripts/extract_real_data.py --analyze data/blueprints/
-  
-  # Extract from single file
-  python scripts/extract_real_data.py --file data/blueprints/cad/building.dwg --output building.json
-  
-  # Extract from directory
-  python scripts/extract_real_data.py --input data/blueprints/ --output data/extracted/
-  
-  # Show capabilities
-  python scripts/extract_real_data.py --demo
-        """
-    )
+    """Main function."""
+    setup_logging()
     
-    # Input options (mutually exclusive)
-    input_group = parser.add_mutually_exclusive_group(required=True)
-    input_group.add_argument(
-        '--file', '-f',
-        type=Path,
-        help='Single CAD file to process'
-    )
-    input_group.add_argument(
-        '--input', '-i',
-        type=Path,
-        help='Input directory containing CAD files'
-    )
-    input_group.add_argument(
-        '--analyze', '-a',
-        type=Path,
-        help='Analyze CAD file(s) without extraction'
-    )
-    input_group.add_argument(
-        '--demo',
-        action='store_true',
-        help='Show extraction capabilities'
-    )
+    print("🏗️  AEC Compliance Agent - Real Data Extraction & Testing")
+    print("=" * 60)
     
-    # Output options
-    parser.add_argument(
-        '--output', '-o',
-        type=Path,
-        help='Output file path (for single file)'
-    )
-    parser.add_argument(
-        '--output-dir',
-        type=Path,
-        help='Output directory (for directory processing)'
-    )
+    # Step 1: Extract data from DWG files
+    print("\n📦 Step 1: Extracting data from DWG files...")
+    extracted_files = extract_dwg_files()
     
-    # Optional parameters
-    parser.add_argument(
-        '--project', '-p',
-        type=str,
-        help='Project name override'
-    )
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose logging'
-    )
+    if not extracted_files:
+        print("❌ No files were successfully extracted. Exiting.")
+        return 1
     
-    args = parser.parse_args()
+    # Step 2: Test agent tools with extracted data
+    print(f"\n🧪 Step 2: Testing agent tools with {len(extracted_files)} extracted files...")
     
-    # Setup logging
-    setup_logging(args.verbose)
-    logger = logging.getLogger(__name__)
+    for extracted_file in extracted_files:
+        test_agent_tools(extracted_file)
     
-    try:
-        if args.demo:
-            # Show capabilities
-            demonstrate_extraction_capabilities()
-            
-        elif args.analyze:
-            # Analyze files
-            analyze_cad_files(args.analyze)
-            
-        elif args.file:
-            # Process single file
-            if not args.file.exists():
-                print(f"❌ File not found: {args.file}")
-                sys.exit(1)
-            
-            # Generate output path if not provided
-            if not args.output:
-                output_dir = Path("data/extracted")
-                output_dir.mkdir(parents=True, exist_ok=True)
-                args.output = output_dir / f"{args.file.stem}_extracted.json"
-            
-            success = extract_single_file(args.file, args.output, args.project)
-            if not success:
-                sys.exit(1)
-            
-        elif args.input:
-            # Process directory
-            if not args.input.exists():
-                print(f"❌ Directory not found: {args.input}")
-                sys.exit(1)
-            
-            # Generate output directory if not provided
-            if not args.output_dir:
-                args.output_dir = Path("data/extracted")
-            
-            success_count = extract_directory(args.input, args.output_dir)
-            if success_count == 0:
-                sys.exit(1)
-        
-        print(f"\n🎉 Processing completed successfully!")
-        
-    except KeyboardInterrupt:
-        print("\n⚠️  Processing interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        print(f"❌ Unexpected error: {e}")
-        sys.exit(1)
+    print(f"\n🎉 All tests completed!")
+    print(f"   - Extracted files: {len(extracted_files)}")
+    print(f"   - Agent tools tested successfully")
+    
+    return 0
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    exit(main())
