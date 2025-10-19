@@ -1,0 +1,115 @@
+{
+  "metadata": {
+    "project_name": "Test Office Building",
+    "file_name": "test_project.json",
+    "building_type": "office",
+    "total_area": 45.0,
+    "number_of_levels": 1,
+    "created_date": "2023-01-01T10:00:00",
+    "modified_date": "2023-01-01T10:00:00"
+  },
+  "levels": [
+    {
+      "name": "Ground Floor",
+      "elevation": 0.0,
+      "rooms": [
+        {
+          "id": "ROOM_001",
+          "name": "Office 1",
+          "area": 20.0,
+          "use": "office",
+          "boundary": {
+            "points": [
+              {"x": 0.0, "y": 0.0},
+              {"x": 5.0, "y": 0.0},
+              {"x": 5.0, "y": 4.0},
+              {"x": 0.0, "y": 4.0},
+              {"x": 0.0, "y": 0.0}
+            ]
+          },
+          "level": "Ground Floor",
+          "occupancy_load": 10,
+          "fire_rating": "RF_60"
+        },
+        {
+          "id": "ROOM_002",
+          "name": "Corridor",
+          "area": 15.0,
+          "use": "corridor",
+          "boundary": {
+            "points": [
+              {"x": 5.0, "y": 0.0},
+              {"x": 8.0, "y": 0.0},
+              {"x": 8.0, "y": 5.0},
+              {"x": 5.0, "y": 5.0},
+              {"x": 5.0, "y": 0.0}
+            ]
+          },
+          "level": "Ground Floor",
+          "occupancy_load": 5,
+          "fire_rating": "RF_30"
+        },
+        {
+          "id": "ROOM_003",
+          "name": "Storage",
+          "area": 10.0,
+          "use": "storage",
+          "boundary": {
+            "points": [
+              {"x": 8.0, "y": 0.0},
+              {"x": 10.0, "y": 0.0},
+              {"x": 10.0, "y": 5.0},
+              {"x": 8.0, "y": 5.0},
+              {"x": 8.0, "y": 0.0}
+            ]
+          },
+          "level": "Ground Floor",
+          "occupancy_load": 2,
+          "fire_rating": "no_rating"
+        }
+      ],
+      "doors": [
+        {
+          "id": "DOOR_001",
+          "name": "Main Exit",
+          "width_mm": 800.0,
+          "height_mm": 2100.0,
+          "door_type": "emergency_exit",
+          "fire_rating": "RF_60",
+          "position": {"x": 5.0, "y": 2.0, "z": 0.0},
+          "from_room": "ROOM_001",
+          "to_room": "ROOM_002",
+          "is_emergency_exit": true,
+          "is_accessible": true
+        },
+        {
+          "id": "DOOR_002",
+          "name": "Office Door",
+          "width_mm": 600.0,
+          "height_mm": 2100.0,
+          "door_type": "single",
+          "fire_rating": "no_rating",
+          "position": {"x": 7.0, "y": 2.0, "z": 0.0},
+          "from_room": "ROOM_002",
+          "to_room": "ROOM_003",
+          "is_emergency_exit": false,
+          "is_accessible": true
+        },
+        {
+          "id": "DOOR_003",
+          "name": "Storage Door",
+          "width_mm": 700.0,
+          "height_mm": 2100.0,
+          "door_type": "single",
+          "fire_rating": "no_rating",
+          "position": {"x": 9.0, "y": 2.0, "z": 0.0},
+          "from_room": "ROOM_003",
+          "to_room": null,
+          "is_emergency_exit": false,
+          "is_accessible": true
+        }
+      ],
+      "walls": []
+    }
+  ]
+}
