@@ -1,0 +1,717 @@
+{
+  "metadata": {
+    "project_name": "I01.6 PCI - SECTORIZACIÓN",
+    "project_id": null,
+    "level_name": "Planta Baja",
+    "level_number": null,
+    "extraction_date": "2025-10-19 11:54:01.634894",
+    "source_file": "data/blueprints/cad/I01.6 PCI - SECTORIZACIÓN.dwg",
+    "building_use": "commercial"
+  },
+  "levels": [
+    {
+      "name": "Planta Baja",
+      "number": 0,
+      "height": 0.0,
+      "rooms": [
+        {
+          "id": "R001",
+          "name": "Oficina A",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              5.0,
+              0.0
+            ],
+            [
+              5.0,
+              4.0
+            ],
+            [
+              0.0,
+              4.0
+            ]
+          ],
+          "use_type": "office",
+          "area": null,
+          "occupancy_load": null,
+          "has_emergency_lighting": false,
+          "has_fire_detection": false,
+          "ceiling_height": 2.5
+        },
+        {
+          "id": "R002",
+          "name": "Oficina B",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              5.0,
+              0.0
+            ],
+            [
+              10.0,
+              0.0
+            ],
+            [
+              10.0,
+              4.0
+            ],
+            [
+              5.0,
+              4.0
+            ]
+          ],
+          "use_type": "office",
+          "area": null,
+          "occupancy_load": null,
+          "has_emergency_lighting": false,
+          "has_fire_detection": false,
+          "ceiling_height": 2.5
+        },
+        {
+          "id": "R003",
+          "name": "Pasillo",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              0.0,
+              4.0
+            ],
+            [
+              10.0,
+              4.0
+            ],
+            [
+              10.0,
+              6.0
+            ],
+            [
+              0.0,
+              6.0
+            ]
+          ],
+          "use_type": "corridor",
+          "area": null,
+          "occupancy_load": null,
+          "has_emergency_lighting": false,
+          "has_fire_detection": false,
+          "ceiling_height": 2.5
+        },
+        {
+          "id": "R004",
+          "name": "Sala Reuniones",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              0.0,
+              6.0
+            ],
+            [
+              5.0,
+              6.0
+            ],
+            [
+              5.0,
+              10.0
+            ],
+            [
+              0.0,
+              10.0
+            ]
+          ],
+          "use_type": "meeting_room",
+          "area": null,
+          "occupancy_load": null,
+          "has_emergency_lighting": false,
+          "has_fire_detection": false,
+          "ceiling_height": 2.5
+        },
+        {
+          "id": "R005",
+          "name": "Almacén",
+          "level": "Planta Baja",
+          "boundary": [
+            [
+              5.0,
+              6.0
+            ],
+            [
+              10.0,
+              6.0
+            ],
+            [
+              10.0,
+              10.0
+            ],
+            [
+              5.0,
+              10.0
+            ]
+          ],
+          "use_type": "storage",
+          "area": null,
+          "occupancy_load": null,
+          "has_emergency_lighting": false,
+          "has_fire_detection": false,
+          "ceiling_height": 2.5
+        }
+      ],
+      "doors": [
+        {
+          "id": "D001",
+          "position": [
+            2.5,
+            0.0
+          ],
+          "width": 0.9,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": []
+        },
+        {
+          "id": "D002",
+          "position": [
+            7.5,
+            0.0
+          ],
+          "width": 0.9,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": []
+        },
+        {
+          "id": "D003",
+          "position": [
+            5.0,
+            4.0
+          ],
+          "width": 0.9,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": []
+        },
+        {
+          "id": "D004",
+          "position": [
+            2.5,
+            6.0
+          ],
+          "width": 0.9,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": []
+        },
+        {
+          "id": "D005",
+          "position": [
+            7.5,
+            6.0
+          ],
+          "width": 0.9,
+          "height": 2.1,
+          "door_type": "single",
+          "is_egress": false,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": []
+        },
+        {
+          "id": "D006",
+          "position": [
+            10.0,
+            5.0
+          ],
+          "width": 1.2,
+          "height": 2.1,
+          "door_type": "double",
+          "is_egress": true,
+          "fire_rating": null,
+          "opening_direction": null,
+          "connected_rooms": []
+        }
+      ],
+      "walls": [
+        {
+          "id": "W001",
+          "start": [
+            0.0,
+            0.0
+          ],
+          "end": [
+            10.0,
+            0.0
+          ],
+          "length": 10.0,
+          "thickness": 0.15,
+          "fire_rating": null,
+          "material": null,
+          "is_exterior": true
+        },
+        {
+          "id": "W002",
+          "start": [
+            0.0,
+            10.0
+          ],
+          "end": [
+            10.0,
+            10.0
+          ],
+          "length": 10.0,
+          "thickness": 0.15,
+          "fire_rating": null,
+          "material": null,
+          "is_exterior": true
+        },
+        {
+          "id": "W003",
+          "start": [
+            0.0,
+            0.0
+          ],
+          "end": [
+            0.0,
+            10.0
+          ],
+          "length": 10.0,
+          "thickness": 0.15,
+          "fire_rating": null,
+          "material": null,
+          "is_exterior": true
+        },
+        {
+          "id": "W004",
+          "start": [
+            10.0,
+            0.0
+          ],
+          "end": [
+            10.0,
+            10.0
+          ],
+          "length": 10.0,
+          "thickness": 0.15,
+          "fire_rating": null,
+          "material": null,
+          "is_exterior": true
+        },
+        {
+          "id": "W005",
+          "start": [
+            5.0,
+            0.0
+          ],
+          "end": [
+            5.0,
+            4.0
+          ],
+          "length": 4.0,
+          "thickness": 0.15,
+          "fire_rating": null,
+          "material": null,
+          "is_exterior": false
+        },
+        {
+          "id": "W006",
+          "start": [
+            0.0,
+            4.0
+          ],
+          "end": [
+            10.0,
+            4.0
+          ],
+          "length": 10.0,
+          "thickness": 0.15,
+          "fire_rating": null,
+          "material": null,
+          "is_exterior": false
+        },
+        {
+          "id": "W007",
+          "start": [
+            0.0,
+            6.0
+          ],
+          "end": [
+            5.0,
+            6.0
+          ],
+          "length": 5.0,
+          "thickness": 0.15,
+          "fire_rating": null,
+          "material": null,
+          "is_exterior": false
+        }
+      ],
+      "fire_equipment": [],
+      "sectors": []
+    }
+  ],
+  "rooms": [
+    {
+      "id": "R001",
+      "name": "Oficina A",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          5.0,
+          0.0
+        ],
+        [
+          5.0,
+          4.0
+        ],
+        [
+          0.0,
+          4.0
+        ]
+      ],
+      "use_type": "office",
+      "area": null,
+      "occupancy_load": null,
+      "has_emergency_lighting": false,
+      "has_fire_detection": false,
+      "ceiling_height": 2.5
+    },
+    {
+      "id": "R002",
+      "name": "Oficina B",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          5.0,
+          0.0
+        ],
+        [
+          10.0,
+          0.0
+        ],
+        [
+          10.0,
+          4.0
+        ],
+        [
+          5.0,
+          4.0
+        ]
+      ],
+      "use_type": "office",
+      "area": null,
+      "occupancy_load": null,
+      "has_emergency_lighting": false,
+      "has_fire_detection": false,
+      "ceiling_height": 2.5
+    },
+    {
+      "id": "R003",
+      "name": "Pasillo",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          0.0,
+          4.0
+        ],
+        [
+          10.0,
+          4.0
+        ],
+        [
+          10.0,
+          6.0
+        ],
+        [
+          0.0,
+          6.0
+        ]
+      ],
+      "use_type": "corridor",
+      "area": null,
+      "occupancy_load": null,
+      "has_emergency_lighting": false,
+      "has_fire_detection": false,
+      "ceiling_height": 2.5
+    },
+    {
+      "id": "R004",
+      "name": "Sala Reuniones",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          0.0,
+          6.0
+        ],
+        [
+          5.0,
+          6.0
+        ],
+        [
+          5.0,
+          10.0
+        ],
+        [
+          0.0,
+          10.0
+        ]
+      ],
+      "use_type": "meeting_room",
+      "area": null,
+      "occupancy_load": null,
+      "has_emergency_lighting": false,
+      "has_fire_detection": false,
+      "ceiling_height": 2.5
+    },
+    {
+      "id": "R005",
+      "name": "Almacén",
+      "level": "Planta Baja",
+      "boundary": [
+        [
+          5.0,
+          6.0
+        ],
+        [
+          10.0,
+          6.0
+        ],
+        [
+          10.0,
+          10.0
+        ],
+        [
+          5.0,
+          10.0
+        ]
+      ],
+      "use_type": "storage",
+      "area": null,
+      "occupancy_load": null,
+      "has_emergency_lighting": false,
+      "has_fire_detection": false,
+      "ceiling_height": 2.5
+    }
+  ],
+  "doors": [
+    {
+      "id": "D001",
+      "position": [
+        2.5,
+        0.0
+      ],
+      "width": 0.9,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": []
+    },
+    {
+      "id": "D002",
+      "position": [
+        7.5,
+        0.0
+      ],
+      "width": 0.9,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": []
+    },
+    {
+      "id": "D003",
+      "position": [
+        5.0,
+        4.0
+      ],
+      "width": 0.9,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": []
+    },
+    {
+      "id": "D004",
+      "position": [
+        2.5,
+        6.0
+      ],
+      "width": 0.9,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": []
+    },
+    {
+      "id": "D005",
+      "position": [
+        7.5,
+        6.0
+      ],
+      "width": 0.9,
+      "height": 2.1,
+      "door_type": "single",
+      "is_egress": false,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": []
+    },
+    {
+      "id": "D006",
+      "position": [
+        10.0,
+        5.0
+      ],
+      "width": 1.2,
+      "height": 2.1,
+      "door_type": "double",
+      "is_egress": true,
+      "fire_rating": null,
+      "opening_direction": null,
+      "connected_rooms": []
+    }
+  ],
+  "walls": [
+    {
+      "id": "W001",
+      "start": [
+        0.0,
+        0.0
+      ],
+      "end": [
+        10.0,
+        0.0
+      ],
+      "length": 10.0,
+      "thickness": 0.15,
+      "fire_rating": null,
+      "material": null,
+      "is_exterior": true
+    },
+    {
+      "id": "W002",
+      "start": [
+        0.0,
+        10.0
+      ],
+      "end": [
+        10.0,
+        10.0
+      ],
+      "length": 10.0,
+      "thickness": 0.15,
+      "fire_rating": null,
+      "material": null,
+      "is_exterior": true
+    },
+    {
+      "id": "W003",
+      "start": [
+        0.0,
+        0.0
+      ],
+      "end": [
+        0.0,
+        10.0
+      ],
+      "length": 10.0,
+      "thickness": 0.15,
+      "fire_rating": null,
+      "material": null,
+      "is_exterior": true
+    },
+    {
+      "id": "W004",
+      "start": [
+        10.0,
+        0.0
+      ],
+      "end": [
+        10.0,
+        10.0
+      ],
+      "length": 10.0,
+      "thickness": 0.15,
+      "fire_rating": null,
+      "material": null,
+      "is_exterior": true
+    },
+    {
+      "id": "W005",
+      "start": [
+        5.0,
+        0.0
+      ],
+      "end": [
+        5.0,
+        4.0
+      ],
+      "length": 4.0,
+      "thickness": 0.15,
+      "fire_rating": null,
+      "material": null,
+      "is_exterior": false
+    },
+    {
+      "id": "W006",
+      "start": [
+        0.0,
+        4.0
+      ],
+      "end": [
+        10.0,
+        4.0
+      ],
+      "length": 10.0,
+      "thickness": 0.15,
+      "fire_rating": null,
+      "material": null,
+      "is_exterior": false
+    },
+    {
+      "id": "W007",
+      "start": [
+        0.0,
+        6.0
+      ],
+      "end": [
+        5.0,
+        6.0
+      ],
+      "length": 5.0,
+      "thickness": 0.15,
+      "fire_rating": null,
+      "material": null,
+      "is_exterior": false
+    }
+  ],
+  "fire_equipment": [],
+  "evacuation_routes": [],
+  "sectors": []
+}

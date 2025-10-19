@@ -1,0 +1,193 @@
+{
+  "metadata": {
+    "project_name": "I01.6 PCI - SECTORIZACIÓN",
+    "project_id": null,
+    "level_name": "Planta Baja",
+    "level_number": null,
+    "extraction_date": "2025-10-19 11:55:24.229194",
+    "source_file": "data/blueprints/cad/I01.6 PCI - SECTORIZACIÓN.dwg",
+    "building_use": "commercial"
+  },
+  "levels": [
+    {
+      "name": "Planta Baja",
+      "number": 0,
+      "height": 0.0,
+      "rooms": [],
+      "doors": [],
+      "walls": [],
+      "fire_equipment": [],
+      "sectors": [
+        {
+          "id": "S001",
+          "name": "Sector 1",
+          "boundary": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              20.0,
+              0.0
+            ],
+            [
+              20.0,
+              10.0
+            ],
+            [
+              0.0,
+              10.0
+            ]
+          ],
+          "area": null,
+          "fire_resistance": "EI-60",
+          "rooms": [],
+          "max_evacuation_distance": null,
+          "compartment_type": null
+        },
+        {
+          "id": "S002",
+          "name": "Sector 2",
+          "boundary": [
+            [
+              20.0,
+              0.0
+            ],
+            [
+              40.0,
+              0.0
+            ],
+            [
+              40.0,
+              10.0
+            ],
+            [
+              20.0,
+              10.0
+            ]
+          ],
+          "area": null,
+          "fire_resistance": "EI-60",
+          "rooms": [],
+          "max_evacuation_distance": null,
+          "compartment_type": null
+        },
+        {
+          "id": "S003",
+          "name": "Sector 3",
+          "boundary": [
+            [
+              0.0,
+              10.0
+            ],
+            [
+              20.0,
+              10.0
+            ],
+            [
+              20.0,
+              20.0
+            ],
+            [
+              0.0,
+              20.0
+            ]
+          ],
+          "area": null,
+          "fire_resistance": "EI-90",
+          "rooms": [],
+          "max_evacuation_distance": null,
+          "compartment_type": null
+        }
+      ]
+    }
+  ],
+  "rooms": [],
+  "doors": [],
+  "walls": [],
+  "fire_equipment": [],
+  "evacuation_routes": [],
+  "sectors": [
+    {
+      "id": "S001",
+      "name": "Sector 1",
+      "boundary": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          20.0,
+          0.0
+        ],
+        [
+          20.0,
+          10.0
+        ],
+        [
+          0.0,
+          10.0
+        ]
+      ],
+      "area": null,
+      "fire_resistance": "EI-60",
+      "rooms": [],
+      "max_evacuation_distance": null,
+      "compartment_type": null
+    },
+    {
+      "id": "S002",
+      "name": "Sector 2",
+      "boundary": [
+        [
+          20.0,
+          0.0
+        ],
+        [
+          40.0,
+          0.0
+        ],
+        [
+          40.0,
+          10.0
+        ],
+        [
+          20.0,
+          10.0
+        ]
+      ],
+      "area": null,
+      "fire_resistance": "EI-60",
+      "rooms": [],
+      "max_evacuation_distance": null,
+      "compartment_type": null
+    },
+    {
+      "id": "S003",
+      "name": "Sector 3",
+      "boundary": [
+        [
+          0.0,
+          10.0
+        ],
+        [
+          20.0,
+          10.0
+        ],
+        [
+          20.0,
+          20.0
+        ],
+        [
+          0.0,
+          20.0
+        ]
+      ],
+      "area": null,
+      "fire_resistance": "EI-90",
+      "rooms": [],
+      "max_evacuation_distance": null,
+      "compartment_type": null
+    }
+  ]
+}
