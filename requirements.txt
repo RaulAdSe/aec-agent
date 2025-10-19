@@ -18,6 +18,7 @@ seaborn==0.13.2
 # LangChain and RAG
 langchain==0.2.16
 langchain-community==0.2.16
+langchain-openai==0.1.7
 langchain-google-genai==1.0.8
 langgraph==0.2.16
 langchain-core==0.2.38
@@ -26,6 +27,7 @@ google-generativeai==0.3.2
 # Vector Database and Embeddings
 chromadb==0.4.22
 sentence-transformers==2.3.1
+langchain-huggingface==0.1.0
 
 # PDF Processing
 pypdf==3.17.4
