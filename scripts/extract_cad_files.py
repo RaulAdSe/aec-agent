@@ -2,13 +2,14 @@
 """
 CAD File Extraction Script for AEC Compliance Agent.
 
-This script processes DWG/DXF files from the blueprints directory and extracts
-building data using the DWGExtractor class. The extracted data is saved as JSON
+This script processes DWG/DXF and Revit files from the blueprints directory and extracts
+building data using the unified extraction pipeline. The extracted data is saved as JSON
 files in the data/extracted/ directory.
 
 Usage:
     python scripts/extract_cad_files.py --input data/blueprints/cad/ --output data/extracted/
     python scripts/extract_cad_files.py --file "data/blueprints/cad/I01.4 PCI - EXTINCIÓN AUTOMÁTICA.dwg"
+    python scripts/extract_cad_files.py --analyze data/blueprints/  # Analyze files without extraction
 """
 
 import argparse
@@ -21,7 +22,7 @@ from typing import Optional
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from extraction.dwg_extractor import DWGExtractor
+from extraction.unified_extractor import UnifiedExtractor, analyze_file
 
 
 def setup_logging(verbose: bool = False) -> None:
