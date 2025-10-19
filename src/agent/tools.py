@@ -10,14 +10,14 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from langchain_core.tools import tool
 
-from src.schemas import Project, Room, Door, ComplianceCheck
-from src.calculations.geometry import (
+from schemas import Project, Room, Door, ComplianceCheck
+from calculations.geometry import (
     calculate_room_area, 
     calculate_room_centroid,
     calculate_door_clear_width,
     calculate_egress_capacity
 )
-from src.calculations.graph import create_circulation_graph, calculate_egress_distance
+from calculations.graph import create_circulation_graph, calculate_egress_distance
 
 
 # Global variables to hold project data and RAG manager
