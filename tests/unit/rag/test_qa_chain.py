@@ -5,7 +5,7 @@ Unit tests for QA chain.
 import pytest
 import os
 from unittest.mock import Mock, patch, MagicMock
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from src.rag.qa_chain import (
     create_qa_chain, 

@@ -5,7 +5,7 @@ Unit tests for vectorstore manager.
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from src.rag.vectorstore_manager import VectorstoreManager
 

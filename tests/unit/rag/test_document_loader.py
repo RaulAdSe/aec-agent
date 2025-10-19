@@ -5,7 +5,7 @@ Unit tests for document loader.
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from src.rag.document_loader import load_pdfs, load_single_pdf
 

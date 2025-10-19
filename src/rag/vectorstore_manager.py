@@ -6,7 +6,7 @@ Handles creation, loading, and management of ChromaDB vectorstore.
 
 from pathlib import Path
 from typing import List, Optional
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 

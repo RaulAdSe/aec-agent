@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 
 # System prompt optimized for Spanish building codes
