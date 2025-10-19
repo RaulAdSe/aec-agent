@@ -64,13 +64,28 @@ def create_qa_chain(
             "Please set it with your OpenAI API key."
         )
     
-    # Create OpenAI LLM
-    llm = ChatOpenAI(
-        model_name=model_name,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        openai_api_key=os.getenv("OPENAI_API_KEY")
-    )
+    # Create OpenAI LLM with model-specific parameters
+    if "gpt-5" in model_name:
+        # GPT-5 models have different parameter requirements
+        llm = ChatOpenAI(
+            model_name=model_name,
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+            # No temperature or max_tokens for gpt-5 models
+        )
+    elif "gpt-4" in model_name:
+        llm = ChatOpenAI(
+            model_name=model_name,
+            temperature=temperature,
+            max_completion_tokens=max_tokens,
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
+    else:
+        llm = ChatOpenAI(
+            model_name=model_name,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
     
     # Create prompt template
     prompt = PromptTemplate(

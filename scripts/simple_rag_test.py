@@ -98,14 +98,37 @@ def test_openai_connection():
         openai.api_key = os.getenv("OPENAI_API_KEY")
         
         # Test with a simple completion
-        response = openai.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
-            messages=[
-                {"role": "user", "content": "Say 'Hello, RAG system is working!' in Spanish."}
-            ],
-            max_tokens=50,
-            temperature=0.1
-        )
+        model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        
+        # Use correct parameter based on model
+        if "gpt-5" in model:
+            # GPT-5 models have different parameter requirements
+            response = openai.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": "Say 'Hello, RAG system is working!' in Spanish."}
+                ],
+                max_completion_tokens=50
+                # No temperature parameter for gpt-5 models
+            )
+        elif "gpt-4" in model:
+            response = openai.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": "Say 'Hello, RAG system is working!' in Spanish."}
+                ],
+                max_completion_tokens=50,
+                temperature=0.1
+            )
+        else:
+            response = openai.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": "Say 'Hello, RAG system is working!' in Spanish."}
+                ],
+                max_tokens=50,
+                temperature=0.1
+            )
         
         answer = response.choices[0].message.content
         print(f"✅ OpenAI connection successful!")
