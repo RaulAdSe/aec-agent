@@ -7,7 +7,7 @@ Uses OpenAI LLM with retrieval-augmented generation for building code queries.
 import os
 from typing import Dict, Any, List
 from langchain_openai import ChatOpenAI
-from langchain.chains import RetrievalQA
+from langchain_community.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain_core.documents import Document
 
