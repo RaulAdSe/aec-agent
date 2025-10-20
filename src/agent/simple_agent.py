@@ -153,6 +153,143 @@ class SimpleReActAgent:
             "final_answer": final_answer
         }
     
+    def run(self, question: str, max_iterations: int = None) -> Dict[str, Any]:
+        """
+        Run the agent with a simple question string.
+        
+        Args:
+            question: The question to ask the agent
+            max_iterations: Maximum number of iterations (optional)
+            
+        Returns:
+            Dictionary with agent response and metadata
+        """
+        if max_iterations is not None:
+            original_max = self.max_iterations
+            self.max_iterations = max_iterations
+        
+        try:
+            # Create input data for invoke method
+            input_data = {
+                "messages": [HumanMessage(content=question)],
+                "iterations": 0
+            }
+            
+            result = self.invoke(input_data)
+            return result
+        finally:
+            if max_iterations is not None:
+                self.max_iterations = original_max
+    
+    def run_with_streaming(self, question: str, max_iterations: int = None) -> Dict[str, Any]:
+        """
+        Run the agent with streaming output showing reasoning steps.
+        
+        Args:
+            question: The question to ask the agent
+            max_iterations: Maximum number of iterations (optional)
+            
+        Returns:
+            Dictionary with agent response and metadata
+        """
+        if max_iterations is not None:
+            original_max = self.max_iterations
+            self.max_iterations = max_iterations
+        
+        try:
+            print(f"\n💬 Question: {question}")
+            print("\n" + "="*80)
+            print("🔍 AGENT REASONING PROCESS (LIVE)")
+            print("="*80)
+            
+            # Create system prompt
+            system_prompt = self._create_system_prompt(question)
+            
+            # Start conversation
+            conversation = [
+                HumanMessage(content=system_prompt),
+                HumanMessage(content=question)
+            ]
+            
+            # Run ReAct loop with live updates
+            for iteration in range(self.max_iterations):
+                print(f"\n🔄 ITERATION {iteration + 1}")
+                print("-" * 50)
+                
+                try:
+                    # Get agent response
+                    print("🧠 Agent reasoning...")
+                    response = self.llm_with_tools.invoke(conversation)
+                    conversation.append(response)
+                    
+                    print(f"💭 Agent thought: {response.content[:150]}...")
+                    
+                    # Check if agent made tool calls
+                    if hasattr(response, 'tool_calls') and response.tool_calls:
+                        print(f"\n🔧 TOOL CALLS ({len(response.tool_calls)}):")
+                        
+                        # Execute tool calls
+                        for i, tool_call in enumerate(response.tool_calls, 1):
+                            tool_name = tool_call['name']
+                            tool_args = tool_call['args']
+                            tool_id = tool_call['id']
+                            
+                            print(f"\n  {i}. 🔨 Executing: {tool_name}")
+                            print(f"     📝 Arguments: {tool_args}")
+                            
+                            # Execute the tool
+                            if tool_name in self.tools:
+                                try:
+                                    result = self.tools[tool_name].invoke(tool_args)
+                                    print(f"     ✅ Result: {str(result)[:100]}...")
+                                    
+                                    # Create tool message
+                                    from langchain_core.messages import ToolMessage
+                                    tool_message = ToolMessage(
+                                        content=str(result),
+                                        tool_call_id=tool_id
+                                    )
+                                    conversation.append(tool_message)
+                                    
+                                except Exception as e:
+                                    print(f"     ❌ Error: {str(e)}")
+                                    tool_message = ToolMessage(
+                                        content=f"Error: {str(e)}",
+                                        tool_call_id=tool_id
+                                    )
+                                    conversation.append(tool_message)
+                            else:
+                                print(f"     ❌ Unknown tool: {tool_name}")
+                                print(f"     Available tools: {list(self.tools.keys())}")
+                                tool_message = ToolMessage(
+                                    content=f"Unknown tool: {tool_name}",
+                                    tool_call_id=tool_id
+                                )
+                                conversation.append(tool_message)
+                    else:
+                        # No tool calls, agent provided final answer
+                        print(f"\n✅ FINAL ANSWER:")
+                        print(f"📝 {response.content}")
+                        break
+                        
+                except Exception as e:
+                    print(f"\n❌ Error in iteration {iteration + 1}: {str(e)}")
+                    break
+            
+            print(f"\n📊 Completed in {len(conversation)} steps")
+            
+            # Extract final answer
+            final_answer = conversation[-1].content if conversation else "No response generated"
+            
+            return {
+                "messages": conversation,
+                "iterations": len(conversation),
+                "final_answer": final_answer
+            }
+        finally:
+            if max_iterations is not None:
+                self.max_iterations = original_max
+    
     def _create_system_prompt(self, task: str) -> str:
         """Create system prompt for the agent."""
         return f"""You are an expert AEC (Architecture, Engineering, Construction) compliance verification agent.
