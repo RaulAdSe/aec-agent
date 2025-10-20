@@ -20,7 +20,7 @@ import sys
 sys.path.append('.')
 
 from src.extraction.dwg_extractor import DWGExtractor
-from src.calculations.geometry import calculate_room_area, calculate_centroid
+from src.calculations.geometry import calculate_room_area, calculate_room_centroid
 from src.calculations.graph import create_circulation_graph, find_shortest_path
 from src.rag.vectorstore_manager import VectorstoreManager
 from src.rag.qa_chain import create_qa_chain

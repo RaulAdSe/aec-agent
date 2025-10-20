@@ -96,7 +96,7 @@ class ReActAgent:
             "agent",
             self._should_continue,
             {
-                "continue": "tools",
+                "tools": "tools",
                 "end": END
             }
         )
@@ -181,18 +181,10 @@ class ReActAgent:
         # Check if the last message has tool calls
         last_message = messages[-1]
         if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
-            return "continue"
+            return "tools"
         
-        # Check if the agent has provided a final answer
-        if isinstance(last_message, AIMessage):
-            content = last_message.content.lower()
-            if any(phrase in content for phrase in [
-                "final answer", "conclusion", "summary", "compliance report",
-                "all checks complete", "verification complete"
-            ]):
-                return "end"
-        
-        return "continue"
+        # If no tool calls, end the workflow
+        return "end"
     
     def _create_system_prompt(self, task: str, iteration: int) -> str:
         """Create system prompt for the agent."""

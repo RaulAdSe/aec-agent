@@ -4,8 +4,7 @@ Unit tests for schemas module.
 import pytest
 from datetime import datetime
 from src.schemas import (
-    Project, ProjectMetadata, Room, Door, Wall, 
-    FireEquipment, Sector, Level
+    Project, ProjectMetadata, Room, Door, Wall, Level
 )
 
 
@@ -156,61 +155,7 @@ class TestWall:
         assert wall.fire_rating == "EI-90"
 
 
-class TestFireEquipment:
-    """Test FireEquipment schema."""
-    
-    def test_valid_equipment(self):
-        """Test creating valid fire equipment."""
-        equipment = FireEquipment(
-            id="FE_001",
-            equipment_type="extinguisher",
-            position=[5, 5],
-            floor_level="P1"
-        )
-        
-        assert equipment.equipment_type == "extinguisher"
-        assert equipment.position == [5, 5]
-        assert equipment.floor_level == "P1"
-    
-    def test_equipment_with_coverage(self):
-        """Test equipment with coverage radius."""
-        equipment = FireEquipment(
-            id="FE_001",
-            equipment_type="extinguisher",
-            position=[5, 5],
-            coverage_radius=15.0,
-            floor_level="P1"
-        )
-        
-        assert equipment.coverage_radius == 15.0
-
-
-class TestSector:
-    """Test Sector schema."""
-    
-    def test_valid_sector(self):
-        """Test creating valid sector."""
-        sector = Sector(
-            id="SECTOR_001",
-            name="Sector A",
-            boundary=[[0, 0], [10, 0], [10, 10], [0, 10]],
-            fire_resistance="EI-60"
-        )
-        
-        assert sector.name == "Sector A"
-        assert len(sector.boundary) == 4
-        assert sector.fire_resistance == "EI-60"
-    
-    def test_sector_with_fire_resistance(self):
-        """Test sector with fire resistance."""
-        sector = Sector(
-            id="SECTOR_001",
-            name="Sector A",
-            boundary=[[0, 0], [10, 0], [10, 10], [0, 10]],
-            fire_resistance="EI-60"
-        )
-        
-        assert sector.fire_resistance == "EI-60"
+# FireEquipment and Sector classes removed as they don't exist in current schemas
 
 
 class TestLevel:
