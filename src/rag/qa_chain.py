@@ -139,7 +139,12 @@ def format_response(result: Dict[str, Any]) -> str:
         for i, doc in enumerate(sources, 1):
             source = doc.metadata.get("source", "Desconocido")
             page = doc.metadata.get("page", "N/A")
-            response += f"{i}. {source}, Página {page}\n"
+            section = doc.metadata.get("section")
+            # Build a compact citation including section when available
+            if section:
+                response += f"{i}. {source}, Página {page}, Sección {section}\n"
+            else:
+                response += f"{i}. {source}, Página {page}\n"
     
     return response
 
