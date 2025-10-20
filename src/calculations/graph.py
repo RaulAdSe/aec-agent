@@ -70,8 +70,10 @@ class CirculationGraph:
                     from_node = f"room_{door.from_room}"
                     to_node = f"room_{door.to_room}"
                     
-                    # Calculate distance between room centroids
-                    distance = self._calculate_room_distance(door.from_room, door.to_room)
+                    # Calculate distance via the actual door position (centroid -> door -> centroid)
+                    distance = self._calculate_door_constrained_distance(
+                        door.from_room, door.to_room, door
+                    )
                     
                     self.graph.add_edge(from_node, to_node,
                                       door_id=door.id,
@@ -115,6 +117,28 @@ class CirculationGraph:
         dx = pos2.x - pos1.x
         dy = pos2.y - pos1.y
         return math.sqrt(dx * dx + dy * dy)
+
+    def _calculate_door_constrained_distance(self, room1_id: str, room2_id: str, door: Door) -> float:
+        """Calculate distance from room1 centroid to door to room2 centroid.
+
+        Falls back to centroid-to-centroid if door position is missing.
+        """
+        pos1 = self.room_positions.get(room1_id, Point2D(x=0, y=0))
+        pos2 = self.room_positions.get(room2_id, Point2D(x=0, y=0))
+
+        if door and getattr(door, 'position', None):
+            dp = door.position
+            # distance room1 centroid -> door
+            dx1 = dp.x - pos1.x
+            dy1 = dp.y - pos1.y
+            d1 = math.sqrt(dx1 * dx1 + dy1 * dy1)
+            # distance door -> room2 centroid
+            dx2 = pos2.x - dp.x
+            dy2 = pos2.y - dp.y
+            d2 = math.sqrt(dx2 * dx2 + dy2 * dy2)
+            return d1 + d2
+        # Fallback
+        return self._calculate_room_distance(room1_id, room2_id)
     
     def calculate_egress_distance(self, room_id: str) -> Dict[str, any]:
         """
