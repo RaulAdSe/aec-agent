@@ -2,7 +2,7 @@
 """
 Real CAD Data Extraction Script for AEC Compliance Agent.
 
-This script extracts real building data from DWG and Revit files using
+This script extracts real building data from DWG files using
 various methods including pyautocad for DWG files and direct file analysis.
 """
 

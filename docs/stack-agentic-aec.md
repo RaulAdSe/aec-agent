@@ -3,7 +3,7 @@
 ## 🎯 Objetivo del Sistema
 
 Single-agent con ReACT que:
-1. Lee datos estructurados de planos (RVT/DWG → JSON)
+1. Lee datos estructurados de planos (DWG → JSON)
 2. Realiza cálculos geométricos y de rutas
 3. Consulta normativa vía RAG
 4. Verifica cumplimiento normativo
@@ -15,8 +15,6 @@ Single-agent con ReACT que:
 
 ### 1. **Extracción de Datos** (Pre-procesamiento)
 
-**Para RVT:**
-- `pyRevit` (ejecutar dentro de Revit)
 - Script Python → JSON estructurado
 
 **Para DWG/DXF:**
@@ -153,7 +151,7 @@ aec-compliance-agent/
 ├── .gitignore
 │
 ├── data/
-│   ├── raw/                      # RVT/DWG originales
+│   ├── raw/                      # DWG originales
 │   ├── extracted/                # JSON extraídos
 │   │   ├── project_001.json
 │   │   └── project_002.json
@@ -168,7 +166,6 @@ aec-compliance-agent/
 ├── src/
 │   ├── __init__.py
 │   ├── extraction/               # Scripts de extracción
-│   │   ├── rvt_export.py        # pyRevit script
 │   │   └── dxf_export.py        # ezdxf script
 │   ├── schemas.py                # Pydantic models
 │   ├── geometry.py               # Shapely functions
@@ -314,7 +311,7 @@ END
 **Parte 1: Extracción (5 min)**
 - Mostrar JSON ya extraído
 - Explicar schema unificado
-- Quick tour de pyRevit/ezdxf
+- Quick tour de ezdxf
 
 **Parte 2: Cálculos Básicos (5 min)**
 - Shapely: calcular área de room
@@ -346,7 +343,7 @@ END
 
 | Feature | Ichi/CivCheck | Tu Sistema |
 |---------|---------------|------------|
-| **Extracción** | Upload PDF | RVT/DWG nativos |
+| **Extracción** | Upload PDF | DWG nativos |
 | **Cálculos** | ❓ Black box | ✅ Transparente (Python) |
 | **Normativa** | Hardcoded | 🔥 RAG (actualizable) |
 | **Agente** | Fixed workflow | 🧠 ReACT (adaptativo) |
@@ -400,7 +397,7 @@ END
 
 ```
 "Imaginad que acabáis de recibir un proyecto de un cliente.
-Tenéis el RVT/DWG y necesitáis verificar contra CTE DB-SI.
+Tenéis el DWG y necesitáis verificar contra CTE DB-SI.
 
 [CLICK: Carga JSON]
 'Aquí tenemos los datos extraídos: 15 rooms, 23 puertas, 8 salidas.'

@@ -2,7 +2,7 @@
 """
 CAD File Extraction Script for AEC Compliance Agent.
 
-This script processes DWG/DXF and Revit files from the blueprints directory and extracts
+This script processes DWG/DXF files from the blueprints directory and extracts
 building data using the unified extraction pipeline. The extracted data is saved as JSON
 files in the data/extracted/ directory.
 

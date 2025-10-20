@@ -46,7 +46,6 @@ aec-compliance-agent/
 │
 ├── data/                          # Data directory
 │   ├── raw/                       # Raw input files
-│   │   ├── rvt/                   # Revit files (if any)
 │   │   └── dwg/                   # DWG files (AutoCAD)
 │   ├── extracted/                 # Extracted JSON data
 │   │   └── tech_tower_p2.json     # Example project

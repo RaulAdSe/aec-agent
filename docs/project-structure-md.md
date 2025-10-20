@@ -34,7 +34,6 @@ aec-compliance-agent/
 │   │
 │   ├── 📁 extraction/                # Pilar 1: Extracción
 │   │   ├── __init__.py
-│   │   ├── rvt_export.py             # Script para Revit (pyRevit)
 │   │   ├── dxf_export.py             # Script para DWG/DXF (ezdxf)
 │   │   └── json_validator.py         # Validación de JSON extraídos
 │   │
@@ -68,7 +67,6 @@ aec-compliance-agent/
 │
 ├── 📁 data/                          # 💾 Datos
 │   ├── 📁 raw/                       # Archivos originales
-│   │   ├── 📁 rvt/                   # Archivos Revit
 │   │   └── 📁 dwg/                   # Archivos CAD
 │   │
 │   ├── 📁 extracted/                 # JSON extraídos
@@ -208,9 +206,6 @@ notebooks/
 #### 3.1 `src/extraction/`
 
 ```python
-# src/extraction/rvt_export.py
-"""
-Script para ejecutar dentro de Revit con pyRevit.
 Extrae rooms, doors, walls, exits → JSON
 """
 
@@ -366,7 +361,7 @@ def create_compliance_agent() -> StateGraph:
 
 ```
 data/
-├── raw/              # Archivos originales (RVT, DWG)
+├── raw/              # Archivos originales (DWG)
 ├── extracted/        # JSON procesados
 └── normativa/        # PDFs de normativa
 ```
@@ -385,7 +380,6 @@ RD_{number}_{year}_{name}.pdf
 **.gitignore**:
 ```
 # Ignorar archivos grandes
-data/raw/*.rvt
 data/raw/*.dwg
 
 # Pero SÍ incluir JSONs y PDFs
@@ -548,7 +542,6 @@ ENV/
 .env                    # ⚠️ NUNCA committear API keys
 vectorstore/            # Regenerable
 outputs/                # Auto-generados
-data/raw/*.rvt          # Archivos grandes
 data/raw/*.dwg
 
 # Logs
@@ -583,7 +576,7 @@ pydantic==2.5.3
 echo "🚀 Setting up AEC Compliance Agent..."
 
 # 1. Crear estructura de carpetas
-mkdir -p data/{raw/{rvt,dwg},extracted,normativa}
+mkdir -p data/{raw/dwg,extracted,normativa}
 mkdir -p vectorstore
 mkdir -p outputs/{reports,logs,visualizations}
 mkdir -p tests/{unit,integration,fixtures}

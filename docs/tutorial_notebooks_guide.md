@@ -1261,8 +1261,8 @@ After the presentation, students should be able to:
 **Q: What if the regulations change?**
 > A: Just update the PDFs and rebuild the vectorstore. That's the advantage - no hardcoded rules.
 
-**Q: Can it work with Revit?**
-> A: Yes! Revit can export to DXF. You could also use the Revit API for direct integration.
+**Q: Can it work with other CAD formats?**
+> A: Yes! Most CAD software can export to DXF format, which is fully supported.
 
 **Q: How long to process a full building?**
 > A: Currently: ~1-2 seconds per floor for extraction, ~5 seconds for analysis, ~10-30 seconds for agent verification. So under a minute per floor.

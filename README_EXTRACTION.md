@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AEC Compliance Agent includes a comprehensive CAD file extraction system that can read building information from DWG, DXF, and Revit files. This system extracts structured data about rooms, doors, walls, fire equipment, and fire sectors for building code compliance analysis.
+The AEC Compliance Agent includes a comprehensive CAD file extraction system that can read building information from DWG and DXF files. This system extracts structured data about rooms, doors, walls, fire equipment, and fire sectors for building code compliance analysis.
 
 ## 🚀 Quick Start
 
@@ -32,7 +32,6 @@ python3 scripts/extract_real_data.py --input data/blueprints/ --output-dir data/
 ```
 src/extraction/
 ├── dwg_extractor.py          # DWG/DXF extraction engine
-├── revit_extractor.py        # Revit extraction engine  
 ├── unified_extractor.py      # Unified interface
 └── json_validator.py         # Data validation
 
@@ -45,7 +44,6 @@ scripts/
 data/
 ├── blueprints/               # Input CAD files
 │   ├── cad/                  # DWG/DXF files
-│   └── revit/                # RVT files
 └── extracted/                # Output JSON files
 ```
 
@@ -57,10 +55,6 @@ data/
 - **Status**: ✅ Fully supported
 - **Method**: Python with `ezdxf` library
 
-### Revit Files (RVT)
-- **RVT**: Autodesk Revit format
-- **Status**: ⚠️ Requires Revit API
-- **Method**: Revit API (with mock data fallback)
 
 ## 🏗️ Extracted Building Elements
 
@@ -220,8 +214,6 @@ The extraction system produces structured JSON files with the following schema:
 # Install Python dependencies
 pip install ezdxf pydantic shapely
 
-# For Revit extraction (optional)
-# Install Revit and pyRevit
 ```
 
 ### Environment Setup
@@ -234,7 +226,7 @@ cd aec-compliance-agent
 pip install -r requirements.txt
 
 # Create directories
-mkdir -p data/blueprints/{cad,revit}
+mkdir -p data/blueprints/cad
 mkdir -p data/extracted
 ```
 
@@ -276,11 +268,6 @@ if entity.is_closed and 'ROOM' in layer_name:
 qcad -exec scripts/qcad_converter.js convert building.dwg building.dxf
 ```
 
-#### Revit API Not Available
-```bash
-⚠️ Revit API not available. Returning mock data.
-```
-**Solution**: Install Revit and pyRevit, or use mock data for development.
 
 #### File Not Found
 ```bash
@@ -338,7 +325,6 @@ python3 scripts/test_extraction.py
 The test suite verifies:
 - ✅ Mock data extraction
 - ✅ DWG extractor functionality
-- ✅ Revit extractor functionality
 - ✅ Unified extractor interface
 - ✅ JSON validation
 - ✅ Existing mock data compatibility
@@ -354,7 +340,6 @@ The test suite verifies:
 
 1. **Convert DWG to DXF**: Use QCAD for better compatibility
 2. **Test with Real Files**: Extract from actual CAD files
-3. **Set up Revit API**: For full RVT file support
 4. **Integrate with RAG**: Connect to compliance analysis
 5. **Deploy Agent**: Use extracted data for automated compliance
 

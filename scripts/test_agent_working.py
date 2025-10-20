@@ -354,7 +354,7 @@ def main():
     if passed == total:
         print("\n🎉 All tests passed! The agent is working correctly.")
         print("\nThe agent can successfully:")
-        print("  ✅ Extract information from blueprints (DWG/DXF/Revit)")
+        print("  ✅ Extract information from blueprints (DWG/DXF)")
         print("  ✅ Perform geometric computations (areas, distances, graphs)")
         print("  ✅ Use RAG to query Spanish building codes (CTE)")
         print("  ✅ Establish compliance verification with regulations")

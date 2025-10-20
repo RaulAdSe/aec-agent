@@ -1,8 +1,8 @@
 """
 Unified extraction pipeline for AEC Compliance Agent.
 
-This module provides a single interface for extracting building data from both
-DWG/DXF and Revit files, with automatic file type detection and appropriate
+This module provides a single interface for extracting building data from
+DWG/DXF files, with automatic file type detection and appropriate
 extraction method selection.
 """
 
@@ -13,16 +13,14 @@ from typing import Optional, Union, Dict, Any
 from datetime import datetime
 
 try:
-    from .dwg_extractor import DWGExtractor, extract_and_save as extract_dwg
-    from .revit_extractor import RevitExtractor, extract_and_save_revit
+    from .dwg_extractor import DWGExtractor, extract_from_dwg, save_to_json
     from ..schemas import Project
 except ImportError:
     # Fallback for direct execution
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from extraction.dwg_extractor import DWGExtractor, extract_and_save as extract_dwg
-    from extraction.revit_extractor import RevitExtractor, extract_and_save_revit
+    from extraction.dwg_extractor import DWGExtractor, extract_from_dwg, save_to_json
     from schemas import Project
 
 # Configure logging
@@ -32,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class UnifiedExtractor:
     """
-    Unified extractor that can handle both DWG/DXF and Revit files.
+    Unified extractor that can handle DWG/DXF files.
     
     This class automatically detects file types and uses the appropriate
     extraction method for each file format.
@@ -40,14 +38,13 @@ class UnifiedExtractor:
     
     def __init__(self):
         self.dwg_extractor = DWGExtractor()
-        self.revit_extractor = RevitExtractor()
         
     def extract_from_file(self, file_path: Union[str, Path], 
                          project_name: Optional[str] = None,
                          level_name: str = "Planta Baja",
                          output_path: Optional[Union[str, Path]] = None) -> Project:
         """
-        Extract building data from a CAD file (DWG, DXF, or RVT).
+        Extract building data from a CAD file (DWG or DXF).
         
         Args:
             file_path: Path to the CAD file
@@ -74,8 +71,6 @@ class UnifiedExtractor:
         # Extract based on file type
         if file_type in ['dwg', 'dxf']:
             project = self._extract_dwg_file(file_path, project_name, level_name)
-        elif file_type == 'rvt':
-            project = self._extract_revit_file(file_path, project_name, level_name)
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
         
@@ -154,8 +149,6 @@ class UnifiedExtractor:
         
         if extension in ['.dwg', '.dxf']:
             return extension[1:]  # Remove the dot
-        elif extension == '.rvt':
-            return 'rvt'
         else:
             raise ValueError(f"Unsupported file extension: {extension}")
     
@@ -172,23 +165,10 @@ class UnifiedExtractor:
         
         return project
     
-    def _extract_revit_file(self, file_path: Path, project_name: Optional[str], level_name: str) -> Project:
-        """Extract data from Revit file."""
-        logger.info(f"Extracting from Revit: {file_path.name}")
-        
-        # For Revit files, we need to use the Revit API
-        # This will return mock data if not running inside Revit
-        project = self.revit_extractor.extract_from_document(
-            doc=None,  # Will use active document or create mock
-            project_name=project_name,
-            level_name=level_name
-        )
-        
-        return project
     
     def _find_cad_files(self, directory_path: Path) -> list:
         """Find all CAD files in a directory."""
-        supported_extensions = ['.dwg', '.dxf', '.rvt']
+        supported_extensions = ['.dwg', '.dxf']
         cad_files = []
         
         for extension in supported_extensions:
@@ -237,7 +217,7 @@ class UnifiedExtractor:
             "file_type": file_type,
             "file_size_mb": file_path.stat().st_size / (1024 * 1024),
             "modified_date": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
-            "supported": file_type in ['dwg', 'dxf', 'rvt']
+            "supported": file_type in ['dwg', 'dxf']
         }
         
         if file_type in ['dwg', 'dxf']:
@@ -263,12 +243,6 @@ class UnifiedExtractor:
             except Exception as e:
                 analysis["analysis_error"] = str(e)
         
-        elif file_type == 'rvt':
-            # For Revit files, we can only provide basic file info
-            analysis.update({
-                "note": "Revit file analysis requires Revit API access",
-                "extraction_available": False
-            })
         
         return analysis
 

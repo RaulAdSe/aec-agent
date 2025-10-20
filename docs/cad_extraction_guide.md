@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AEC Compliance Agent provides comprehensive tools for extracting building data from CAD files (DWG, DXF, and Revit). This guide explains how to use these tools to extract structured building information for compliance analysis.
+The AEC Compliance Agent provides comprehensive tools for extracting building data from CAD files (DWG and DXF). This guide explains how to use these tools to extract structured building information for compliance analysis.
 
 ## 🎯 Supported File Types
 
@@ -12,11 +12,6 @@ The AEC Compliance Agent provides comprehensive tools for extracting building da
 - **Extraction Method**: Python with `ezdxf` library
 - **Capabilities**: Full building element extraction
 
-### Revit Files (RVT)
-- **RVT**: Autodesk Revit format
-- **Extraction Method**: Revit API (requires Revit installation)
-- **Capabilities**: Full building element extraction with BIM data
-- **Fallback**: Mock data generation when Revit API unavailable
 
 ## 🛠️ Installation & Setup
 
@@ -25,8 +20,6 @@ The AEC Compliance Agent provides comprehensive tools for extracting building da
 # Install required Python packages
 pip install ezdxf pydantic shapely
 
-# For Revit extraction (optional)
-# Install pyRevit or use Revit API directly
 ```
 
 ### Environment Setup
@@ -39,7 +32,7 @@ cd aec-compliance-agent
 pip install -r requirements.txt
 
 # Create data directories
-mkdir -p data/blueprints/{cad,revit}
+mkdir -p data/blueprints/cad
 mkdir -p data/extracted
 ```
 
@@ -49,7 +42,6 @@ mkdir -p data/extracted
 aec-compliance-agent/
 ├── src/extraction/
 │   ├── dwg_extractor.py          # DWG/DXF extraction
-│   ├── revit_extractor.py        # Revit extraction
 │   ├── unified_extractor.py      # Unified interface
 │   └── json_validator.py         # Data validation
 ├── scripts/
@@ -59,7 +51,6 @@ aec-compliance-agent/
 └── data/
     ├── blueprints/               # Input CAD files
     │   ├── cad/                  # DWG/DXF files
-    │   └── revit/                # RVT files
     └── extracted/                # Output JSON files
 ```
 
@@ -79,8 +70,6 @@ python scripts/extract_real_data.py --analyze data/blueprints/
 # Extract from DWG file
 python scripts/extract_real_data.py --file data/blueprints/cad/building.dwg --output building.json
 
-# Extract from Revit file
-python scripts/extract_real_data.py --file data/blueprints/revit/building.rvt --output building.json
 ```
 
 ### 3. Extract from Directory
@@ -188,19 +177,10 @@ print(f"File has {analysis['total_entities']} entities")
 
 ```python
 from src.extraction.dwg_extractor import DWGExtractor
-from src.extraction.revit_extractor import RevitExtractor
-
 # DWG/DXF extraction
 dwg_extractor = DWGExtractor()
 project = dwg_extractor.extract_from_file(
     file_path="building.dwg",
-    project_name="My Building"
-)
-
-# Revit extraction
-revit_extractor = RevitExtractor()
-project = revit_extractor.extract_from_document(
-    doc=None,  # Uses active document
     project_name="My Building"
 )
 ```
@@ -299,7 +279,7 @@ if any(keyword in name for keyword in ['EXTINTOR', 'BIE', 'SPRINKLER']):
 ```bash
 ❌ Unsupported file extension: .pdf
 ```
-**Solution**: Use supported formats (DWG, DXF, RVT)
+**Solution**: Use supported formats (DWG, DXF)
 
 #### 3. DXF Parsing Errors
 ```bash
@@ -310,16 +290,7 @@ if any(keyword in name for keyword in ['EXTINTOR', 'BIE', 'SPRINKLER']):
 - Try converting DWG to DXF with QCAD
 - Check file encoding
 
-#### 4. Revit API Not Available
-```bash
-⚠️ Revit API not available. Returning mock data.
-```
-**Solution**: 
-- Install Revit and pyRevit
-- Run script inside Revit environment
-- Use mock data for development
-
-#### 5. Memory Issues
+#### 4. Memory Issues
 ```bash
 ❌ Out of memory when processing large file
 ```
@@ -415,7 +386,6 @@ load_project_data("data/extracted/building.json")
 ### Tools
 - [QCAD Community Edition](https://qcad.org/)
 - [ezdxf Documentation](https://ezdxf.readthedocs.io/)
-- [Revit API Documentation](https://help.autodesk.com/view/RVT/2024/ENU/)
 
 ---
 

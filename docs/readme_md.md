@@ -412,7 +412,6 @@ This is a **Proof of Concept** with known limitations:
 
 - [ ] Computer vision for PDF plan analysis
 - [ ] Multi-agent collaboration (specialist agents)
-- [ ] Integration with BIM software (Revit API)
 - [ ] Real-time code updates
 
 ### Long-term (v3.0)

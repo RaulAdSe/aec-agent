@@ -2,7 +2,7 @@
 End-to-End Integration Test for Complete Agent Workflow
 
 This test verifies the complete pipeline:
-1. Blueprint Extraction (DWG/DXF/Revit)
+1. Blueprint Extraction (DWG/DXF)
 2. Geometric Computations 
 3. RAG System (Building Code Queries)
 4. Compliance Verification

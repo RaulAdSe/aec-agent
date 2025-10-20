@@ -18,7 +18,7 @@ from src.utils.visualization import plot_floorplan
 
 def demo_data_extraction():
     """Demo data extraction capabilities."""
-    print("🏗️  DEMO: Data Extraction from CAD/Revit Files")
+    print("🏗️  DEMO: Data Extraction from CAD Files")
     print("=" * 60)
     
     # Load BAUHAUS project data
@@ -156,17 +156,6 @@ def demo_mock_data():
         for sector in sector_data['sectors']:
             print(f"    - {sector['name']}: {sector['fire_rating']}, {sector['area']} m²")
     
-    # Load Revit mock data
-    revit_file = Path("data/blueprints/revit/2201A_R24_BAUHAUS_LEGANÉS_V8_LT_mock_data.json")
-    if revit_file.exists():
-        with open(revit_file, 'r') as f:
-            revit_data = json.load(f)
-        
-        print(f"\nRevit Model (BAUHAUS):")
-        level = revit_data['levels'][0]
-        print(f"  - Level: {level['name']}")
-        print(f"  - Rooms: {len(level['rooms'])}")
-        print(f"  - Total Area: {sum(r['area'] for r in level['rooms']):.1f} m²")
 
 def main():
     """Run the complete demo."""
@@ -190,7 +179,7 @@ def main():
         
         print(f"\n🎯 DEMO SUMMARY")
         print("=" * 60)
-        print("✅ Data extraction from CAD/Revit: Working")
+        print("✅ Data extraction from CAD: Working")
         print("✅ Geometric calculations: Working") 
         print("✅ Route analysis: Working")
         print("✅ Visualization: Working")
