@@ -301,7 +301,7 @@ def calculate_egress_distance(room_id: str) -> Dict[str, Any]:
             return egress_info
         
         # Get room information for compliance checking
-        room_info = get_room_info(room_id)
+        room_info = get_room_info.invoke({"room_id": room_id})
         if "error" in room_info:
             return room_info
         
