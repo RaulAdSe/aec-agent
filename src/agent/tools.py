@@ -199,7 +199,7 @@ def check_door_width_compliance(door_id: str) -> Dict[str, Any]:
         return {"error": f"Door {door_id} not found in project"}
     
     # Get door information
-    door_info = get_door_info(door_id)
+    door_info = get_door_info.invoke({"door_id": door_id})
     if "error" in door_info:
         return door_info
     
