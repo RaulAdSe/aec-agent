@@ -11,7 +11,7 @@ from shapely.geometry import Polygon, Point, LineString
 from shapely.ops import unary_union
 import numpy as np
 
-from schemas import Point2D, Point3D, Boundary, Room, Door
+from src.schemas import Point2D, Point3D, Boundary, Room, Door
 
 
 def calculate_polygon_area(points: List[Point2D]) -> float:

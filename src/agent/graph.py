@@ -22,6 +22,7 @@ from .tools import (
     query_normativa,
     calculate_egress_distance
 )
+from .memory import SlidingWindowMemory
 
 
 class AgentState(TypedDict):
@@ -32,6 +33,7 @@ class AgentState(TypedDict):
     current_task: Optional[str]
     compliance_results: List[Dict[str, Any]]
     final_answer: Optional[str]
+    memory: Optional[SlidingWindowMemory]
 
 
 class ReActAgent:
@@ -41,7 +43,8 @@ class ReActAgent:
         self,
         model_name: str = "gpt-3.5-turbo",
         temperature: float = 0.1,
-        max_iterations: int = 10
+        max_iterations: int = 10,
+        memory_window_size: int = 5
     ):
         """
         Initialize the ReAct Agent.
@@ -50,6 +53,7 @@ class ReActAgent:
             model_name: OpenAI model to use
             temperature: Model temperature
             max_iterations: Maximum number of reasoning iterations
+            memory_window_size: Size of the sliding window memory
         """
         self.llm = ChatOpenAI(
             model=model_name,
@@ -58,6 +62,7 @@ class ReActAgent:
         )
         
         self.max_iterations = max_iterations
+        self.memory_window_size = memory_window_size
         
         # Define available tools
         self.tools = [
@@ -104,6 +109,14 @@ class ReActAgent:
         messages = state["messages"]
         iterations = state.get("iterations", 0)
         max_iterations = state.get("max_iterations", self.max_iterations)
+        memory = state.get("memory")
+        
+        # Initialize memory if not present
+        if memory is None:
+            memory = SlidingWindowMemory(window_size=self.memory_window_size)
+            # Add existing messages to memory
+            for msg in messages:
+                memory.add_message(msg)
         
         # Check if we've exceeded max iterations
         if iterations >= max_iterations:
@@ -111,11 +124,13 @@ class ReActAgent:
                 content=f"I've reached the maximum number of iterations ({max_iterations}). "
                        f"Here's what I've found so far: {self._summarize_results(state)}"
             )
+            memory.add_message(final_message)
             return {
                 **state,
                 "messages": messages + [final_message],
                 "iterations": iterations + 1,
-                "final_answer": final_message.content
+                "final_answer": final_message.content,
+                "memory": memory
             }
         
         # Get the last human message to understand the task
@@ -133,17 +148,24 @@ class ReActAgent:
         # Create system prompt for reasoning
         system_prompt = self._create_system_prompt(current_task, iterations)
         
-        # Prepare messages for LLM
-        llm_messages = [HumanMessage(content=system_prompt)] + messages
+        # Get messages from memory (includes summaries)
+        memory_messages = memory.get_messages_for_llm()
+        
+        # Prepare messages for LLM (system prompt + memory context)
+        llm_messages = [HumanMessage(content=system_prompt)] + memory_messages
         
         # Get LLM response
         response = self.llm_with_tools.invoke(llm_messages)
+        
+        # Add response to memory
+        memory.add_message(response)
         
         return {
             **state,
             "messages": messages + [response],
             "iterations": iterations + 1,
-            "current_task": current_task
+            "current_task": current_task,
+            "memory": memory
         }
     
     def _should_continue(self, state: AgentState) -> str:
@@ -226,6 +248,9 @@ You have access to 6 specialized tools for building compliance verification:
         Returns:
             Dictionary with agent response and metadata
         """
+        # Initialize memory
+        memory = SlidingWindowMemory(window_size=self.memory_window_size)
+        
         # Initialize state
         initial_state = {
             "messages": input_data.get("messages", []),
@@ -233,7 +258,8 @@ You have access to 6 specialized tools for building compliance verification:
             "max_iterations": input_data.get("max_iterations", self.max_iterations),
             "current_task": None,
             "compliance_results": [],
-            "final_answer": None
+            "final_answer": None,
+            "memory": memory
         }
         
         # Run the agent
@@ -243,30 +269,34 @@ You have access to 6 specialized tools for building compliance verification:
             "messages": result["messages"],
             "iterations": result["iterations"],
             "final_answer": result.get("final_answer"),
-            "compliance_results": result.get("compliance_results", [])
+            "compliance_results": result.get("compliance_results", []),
+            "memory_stats": result.get("memory", memory).get_memory_stats()
         }
 
 
 def create_compliance_agent(
     model_name: str = "gpt-3.5-turbo",
     temperature: float = 0.1,
-    max_iterations: int = 10
+    max_iterations: int = 10,
+    memory_window_size: int = 5
 ) -> ReActAgent:
     """
-    Create a ReAct compliance verification agent.
+    Create a ReAct compliance verification agent with memory.
     
     Args:
         model_name: OpenAI model to use
         temperature: Model temperature
         max_iterations: Maximum number of reasoning iterations
+        memory_window_size: Size of the sliding window memory (default: 5)
         
     Returns:
-        Configured ReActAgent instance
+        Configured ReActAgent instance with memory
     """
     return ReActAgent(
         model_name=model_name,
         temperature=temperature,
-        max_iterations=max_iterations
+        max_iterations=max_iterations,
+        memory_window_size=memory_window_size
     )
 
 

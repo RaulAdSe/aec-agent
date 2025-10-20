@@ -12,7 +12,7 @@ from shapely.geometry import Point, LineString, Polygon
 from shapely.ops import nearest_points
 import numpy as np
 
-from schemas import Point2D, Point3D, Room, Door, Project
+from src.schemas import Point2D, Point3D, Room, Door, Project
 
 
 class CirculationGraph:
