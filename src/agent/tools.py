@@ -17,7 +17,15 @@ from src.calculations.geometry import (
     calculate_door_clear_width,
     calculate_egress_capacity
 )
-from src.calculations.graph import create_circulation_graph, calculate_egress_distance
+from src.calculations.graph import (
+    create_circulation_graph, 
+    calculate_egress_distance,
+    find_all_evacuation_routes,
+    calculate_room_connectivity_score,
+    find_critical_circulation_points,
+    validate_evacuation_compliance,
+    get_room_adjacency_list
+)
 
 
 # Global variables to hold project data and RAG manager
@@ -345,6 +353,224 @@ def calculate_egress_distance(room_id: str) -> Dict[str, Any]:
         }
 
 
+@tool
+def analyze_building_circulation() -> Dict[str, Any]:
+    """
+    Analyze overall building circulation and identify potential issues.
+    
+    Returns:
+        Dictionary with comprehensive circulation analysis
+    """
+    if _project_data is None:
+        return {"error": "No project data loaded. Call load_project_data() first."}
+    
+    try:
+        # Get critical circulation points
+        critical_points = find_critical_circulation_points(_project_data)
+        
+        # Get evacuation compliance
+        compliance = validate_evacuation_compliance(_project_data)
+        
+        # Get room adjacency
+        adjacency = get_room_adjacency_list(_project_data)
+        
+        return {
+            "critical_circulation_points": critical_points,
+            "evacuation_compliance": compliance,
+            "room_adjacency": adjacency,
+            "analysis_summary": {
+                "total_rooms": len(adjacency),
+                "critical_rooms": critical_points["critical_room_count"],
+                "compliance_rate": compliance["compliance_rate"],
+                "overall_circulation_health": "good" if compliance["compliance_rate"] > 0.9 and critical_points["critical_room_count"] < 3 else "needs_attention"
+            }
+        }
+    
+    except Exception as e:
+        return {"error": f"Error analyzing circulation: {str(e)}"}
+
+
+@tool
+def find_all_evacuation_routes_tool() -> Dict[str, Any]:
+    """
+    Find evacuation routes for all rooms in the building.
+    
+    Returns:
+        Dictionary with evacuation routes for all rooms
+    """
+    if _project_data is None:
+        return {"error": "No project data loaded. Call load_project_data() first."}
+    
+    try:
+        routes = find_all_evacuation_routes(_project_data)
+        return routes
+    
+    except Exception as e:
+        return {"error": f"Error finding evacuation routes: {str(e)}"}
+
+
+@tool
+def check_room_connectivity(room_id: str) -> Dict[str, Any]:
+    """
+    Check how well-connected a specific room is to the rest of the building.
+    
+    Args:
+        room_id: The ID of the room to analyze
+    
+    Returns:
+        Dictionary with room connectivity analysis
+    """
+    if _project_data is None:
+        return {"error": "No project data loaded. Call load_project_data() first."}
+    
+    try:
+        connectivity = calculate_room_connectivity_score(_project_data, room_id)
+        return connectivity
+    
+    except Exception as e:
+        return {"error": f"Error analyzing room connectivity: {str(e)}"}
+
+
+@tool
+def calculate_occupancy_load(room_id: str) -> Dict[str, Any]:
+    """
+    Calculate the occupancy load and egress capacity for a room.
+    
+    Args:
+        room_id: The ID of the room
+    
+    Returns:
+        Dictionary with occupancy analysis
+    """
+    if _project_data is None:
+        return {"error": "No project data loaded. Call load_project_data() first."}
+    
+    room = _project_data.get_room_by_id(room_id)
+    if room is None:
+        return {"error": f"Room {room_id} not found in project"}
+    
+    try:
+        # Calculate room area
+        area = calculate_room_area(room)
+        
+        # Calculate occupancy based on room use
+        occupancy_factors = {
+            "residential": 0.05,  # 1 person per 20 sqm
+            "commercial": 0.1,    # 1 person per 10 sqm
+            "retail": 0.2,        # 1 person per 5 sqm
+            "office": 0.1,        # 1 person per 10 sqm
+            "assembly": 0.5,      # 1 person per 2 sqm
+            "storage": 0.02,      # 1 person per 50 sqm
+            "restroom": 0.1,      # 1 person per 10 sqm
+            "meeting": 0.2,       # 1 person per 5 sqm
+            "reception": 0.1,     # 1 person per 10 sqm
+        }
+        
+        factor = occupancy_factors.get(room.use, 0.1)
+        calculated_occupancy = max(1, int(area * factor))
+        
+        # Calculate required egress width (5mm per person minimum)
+        required_egress_width = calculated_occupancy * 5  # mm
+        
+        # Find doors connected to this room
+        connected_doors = []
+        for level in _project_data.levels:
+            for door in level.doors:
+                if door.from_room == room_id or door.to_room == room_id:
+                    connected_doors.append({
+                        "door_id": door.id,
+                        "width_mm": door.width_mm,
+                        "is_emergency_exit": door.is_emergency_exit
+                    })
+        
+        total_egress_width = sum(door["width_mm"] for door in connected_doors 
+                                if door["is_emergency_exit"])
+        
+        return {
+            "room_id": room_id,
+            "area_sqm": area,
+            "room_use": room.use,
+            "occupancy_factor": factor,
+            "calculated_occupancy": calculated_occupancy,
+            "required_egress_width_mm": required_egress_width,
+            "available_egress_width_mm": total_egress_width,
+            "egress_adequate": total_egress_width >= required_egress_width,
+            "connected_doors": connected_doors,
+            "egress_deficit_mm": max(0, required_egress_width - total_egress_width)
+        }
+    
+    except Exception as e:
+        return {"error": f"Error calculating occupancy load: {str(e)}"}
+
+
+@tool
+def analyze_door_compliance_comprehensive() -> Dict[str, Any]:
+    """
+    Comprehensive analysis of all doors for various compliance requirements.
+    
+    Returns:
+        Dictionary with comprehensive door compliance analysis
+    """
+    if _project_data is None:
+        return {"error": "No project data loaded. Call load_project_data() first."}
+    
+    try:
+        doors = _project_data.get_all_doors()
+        
+        compliance_results = {
+            "total_doors": len(doors),
+            "width_compliance": {"compliant": 0, "non_compliant": []},
+            "emergency_exit_compliance": {"compliant": 0, "non_compliant": []},
+            "accessibility_compliance": {"compliant": 0, "non_compliant": []},
+            "overall_compliance_rate": 0
+        }
+        
+        for door in doors:
+            door_info = {
+                "door_id": door.id,
+                "width_mm": door.width_mm,
+                "door_type": door.door_type,
+                "is_emergency_exit": door.is_emergency_exit
+            }
+            
+            # Width compliance check
+            min_width = 900 if door.is_emergency_exit else 800
+            if door.width_mm >= min_width:
+                compliance_results["width_compliance"]["compliant"] += 1
+            else:
+                door_info["width_deficit"] = min_width - door.width_mm
+                compliance_results["width_compliance"]["non_compliant"].append(door_info.copy())
+            
+            # Emergency exit compliance (minimum 900mm)
+            if door.is_emergency_exit:
+                if door.width_mm >= 900:
+                    compliance_results["emergency_exit_compliance"]["compliant"] += 1
+                else:
+                    door_info["emergency_deficit"] = 900 - door.width_mm
+                    compliance_results["emergency_exit_compliance"]["non_compliant"].append(door_info.copy())
+            
+            # Accessibility compliance (minimum 800mm clear width)
+            clear_width = calculate_door_clear_width(door)
+            if clear_width >= 800:
+                compliance_results["accessibility_compliance"]["compliant"] += 1
+            else:
+                door_info["accessibility_deficit"] = 800 - clear_width
+                compliance_results["accessibility_compliance"]["non_compliant"].append(door_info.copy())
+        
+        # Calculate overall compliance rate
+        total_checks = len(doors) * 3  # 3 compliance checks per door
+        total_compliant = (compliance_results["width_compliance"]["compliant"] + 
+                          compliance_results["emergency_exit_compliance"]["compliant"] + 
+                          compliance_results["accessibility_compliance"]["compliant"])
+        
+        compliance_results["overall_compliance_rate"] = total_compliant / total_checks if total_checks > 0 else 0
+        
+        return compliance_results
+    
+    except Exception as e:
+        return {"error": f"Error analyzing door compliance: {str(e)}"}
+
+
 # Additional utility functions for the agent
 
 def get_project_summary() -> Dict[str, Any]:
@@ -427,5 +653,30 @@ def get_available_tools() -> List[Dict[str, str]]:
             "name": "calculate_egress_distance",
             "description": "Calculate evacuation distance from a room to the nearest exit",
             "parameters": ["room_id: str"]
+        },
+        {
+            "name": "analyze_building_circulation",
+            "description": "Analyze overall building circulation and identify potential issues",
+            "parameters": []
+        },
+        {
+            "name": "find_all_evacuation_routes_tool",
+            "description": "Find evacuation routes for all rooms in the building",
+            "parameters": []
+        },
+        {
+            "name": "check_room_connectivity",
+            "description": "Check how well-connected a specific room is to the rest of the building",
+            "parameters": ["room_id: str"]
+        },
+        {
+            "name": "calculate_occupancy_load",
+            "description": "Calculate the occupancy load and egress capacity for a room",
+            "parameters": ["room_id: str"]
+        },
+        {
+            "name": "analyze_door_compliance_comprehensive",
+            "description": "Comprehensive analysis of all doors for various compliance requirements",
+            "parameters": []
         }
     ]

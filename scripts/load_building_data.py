@@ -67,6 +67,65 @@ class BuildingDataLoader:
                 f"{len(self.levels)} levels, {len(self.all_rooms)} rooms, "
                 f"{len(self.all_doors)} doors, {len(self.all_walls)} walls")
     
+    def enhance_door_connections(self):
+        """Enhance door connections by creating a simple connectivity model."""
+        connections_added = 0
+        
+        # Group rooms by level
+        rooms_by_level = {}
+        for room in self.all_rooms:
+            level = room.get('level', 'unknown')
+            if level not in rooms_by_level:
+                rooms_by_level[level] = []
+            rooms_by_level[level].append(room['id'])
+        
+        # For each level with doors, create connections
+        for level in self.levels:
+            level_name = level['name']
+            level_doors = [d for d in self.all_doors if any(
+                door.get('id') == d['id'] for door in level.get('doors', [])
+            )]
+            
+            level_rooms = rooms_by_level.get(level_name, [])
+            
+            # If we have doors and rooms on this level, create connections
+            if level_doors and level_rooms:
+                room_index = 0
+                for i, door in enumerate(level_doors):
+                    if door.get('from_room') or door.get('to_room'):
+                        continue  # Already has connections
+                    
+                    # Simple strategy: connect doors to rooms in sequence
+                    # This creates a basic circulation pattern
+                    if len(level_rooms) >= 2:
+                        from_room = level_rooms[room_index % len(level_rooms)]
+                        to_room = level_rooms[(room_index + 1) % len(level_rooms)]
+                        room_index += 1
+                    else:
+                        from_room = level_rooms[0]
+                        to_room = 'EXTERIOR'
+                    
+                    door['from_room'] = from_room
+                    door['to_room'] = to_room
+                    connections_added += 1
+        
+        # For any remaining unconnected doors, connect to exterior
+        for door in self.all_doors:
+            if not door.get('from_room') and not door.get('to_room'):
+                # Find any room on the same level
+                door_level = None
+                for level in self.levels:
+                    if any(d.get('id') == door['id'] for d in level.get('doors', [])):
+                        door_level = level['name']
+                        break
+                
+                if door_level and door_level in rooms_by_level and rooms_by_level[door_level]:
+                    door['from_room'] = rooms_by_level[door_level][0]
+                    door['to_room'] = 'EXTERIOR'
+                    connections_added += 1
+        
+        logger.info(f"Enhanced {connections_added} door connections")
+    
     def get_level_data(self, level_name: str) -> Optional[Dict]:
         """Get data for a specific level."""
         for level in self.levels:
@@ -494,6 +553,10 @@ def load_vilamalla_building() -> BuildingDataLoader:
     
     loader = BuildingDataLoader(data_path)
     loader.load_data()
+    
+    # Enhance door connections for better graph analysis
+    loader.enhance_door_connections()
+    
     return loader
 
 

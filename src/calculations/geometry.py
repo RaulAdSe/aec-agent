@@ -390,3 +390,314 @@ def calculate_union_area(polygon1_points: List[Point2D], polygon2_points: List[P
     
     except Exception:
         return 0.0
+
+
+# ============================================================================
+# ADVANCED SPATIAL ANALYSIS FUNCTIONS FOR AGENT USE
+# ============================================================================
+
+def calculate_room_adjacency_matrix(rooms: List[Room]) -> Dict[str, List[str]]:
+    """
+    Calculate which rooms are adjacent to each other based on shared walls.
+    
+    Args:
+        rooms: List of Room objects
+        
+    Returns:
+        Dictionary mapping room_id to list of adjacent room_ids
+    """
+    adjacency = {room.id: [] for room in rooms}
+    
+    for i, room1 in enumerate(rooms):
+        if not room1.boundary or not room1.boundary.points:
+            continue
+            
+        poly1 = Polygon([(p.x, p.y) for p in room1.boundary.points])
+        if not poly1.is_valid:
+            continue
+            
+        for j, room2 in enumerate(rooms[i+1:], i+1):
+            if not room2.boundary or not room2.boundary.points:
+                continue
+                
+            poly2 = Polygon([(p.x, p.y) for p in room2.boundary.points])
+            if not poly2.is_valid:
+                continue
+            
+            # Check if rooms share a boundary (are adjacent)
+            intersection = poly1.intersection(poly2)
+            
+            # If intersection is a line (has length but no area), rooms are adjacent
+            if hasattr(intersection, 'length') and intersection.length > 0.1:  # 10cm tolerance
+                adjacency[room1.id].append(room2.id)
+                adjacency[room2.id].append(room1.id)
+    
+    return adjacency
+
+
+def calculate_sight_line_analysis(start_point: Point2D, target_point: Point2D, 
+                                obstacles: List[List[Point2D]]) -> Dict[str, any]:
+    """
+    Check if there's a clear sight line between two points, considering obstacles.
+    
+    Args:
+        start_point: Starting point
+        target_point: Target point
+        obstacles: List of polygon obstacles (walls, furniture, etc.)
+        
+    Returns:
+        Dictionary with sight line analysis results
+    """
+    try:
+        # Create sight line
+        sight_line = LineString([(start_point.x, start_point.y), 
+                                (target_point.x, target_point.y)])
+        
+        blocked_by = []
+        total_obstruction = 0.0
+        
+        for i, obstacle_points in enumerate(obstacles):
+            if len(obstacle_points) < 3:
+                continue
+                
+            obstacle = Polygon([(p.x, p.y) for p in obstacle_points])
+            if not obstacle.is_valid:
+                continue
+            
+            # Check if sight line intersects with obstacle
+            intersection = sight_line.intersection(obstacle)
+            if intersection and not intersection.is_empty:
+                blocked_by.append(f"obstacle_{i}")
+                
+                # Calculate length of obstruction
+                if hasattr(intersection, 'length'):
+                    total_obstruction += intersection.length
+        
+        is_clear = len(blocked_by) == 0
+        total_distance = sight_line.length
+        obstruction_ratio = total_obstruction / total_distance if total_distance > 0 else 0
+        
+        return {
+            "is_clear": is_clear,
+            "total_distance": total_distance,
+            "blocked_by": blocked_by,
+            "obstruction_length": total_obstruction,
+            "obstruction_ratio": obstruction_ratio,
+            "visibility_score": max(0, 1 - obstruction_ratio)
+        }
+        
+    except Exception as e:
+        return {
+            "is_clear": False,
+            "error": str(e),
+            "total_distance": 0,
+            "blocked_by": [],
+            "obstruction_length": 0,
+            "obstruction_ratio": 1.0,
+            "visibility_score": 0.0
+        }
+
+
+def calculate_compartmentation_analysis(rooms: List[Room], 
+                                      fire_walls: List[Dict]) -> Dict[str, any]:
+    """
+    Analyze fire compartmentation and separation.
+    
+    Args:
+        rooms: List of Room objects
+        fire_walls: List of wall dictionaries with fire ratings
+        
+    Returns:
+        Dictionary with compartmentation analysis
+    """
+    compartments = []
+    fire_rated_boundaries = []
+    
+    # Group rooms by fire compartment
+    # This is a simplified analysis - in reality would need more complex logic
+    for room in rooms:
+        if room.fire_rating and room.fire_rating != "no_rating":
+            compartments.append({
+                "room_id": room.id,
+                "fire_rating": room.fire_rating,
+                "area": room.area,
+                "use": room.use
+            })
+    
+    # Analyze fire-rated walls
+    for wall in fire_walls:
+        fire_rating = wall.get('fire_rating', 'no_rating')
+        if fire_rating != 'no_rating':
+            fire_rated_boundaries.append({
+                "wall_id": wall.get('id', 'unknown'),
+                "fire_rating": fire_rating,
+                "rating_minutes": calculate_fire_rating_equivalent(fire_rating)
+            })
+    
+    return {
+        "compartment_count": len(compartments),
+        "compartments": compartments,
+        "fire_rated_walls": len(fire_rated_boundaries),
+        "fire_boundaries": fire_rated_boundaries,
+        "compliance_notes": [
+            "Fire compartmentation limits building size",
+            "Rated walls must maintain continuity",
+            "Openings require fire-rated assemblies"
+        ]
+    }
+
+
+def calculate_corridor_analysis(corridor_points: List[Point2D], 
+                               min_width: float = 1200.0) -> Dict[str, any]:
+    """
+    Analyze corridor dimensions and compliance.
+    
+    Args:
+        corridor_points: Points defining corridor centerline or boundary
+        min_width: Minimum required width in millimeters
+        
+    Returns:
+        Dictionary with corridor analysis results
+    """
+    if len(corridor_points) < 2:
+        return {
+            "error": "Insufficient points for corridor analysis",
+            "is_compliant": False
+        }
+    
+    try:
+        # Calculate corridor length
+        total_length = 0.0
+        for i in range(len(corridor_points) - 1):
+            segment_length = calculate_distance_2d(corridor_points[i], corridor_points[i+1])
+            total_length += segment_length
+        
+        # For simplified analysis, assume standard corridor width
+        # In practice, this would analyze the actual corridor polygon
+        estimated_width = calculate_corridor_width(corridor_points)
+        width_mm = estimated_width * 1000  # Convert to mm
+        
+        is_compliant = width_mm >= min_width
+        
+        return {
+            "length_m": total_length,
+            "width_mm": width_mm,
+            "min_required_width_mm": min_width,
+            "is_compliant": is_compliant,
+            "area_sqm": total_length * estimated_width,
+            "compliance_status": "COMPLIANT" if is_compliant else "NON_COMPLIANT",
+            "width_deficit_mm": max(0, min_width - width_mm) if not is_compliant else 0
+        }
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "is_compliant": False
+        }
+
+
+def calculate_spatial_relationships(rooms: List[Room]) -> Dict[str, any]:
+    """
+    Calculate comprehensive spatial relationships between rooms.
+    
+    Args:
+        rooms: List of Room objects
+        
+    Returns:
+        Dictionary with spatial relationship analysis
+    """
+    relationships = {
+        "adjacency_matrix": calculate_room_adjacency_matrix(rooms),
+        "room_distances": {},
+        "centroids": {},
+        "size_relationships": {},
+        "spatial_clusters": []
+    }
+    
+    # Calculate centroids and distances
+    for room in rooms:
+        if room.boundary and room.boundary.points:
+            centroid = calculate_room_centroid(room)
+            if centroid:
+                relationships["centroids"][room.id] = {
+                    "x": centroid.x,
+                    "y": centroid.y
+                }
+    
+    # Calculate distances between all rooms
+    room_ids = list(relationships["centroids"].keys())
+    for i, room1_id in enumerate(room_ids):
+        relationships["room_distances"][room1_id] = {}
+        centroid1 = relationships["centroids"][room1_id]
+        
+        for room2_id in room_ids[i+1:]:
+            centroid2 = relationships["centroids"][room2_id]
+            distance = math.sqrt(
+                (centroid2["x"] - centroid1["x"])**2 + 
+                (centroid2["y"] - centroid1["y"])**2
+            )
+            relationships["room_distances"][room1_id][room2_id] = distance
+            
+            # Add reverse mapping
+            if room2_id not in relationships["room_distances"]:
+                relationships["room_distances"][room2_id] = {}
+            relationships["room_distances"][room2_id][room1_id] = distance
+    
+    # Analyze size relationships
+    areas = [(room.id, calculate_room_area(room)) for room in rooms]
+    areas.sort(key=lambda x: x[1], reverse=True)
+    
+    total_area = sum(area for _, area in areas)
+    for room_id, area in areas:
+        relationships["size_relationships"][room_id] = {
+            "area_sqm": area,
+            "percentage_of_total": (area / total_area * 100) if total_area > 0 else 0,
+            "size_category": "large" if area > total_area * 0.2 else "medium" if area > total_area * 0.1 else "small"
+        }
+    
+    return relationships
+
+
+def calculate_bottleneck_analysis(circulation_points: List[Point2D], 
+                                 door_widths: List[float]) -> Dict[str, any]:
+    """
+    Identify potential bottlenecks in circulation paths.
+    
+    Args:
+        circulation_points: Points along circulation path
+        door_widths: Widths of doors along the path (in mm)
+        
+    Returns:
+        Dictionary with bottleneck analysis
+    """
+    if not door_widths:
+        return {
+            "bottlenecks": [],
+            "min_width_mm": 0,
+            "bottleneck_count": 0
+        }
+    
+    min_width = min(door_widths)
+    avg_width = sum(door_widths) / len(door_widths)
+    
+    # Identify bottlenecks (doors significantly narrower than average)
+    bottlenecks = []
+    threshold = avg_width * 0.8  # 20% below average
+    
+    for i, width in enumerate(door_widths):
+        if width < threshold:
+            bottlenecks.append({
+                "position_index": i,
+                "width_mm": width,
+                "deficit_from_average": avg_width - width,
+                "severity": "high" if width < min_width * 1.1 else "medium"
+            })
+    
+    return {
+        "bottlenecks": bottlenecks,
+        "bottleneck_count": len(bottlenecks),
+        "min_width_mm": min_width,
+        "avg_width_mm": avg_width,
+        "width_variance": np.var(door_widths) if len(door_widths) > 1 else 0,
+        "flow_efficiency": max(0, 1 - len(bottlenecks) / len(door_widths))
+    }
