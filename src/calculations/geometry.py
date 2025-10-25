@@ -6,7 +6,7 @@ and other geometric properties needed for building code compliance checks.
 """
 
 import math
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 from shapely.geometry import Polygon, Point, LineString
 from shapely.ops import unary_union
 import numpy as np
