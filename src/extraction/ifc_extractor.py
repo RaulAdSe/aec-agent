@@ -438,10 +438,52 @@ class IFCExtractor:
         return None
     
     def _determine_space_use(self, name: str, space) -> BuildingUse:
-        """Determine space use from name and IFC properties."""
+        """Determine space use from name and IFC properties with enhanced classification."""
         name_lower = name.lower()
         
-        # Try to get use from IFC properties first
+        # Enhanced keyword-based classification for industrial/commercial buildings
+        
+        # Industrial/Manufacturing spaces
+        if any(keyword in name_lower for keyword in ['taller', 'workshop', 'manufactur', 'production', 'assembly', 'factory']):
+            return BuildingUse.COMMERCIAL  # Using commercial for industrial
+        
+        # Loading/Shipping areas
+        if any(keyword in name_lower for keyword in ['muelle', 'loading', 'dock', 'ship', 'cargo', 'warehouse']):
+            return BuildingUse.STORAGE
+        
+        # Technical/Mechanical areas
+        if any(keyword in name_lower for keyword in ['mechanical', 'electrical', 'hvac', 'utility', 'technical', 'machine']):
+            return BuildingUse.COMMERCIAL
+        
+        # Roof/Structural areas
+        if any(keyword in name_lower for keyword in ['roof', 'cubierta', 'peto', 'panel', 'structural']):
+            return BuildingUse.COMMERCIAL
+        
+        # Office areas
+        if any(keyword in name_lower for keyword in ['office', 'oficina', 'admin', 'control']):
+            return BuildingUse.OFFICE
+        
+        # Meeting/Conference areas
+        if any(keyword in name_lower for keyword in ['meeting', 'reunion', 'sala', 'conference']):
+            return BuildingUse.MEETING
+        
+        # Circulation areas
+        if any(keyword in name_lower for keyword in ['corridor', 'hallway', 'pasillo', 'circulation']):
+            return BuildingUse.CORRIDOR
+        
+        # Stairs and vertical circulation
+        if any(keyword in name_lower for keyword in ['stair', 'escalera', 'elevator', 'ascensor']):
+            return BuildingUse.STAIR
+        
+        # Restrooms
+        if any(keyword in name_lower for keyword in ['restroom', 'bathroom', 'aseo', 'wc', 'toilet']):
+            return BuildingUse.RESTROOM
+        
+        # Storage areas
+        if any(keyword in name_lower for keyword in ['storage', 'almacen', 'deposit', 'archive']):
+            return BuildingUse.STORAGE
+        
+        # Try to get use from IFC properties
         try:
             psets = ifcopenshell.util.element.get_psets(space)
             for pset_data in psets.values():
@@ -453,25 +495,73 @@ class IFCExtractor:
                                 return BuildingUse.OFFICE
                             elif 'meeting' in use_lower:
                                 return BuildingUse.MEETING
-                            # Add more mappings as needed
+                            elif 'storage' in use_lower:
+                                return BuildingUse.STORAGE
+                            elif 'circulation' in use_lower:
+                                return BuildingUse.CORRIDOR
         except Exception:
             pass
         
-        # Fallback to name-based detection
-        if any(keyword in name_lower for keyword in ['office', 'oficina']):
-            return BuildingUse.OFFICE
-        elif any(keyword in name_lower for keyword in ['meeting', 'reunion', 'sala']):
-            return BuildingUse.MEETING
-        elif any(keyword in name_lower for keyword in ['restroom', 'bathroom', 'aseo', 'wc']):
-            return BuildingUse.RESTROOM
-        elif any(keyword in name_lower for keyword in ['storage', 'almacen']):
+        # Default fallback
+        return BuildingUse.COMMERCIAL  # Using commercial for industrial
+        
+        # Loading/Shipping areas
+        if any(keyword in name_lower for keyword in ['muelle', 'loading', 'dock', 'ship', 'cargo', 'warehouse']):
             return BuildingUse.STORAGE
-        elif any(keyword in name_lower for keyword in ['corridor', 'hallway', 'pasillo']):
-            return BuildingUse.CORRIDOR
-        elif any(keyword in name_lower for keyword in ['stair', 'escalera']):
-            return BuildingUse.STAIR
-        else:
+        
+        # Technical/Mechanical areas
+        if any(keyword in name_lower for keyword in ['mechanical', 'electrical', 'hvac', 'utility', 'technical', 'machine']):
             return BuildingUse.COMMERCIAL
+        
+        # Roof/Structural areas
+        if any(keyword in name_lower for keyword in ['roof', 'cubierta', 'peto', 'panel', 'structural']):
+            return BuildingUse.COMMERCIAL
+        
+        # Office areas
+        if any(keyword in name_lower for keyword in ['office', 'oficina', 'admin', 'control']):
+            return BuildingUse.OFFICE
+        
+        # Meeting/Conference areas
+        if any(keyword in name_lower for keyword in ['meeting', 'reunion', 'sala', 'conference']):
+            return BuildingUse.MEETING
+        
+        # Circulation areas
+        if any(keyword in name_lower for keyword in ['corridor', 'hallway', 'pasillo', 'circulation']):
+            return BuildingUse.CORRIDOR
+        
+        # Stairs and vertical circulation
+        if any(keyword in name_lower for keyword in ['stair', 'escalera', 'elevator', 'ascensor']):
+            return BuildingUse.STAIR
+        
+        # Restrooms
+        if any(keyword in name_lower for keyword in ['restroom', 'bathroom', 'aseo', 'wc', 'toilet']):
+            return BuildingUse.RESTROOM
+        
+        # Storage areas
+        if any(keyword in name_lower for keyword in ['storage', 'almacen', 'deposit', 'archive']):
+            return BuildingUse.STORAGE
+        
+        # Try to get use from IFC properties
+        try:
+            psets = ifcopenshell.util.element.get_psets(space)
+            for pset_data in psets.values():
+                for prop_name, prop_value in pset_data.items():
+                    if 'use' in prop_name.lower() or 'function' in prop_name.lower():
+                        if isinstance(prop_value, str):
+                            use_lower = prop_value.lower()
+                            if 'office' in use_lower:
+                                return BuildingUse.OFFICE
+                            elif 'meeting' in use_lower:
+                                return BuildingUse.MEETING
+                            elif 'storage' in use_lower:
+                                return BuildingUse.STORAGE
+                            elif 'circulation' in use_lower:
+                                return BuildingUse.CORRIDOR
+        except Exception:
+            pass
+        
+        # Default fallback
+        return BuildingUse.COMMERCIAL
     
     def _calculate_occupancy_load(self, area: float, use: BuildingUse) -> int:
         """Calculate occupancy load based on area and use."""
@@ -788,6 +878,88 @@ class IFCExtractor:
             level=level_name,
             occupancy_load=8
         )
+
+    
+    def _classify_level_function(self, level_name: str, doors_count: int, walls_count: int) -> str:
+        """Classify the function of a building level."""
+        name_lower = level_name.lower()
+        
+        # Main activity levels (high door count)
+        if doors_count > 10:
+            if any(keyword in name_lower for keyword in ['muelle', 'loading', 'dock']):
+                return "Loading/Shipping Operations"
+            elif any(keyword in name_lower for keyword in ['taller', 'workshop', 'production']):
+                return "Manufacturing/Workshop"
+            elif any(keyword in name_lower for keyword in ['main', 'principal', 'ground', 'pb']):
+                return "Main Operations Floor"
+            else:
+                return "Active Operations Level"
+        
+        # Service/utility levels (walls but few doors)
+        elif walls_count > 0 and doors_count < 3:
+            if any(keyword in name_lower for keyword in ['roof', 'cubierta', 'peto']):
+                return "Roof/Structural Level"
+            elif any(keyword in name_lower for keyword in ['mechanical', 'hvac', 'utility']):
+                return "Mechanical/Utility Level"
+            elif any(keyword in name_lower for keyword in ['basement', 'sotano', 'foundation']):
+                return "Foundation/Service Level"
+            else:
+                return "Service/Structural Level"
+        
+        # Mixed use levels
+        elif doors_count > 0 and walls_count > 0:
+            if any(keyword in name_lower for keyword in ['altillo', 'mezzanine']):
+                return "Mezzanine/Intermediate Level"
+            elif any(keyword in name_lower for keyword in ['office', 'admin']):
+                return "Administrative Level"
+            else:
+                return "Mixed Use Level"
+        
+        # Empty/structural only
+        else:
+            return "Structural/Unused Level"
+    
+
+    
+    def _classify_level_function(self, level_name: str, doors_count: int, walls_count: int) -> str:
+        """Classify the function of a building level."""
+        name_lower = level_name.lower()
+        
+        # Main activity levels (high door count)
+        if doors_count > 10:
+            if any(keyword in name_lower for keyword in ['muelle', 'loading', 'dock']):
+                return "Loading/Shipping Operations"
+            elif any(keyword in name_lower for keyword in ['taller', 'workshop', 'production']):
+                return "Manufacturing/Workshop"
+            elif any(keyword in name_lower for keyword in ['main', 'principal', 'ground', 'pb']):
+                return "Main Operations Floor"
+            else:
+                return "Active Operations Level"
+        
+        # Service/utility levels (walls but few doors)
+        elif walls_count > 0 and doors_count < 3:
+            if any(keyword in name_lower for keyword in ['roof', 'cubierta', 'peto']):
+                return "Roof/Structural Level"
+            elif any(keyword in name_lower for keyword in ['mechanical', 'hvac', 'utility']):
+                return "Mechanical/Utility Level"
+            elif any(keyword in name_lower for keyword in ['basement', 'sotano', 'foundation']):
+                return "Foundation/Service Level"
+            else:
+                return "Service/Structural Level"
+        
+        # Mixed use levels
+        elif doors_count > 0 and walls_count > 0:
+            if any(keyword in name_lower for keyword in ['altillo', 'mezzanine']):
+                return "Mezzanine/Intermediate Level"
+            elif any(keyword in name_lower for keyword in ['office', 'admin']):
+                return "Administrative Level"
+            else:
+                return "Mixed Use Level"
+        
+        # Empty/structural only
+        else:
+            return "Structural/Unused Level"
+    
 
     def _create_project_metadata(self) -> ProjectMetadata:
         """Create project metadata from IFC file information."""

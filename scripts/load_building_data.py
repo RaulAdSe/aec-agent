@@ -311,6 +311,162 @@ class BuildingDataLoader:
             'doors': doors_df,
             'walls': walls_df
         }
+    
+    def export_to_json(self, file_path: Optional[Path] = None) -> Dict[str, Any]:
+        """Export building data to LLM-optimized JSON format."""
+        if not self.data:
+            raise ValueError("No data loaded. Call load_data() first.")
+        
+        # Create LLM-optimized structure
+        export_data = {
+            "building_metadata": {
+                "project_name": self.metadata.get('project_name'),
+                "building_type": self.metadata.get('building_type'),
+                "total_area_m2": self.metadata.get('total_area'),
+                "created_date": self.metadata.get('created_date'),
+                "summary": {
+                    "levels": len(self.levels),
+                    "rooms": len(self.all_rooms),
+                    "doors": len(self.all_doors),
+                    "walls": len(self.all_walls)
+                }
+            },
+            "levels": [
+                {
+                    "name": level['name'],
+                    "elevation_m": level['elevation'],
+                    "element_counts": {
+                        "rooms": len(level.get('rooms', [])),
+                        "doors": len(level.get('doors', [])),
+                        "walls": len(level.get('walls', []))
+                    }
+                }
+                for level in self.levels
+            ],
+            "rooms": [
+                {
+                    "id": room['id'],
+                    "name": room['name'],
+                    "level": room['level'],
+                    "area_m2": room['area'],
+                    "use_type": room['use'],
+                    "occupancy_load": room['occupancy_load']
+                }
+                for room in self.all_rooms
+            ],
+            "doors": [
+                {
+                    "id": door['id'],
+                    "name": door.get('name', ''),
+                    "dimensions": {
+                        "width_mm": door['width_mm'],
+                        "height_mm": door['height_mm']
+                    },
+                    "type": door['door_type'],
+                    "properties": {
+                        "is_emergency_exit": door.get('is_emergency_exit', False),
+                        "is_accessible": door.get('is_accessible', True),
+                        "fire_rating": door.get('fire_rating')
+                    },
+                    "position": door['position']
+                }
+                for door in self.all_doors
+            ],
+            "walls": [
+                {
+                    "id": wall['id'],
+                    "geometry": {
+                        "start_point": wall['start_point'],
+                        "end_point": wall['end_point']
+                    },
+                    "properties": {
+                        "thickness_mm": wall['thickness_mm'],
+                        "height_mm": wall['height_mm'],
+                        "material": wall['material'],
+                        "fire_rating": wall.get('fire_rating')
+                    }
+                }
+                for wall in self.all_walls
+            ]
+        }
+        
+        if file_path:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
+            logger.info(f"LLM-optimized JSON exported to: {file_path}")
+        
+        return export_data
+    
+    def export_flat_json(self, file_path: Optional[Path] = None) -> Dict[str, Any]:
+        """Export building data as flat arrays - easiest for LLM parsing."""
+        if not self.data:
+            raise ValueError("No data loaded. Call load_data() first.")
+        
+        # Flat structure - all elements in simple arrays
+        flat_data = {
+            "building_info": {
+                "name": self.metadata.get('project_name'),
+                "type": self.metadata.get('building_type'),
+                "total_area": self.metadata.get('total_area'),
+                "element_counts": {
+                    "levels": len(self.levels),
+                    "rooms": len(self.all_rooms),
+                    "doors": len(self.all_doors),
+                    "walls": len(self.all_walls)
+                }
+            },
+            "all_elements": []
+        }
+        
+        # Add all rooms as flat elements
+        for room in self.all_rooms:
+            flat_data["all_elements"].append({
+                "element_type": "room",
+                "id": room['id'],
+                "name": room['name'],
+                "level": room['level'],
+                "area_m2": room['area'],
+                "use_type": room['use'],
+                "occupancy": room['occupancy_load']
+            })
+        
+        # Add all doors as flat elements
+        for door in self.all_doors:
+            flat_data["all_elements"].append({
+                "element_type": "door",
+                "id": door['id'],
+                "name": door.get('name', ''),
+                "width_mm": door['width_mm'],
+                "height_mm": door['height_mm'],
+                "door_type": door['door_type'],
+                "is_emergency": door.get('is_emergency_exit', False),
+                "position_x": door['position']['x'],
+                "position_y": door['position']['y'],
+                "position_z": door['position']['z']
+            })
+        
+        # Add all walls as flat elements
+        for wall in self.all_walls:
+            flat_data["all_elements"].append({
+                "element_type": "wall",
+                "id": wall['id'],
+                "thickness_mm": wall['thickness_mm'],
+                "height_mm": wall['height_mm'],
+                "material": wall['material'],
+                "start_x": wall['start_point']['x'],
+                "start_y": wall['start_point']['y'],
+                "start_z": wall['start_point']['z'],
+                "end_x": wall['end_point']['x'],
+                "end_y": wall['end_point']['y'],
+                "end_z": wall['end_point']['z']
+            })
+        
+        if file_path:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(flat_data, f, indent=2, ensure_ascii=False)
+            logger.info(f"Flat JSON exported to: {file_path}")
+        
+        return flat_data
 
 
 # Convenience functions for easy use in notebooks
