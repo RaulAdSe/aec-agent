@@ -13,14 +13,16 @@ from typing import Optional, Union, Dict, Any
 from datetime import datetime
 
 try:
-    from .dwg_extractor import DWGExtractor, extract_from_dwg, save_to_json
+    from .dwg_extractor import extract_from_dwg
+    from .ifc_extractor import extract_from_ifc
     from ..schemas import Project
 except ImportError:
     # Fallback for direct execution
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from extraction.dwg_extractor import DWGExtractor, extract_from_dwg, save_to_json
+    from extraction.dwg_extractor import extract_from_dwg
+    from extraction.ifc_extractor import extract_from_ifc
     from schemas import Project
 
 # Configure logging
@@ -30,21 +32,21 @@ logger = logging.getLogger(__name__)
 
 class UnifiedExtractor:
     """
-    Unified extractor that can handle DWG/DXF files.
+    Unified extractor that can handle DWG/DXF and IFC files.
     
     This class automatically detects file types and uses the appropriate
     extraction method for each file format.
     """
     
     def __init__(self):
-        self.dwg_extractor = DWGExtractor()
+        pass
         
     def extract_from_file(self, file_path: Union[str, Path], 
                          project_name: Optional[str] = None,
                          level_name: str = "Planta Baja",
                          output_path: Optional[Union[str, Path]] = None) -> Project:
         """
-        Extract building data from a CAD file (DWG or DXF).
+        Extract building data from a CAD file (DWG, DXF, or IFC).
         
         Args:
             file_path: Path to the CAD file
@@ -70,7 +72,9 @@ class UnifiedExtractor:
         
         # Extract based on file type
         if file_type in ['dwg', 'dxf']:
-            project = self._extract_dwg_file(file_path, project_name, level_name)
+            project = self._extract_dwg_file(file_path)
+        elif file_type == 'ifc':
+            project = self._extract_ifc_file(file_path)
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
         
@@ -130,11 +134,9 @@ class UnifiedExtractor:
                 successful_extractions += 1
                 
                 logger.info(f"✅ Successfully extracted: {file_path.name}")
-                logger.info(f"   - Rooms: {len(project.rooms)}")
-                logger.info(f"   - Doors: {len(project.doors)}")
-                logger.info(f"   - Walls: {len(project.walls)}")
-                logger.info(f"   - Fire Equipment: {len(project.fire_equipment)}")
-                logger.info(f"   - Sectors: {len(project.sectors)}")
+                logger.info(f"   - Rooms: {len(project.get_all_rooms())}")
+                logger.info(f"   - Doors: {len(project.get_all_doors())}")
+                logger.info(f"   - Walls: {len(project.get_all_walls())}")
                 
             except Exception as e:
                 logger.error(f"❌ Failed to extract {file_path.name}: {e}")
@@ -149,26 +151,25 @@ class UnifiedExtractor:
         
         if extension in ['.dwg', '.dxf']:
             return extension[1:]  # Remove the dot
+        elif extension == '.ifc':
+            return 'ifc'
         else:
             raise ValueError(f"Unsupported file extension: {extension}")
     
-    def _extract_dwg_file(self, file_path: Path, project_name: Optional[str], level_name: str) -> Project:
+    def _extract_dwg_file(self, file_path: Path) -> Project:
         """Extract data from DWG/DXF file."""
         logger.info(f"Extracting from DWG/DXF: {file_path.name}")
-        
-        # Use the DWG extractor
-        project = self.dwg_extractor.extract_from_file(
-            file_path=file_path,
-            project_name=project_name,
-            level_name=level_name
-        )
-        
-        return project
+        return extract_from_dwg(file_path)
+    
+    def _extract_ifc_file(self, file_path: Path) -> Project:
+        """Extract data from IFC file."""
+        logger.info(f"Extracting from IFC: {file_path.name}")
+        return extract_from_ifc(file_path)
     
     
     def _find_cad_files(self, directory_path: Path) -> list:
         """Find all CAD files in a directory."""
-        supported_extensions = ['.dwg', '.dxf']
+        supported_extensions = ['.dwg', '.dxf', '.ifc']
         cad_files = []
         
         for extension in supported_extensions:
@@ -217,7 +218,7 @@ class UnifiedExtractor:
             "file_type": file_type,
             "file_size_mb": file_path.stat().st_size / (1024 * 1024),
             "modified_date": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
-            "supported": file_type in ['dwg', 'dxf']
+            "supported": file_type in ['dwg', 'dxf', 'ifc']
         }
         
         if file_type in ['dwg', 'dxf']:
@@ -243,6 +244,38 @@ class UnifiedExtractor:
             except Exception as e:
                 analysis["analysis_error"] = str(e)
         
+        elif file_type == 'ifc':
+            # For IFC files, we can do a quick analysis
+            try:
+                import ifcopenshell
+                ifc_file = ifcopenshell.open(str(file_path))
+                
+                # Count entities by type
+                entity_counts = {}
+                for entity in ifc_file:
+                    entity_type = entity.is_a()
+                    entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+                
+                # Get some key counts
+                spaces = len(ifc_file.by_type('IfcSpace'))
+                doors = len(ifc_file.by_type('IfcDoor'))
+                walls = len(ifc_file.by_type('IfcWall'))
+                windows = len(ifc_file.by_type('IfcWindow'))
+                stories = len(ifc_file.by_type('IfcBuildingStorey'))
+                
+                analysis.update({
+                    "ifc_schema": ifc_file.schema,
+                    "entity_counts": entity_counts,
+                    "total_entities": len(list(ifc_file)),
+                    "spaces": spaces,
+                    "doors": doors,
+                    "walls": walls,
+                    "windows": windows,
+                    "building_stories": stories
+                })
+                
+            except Exception as e:
+                analysis["analysis_error"] = str(e)
         
         return analysis
 
@@ -389,11 +422,9 @@ Examples:
             )
             
             print(f"✅ Extraction completed successfully!")
-            print(f"   - Rooms: {len(project.rooms)}")
-            print(f"   - Doors: {len(project.doors)}")
-            print(f"   - Walls: {len(project.walls)}")
-            print(f"   - Fire Equipment: {len(project.fire_equipment)}")
-            print(f"   - Sectors: {len(project.sectors)}")
+            print(f"   - Rooms: {len(project.get_all_rooms())}")
+            print(f"   - Doors: {len(project.get_all_doors())}")
+            print(f"   - Walls: {len(project.get_all_walls())}")
             
         elif args.directory:
             # Process directory
@@ -407,7 +438,7 @@ Examples:
             print(f"   - Files processed: {len(projects)}")
             
             for file_path, project in projects.items():
-                print(f"   - {Path(file_path).name}: {len(project.rooms)} rooms, {len(project.doors)} doors")
+                print(f"   - {Path(file_path).name}: {len(project.get_all_rooms())} rooms, {len(project.get_all_doors())} doors")
     
     except Exception as e:
         logger.error(f"Error: {e}")

@@ -2,7 +2,7 @@
 
 ## Agentic AI for Building Code Compliance Verification
 
-An autonomous AI agent that verifies building code compliance by extracting data from architectural drawings (DWG/DXF), performing geometric calculations, and querying Spanish building codes using RAG technology.
+An autonomous AI agent that verifies building code compliance by extracting data from architectural drawings (DWG/DXF/IFC), performing geometric calculations, and querying Spanish building codes using RAG technology.
 
 ## 🎯 Project Overview
 
@@ -12,7 +12,7 @@ An autonomous AI agent that verifies building code compliance by extracting data
 
 ### Key Features
 
-- **📦 Data Extraction**: Parse DWG/DXF files
+- **📦 Data Extraction**: Parse DWG/DXF and IFC files
 - **📐 Geometric Analysis**: Calculate areas, distances, and evacuation routes
 - **📚 RAG System**: Query Spanish building codes (CTE DB-SI, CTE DB-SUA)
 - **🤖 ReAct Agent**: Autonomous compliance verification with LangGraph
@@ -47,8 +47,11 @@ cp .env.example .env
 ### Run Example
 
 ```bash
-# Extract data from CAD files
+# Extract data from CAD files (DWG/DXF)
 python scripts/extract_cad_files.py
+
+# Extract data from IFC files
+python scripts/extract_ifc_files.py -f building.ifc
 
 # Run compliance verification
 python scripts/run_full_pipeline.py
@@ -63,6 +66,7 @@ jupyter notebook
 
 # Navigate to notebooks/
 # Start with 01_data_extraction_simple.ipynb
+# Or 05_ifc_extraction_tutorial.ipynb for IFC files
 ```
 
 ## 📁 Project Structure
@@ -70,7 +74,7 @@ jupyter notebook
 ```
 aec-agent/
 ├── src/                    # Source code
-│   ├── extraction/         # DWG/DXF extraction
+│   ├── extraction/         # DWG/DXF/IFC extraction
 │   ├── calculations/       # Geometry and graph analysis
 │   ├── rag/               # RAG system for normativa
 │   └── agent/             # ReAct agent implementation
@@ -89,7 +93,7 @@ aec-agent/
 - **Agent Framework**: LangChain + LangGraph
 - **Vector Database**: ChromaDB
 - **Embeddings**: HuggingFace Multilingual
-- **CAD Processing**: ezdxf
+- **CAD Processing**: ezdxf (DWG/DXF), ifcopenshell (IFC)
 - **Geometry**: Shapely + NetworkX
 - **Validation**: Pydantic
 

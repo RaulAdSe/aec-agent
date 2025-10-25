@@ -4,6 +4,7 @@ pydantic==2.5.3
 
 # CAD Processing
 ezdxf==1.2.0
+ifcopenshell==0.7.0
 
 # Geometry and Graph Analysis
 shapely==2.0.2
@@ -62,3 +63,6 @@ aiohttp==3.9.1
 # Data Processing
 pandas==2.1.4
 openpyxl==3.1.2
+
+# JSON Schema Validation
+jsonschema==4.20.0

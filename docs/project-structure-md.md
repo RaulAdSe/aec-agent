@@ -17,25 +17,29 @@ aec-compliance-agent/
 │   ├── TECH_STACK.md                 # Stack tecnológico detallado
 │   ├── PROJECT_STRUCTURE.md          # ⭐ Este archivo
 │   ├── DEVELOPMENT_GUIDE.md          # Guía para developers
+│   ├── cad_extraction_guide.md       # Guía extracción CAD/DWG
+│   ├── ifc_extraction_guide.md       # Guía extracción IFC
 │   ├── RAG_EXPLAINED.md              # Explicación técnica de RAG
 │   ├── REACT_EXPLAINED.md            # Explicación técnica de ReAct
 │   ├── TESTING_GUIDE.md              # Guía de testing
 │   └── API_REFERENCE.md              # Referencia de APIs
 │
 ├── 📁 notebooks/                     # 📓 Tutoriales Jupyter
-│   ├── 01_extraction_tutorial.ipynb  # Pilar 1: Extracción de datos
-│   ├── 02_calculations_tutorial.ipynb# Pilar 2: Cálculos geométricos
-│   ├── 03_rag_tutorial.ipynb         # Pilar 3: RAG
-│   ├── 04_agent_tutorial.ipynb       # Pilar 4: Agente ReAct
-│   └── 00_complete_demo.ipynb        # Demo completa integrada
+│   ├── 01_data_extraction_simple.ipynb  # Pilar 1: Extracción DWG/DXF
+│   ├── 02_calculations_simple.ipynb     # Pilar 2: Cálculos geométricos
+│   ├── 03_rag_simple.ipynb             # Pilar 3: RAG
+│   ├── 04_agent_simple.ipynb           # Pilar 4: Agente ReAct
+│   ├── 05_ifc_extraction_tutorial.ipynb # Tutorial extracción IFC
+│   └── 04_agent_comprehensive_tutorial.ipynb # Demo completa integrada
 │
 ├── 📁 src/                           # 💻 Código fuente
 │   ├── __init__.py
 │   │
 │   ├── 📁 extraction/                # Pilar 1: Extracción
 │   │   ├── __init__.py
-│   │   ├── dxf_export.py             # Script para DWG/DXF (ezdxf)
-│   │   └── json_validator.py         # Validación de JSON extraídos
+│   │   ├── dwg_extractor.py          # Extractor para DWG/DXF (ezdxf)
+│   │   ├── ifc_extractor.py          # Extractor para IFC (ifcopenshell)
+│   │   └── unified_extractor.py      # Extractor unificado multi-formato
 │   │
 │   ├── 📁 calculations/              # Pilar 2: Cálculos
 │   │   ├── __init__.py
