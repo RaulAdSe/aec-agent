@@ -632,21 +632,292 @@ class IFCExtractor:
             return DoorType.SINGLE
     
     def _get_element_position(self, element) -> Point3D:
-        """Get element position from IFC placement."""
+        """Get element position using element-specific coordinate transformation."""
         try:
             if hasattr(element, 'ObjectPlacement') and element.ObjectPlacement:
-                placement = ifcopenshell.util.placement.get_local_placement(element.ObjectPlacement)
-                if placement is not None and len(placement) > 2:
+                # Use ifcopenshell's placement utility to get the actual position
+                placement_matrix = ifcopenshell.util.placement.get_local_placement(element.ObjectPlacement)
+                if placement_matrix is not None and len(placement_matrix) > 2:
+                    # Extract coordinates from the placement matrix
+                    x = float(placement_matrix[0][3])
+                    y = float(placement_matrix[1][3])
+                    z = float(placement_matrix[2][3])
+                    
+                    # Apply element-specific coordinate transformation
+                    transformed_coords = self._transform_element_coordinates(element, x, y, z)
+                    
                     return Point3D(
-                        x=float(placement[0][3]),
-                        y=float(placement[1][3]),
-                        z=float(placement[2][3])
+                        x=transformed_coords[0],
+                        y=transformed_coords[1],
+                        z=transformed_coords[2]
                     )
             
             return Point3D(x=0.0, y=0.0, z=0.0)
             
         except Exception:
             return Point3D(x=0.0, y=0.0, z=0.0)
+    
+    def _transform_element_coordinates(self, element, x: float, y: float, z: float) -> Tuple[float, float, float]:
+        """Transform coordinates based on element type and its specific transformation."""
+        try:
+            import numpy as np
+            
+            # Get the element's placement matrix
+            element_matrix = ifcopenshell.util.placement.get_local_placement(element.ObjectPlacement)
+            if element_matrix is None:
+                return x, y, z
+            
+            # Extract element transformation components
+            element_rotation = element_matrix[:3, :3]  # 3x3 rotation matrix
+            element_translation = element_matrix[:3, 3]  # Translation vector
+            
+            # For walls, we need to extract the local geometry and apply the element transformation
+            if element.is_a() == 'IfcWall':
+                return self._transform_wall_coordinates(element, element_rotation, element_translation)
+            
+            # For doors, we need to handle the mapped item geometry differently
+            elif element.is_a() == 'IfcDoor':
+                return self._transform_door_coordinates(element, element_rotation, element_translation)
+            
+            # For other elements, use the placement coordinates directly
+            else:
+                return self._transform_placement_coordinates(element_rotation, element_translation)
+            
+        except Exception as e:
+            logger.warning(f"Error in element coordinate transformation: {e}")
+            return x, y, z
+    
+    def _transform_wall_coordinates(self, wall, rotation_matrix, translation_vector) -> Tuple[float, float, float]:
+        """Transform wall coordinates using wall-specific geometry."""
+        try:
+            import numpy as np
+            
+            # Get wall geometry from polyline
+            if hasattr(wall, 'Representation') and wall.Representation:
+                representation = wall.Representation
+                if hasattr(representation, 'Representations'):
+                    for rep in representation.Representations:
+                        if rep.is_a() == 'IfcShapeRepresentation':
+                            for item in rep.Items:
+                                if item.is_a() == 'IfcPolyline' and item.Points:
+                                    points = item.Points
+                                    if len(points) >= 2:
+                                        # Get start and end points
+                                        start_coords = points[0].Coordinates
+                                        end_coords = points[-1].Coordinates
+                                        
+                                        # Calculate center point
+                                        if len(start_coords) == 2:
+                                            start_x, start_y = start_coords
+                                            start_z = 0.0
+                                        else:
+                                            start_x, start_y, start_z = start_coords[:3]
+                                        
+                                        if len(end_coords) == 2:
+                                            end_x, end_y = end_coords
+                                            end_z = 0.0
+                                        else:
+                                            end_x, end_y, end_z = end_coords[:3]
+                                        
+                                        # Calculate center
+                                        center_x = (start_x + end_x) / 2
+                                        center_y = (start_y + end_y) / 2
+                                        center_z = (start_z + end_z) / 2
+                                        
+                                        # Apply wall's rotation and translation
+                                        local_point = np.array([center_x, center_y, center_z])
+                                        transformed_point = rotation_matrix @ local_point + translation_vector
+                                        
+                                        return float(transformed_point[0]), float(transformed_point[1]), float(transformed_point[2])
+            
+            # Fallback to placement coordinates
+            return self._transform_placement_coordinates(rotation_matrix, translation_vector)
+            
+        except Exception as e:
+            logger.warning(f"Error transforming wall coordinates: {e}")
+            return self._transform_placement_coordinates(rotation_matrix, translation_vector)
+    
+    def _transform_door_coordinates(self, door, rotation_matrix, translation_vector) -> Tuple[float, float, float]:
+        """Transform door coordinates from UTM to local building coordinates."""
+        try:
+            import numpy as np
+            
+            # Doors are using UTM coordinates, we need to convert them to local building coordinates
+            # Get the door's UTM coordinates
+            utm_x = float(translation_vector[0])
+            utm_y = float(translation_vector[1])
+            utm_z = float(translation_vector[2])
+            
+            # Convert UTM to local building coordinates
+            # We need to find the building's UTM origin and apply inverse transformation
+            local_coords = self._utm_to_local_coordinates(utm_x, utm_y, utm_z)
+            
+            return local_coords[0], local_coords[1], local_coords[2]
+            
+        except Exception as e:
+            logger.warning(f"Error transforming door coordinates: {e}")
+            return self._transform_placement_coordinates(rotation_matrix, translation_vector)
+    
+    def _utm_to_local_coordinates(self, utm_x: float, utm_y: float, utm_z: float) -> Tuple[float, float, float]:
+        """Convert UTM coordinates to local building coordinates."""
+        try:
+            import numpy as np
+            
+            # Get the site transformation to understand the coordinate system
+            sites = self.ifc_file.by_type('IfcSite')
+            if not sites:
+                return utm_x, utm_y, utm_z
+            
+            site = sites[0]
+            if not hasattr(site, 'ObjectPlacement') or not site.ObjectPlacement:
+                return utm_x, utm_y, utm_z
+            
+            # Get site placement matrix
+            site_matrix = ifcopenshell.util.placement.get_local_placement(site.ObjectPlacement)
+            if site_matrix is None:
+                return utm_x, utm_y, utm_z
+            
+            # Extract site transformation components
+            site_rotation = site_matrix[:3, :3]  # 3x3 rotation matrix
+            site_translation = site_matrix[:3, 3]  # Translation vector
+            
+            # Calculate the inverse transformation to convert from UTM to local coordinates
+            # For a rotation matrix R and translation t, the inverse is R^T and -R^T * t
+            inv_rotation = site_rotation.T
+            inv_translation = -inv_rotation @ site_translation
+            
+            # Apply inverse transformation to get local coordinates
+            utm_coords = np.array([utm_x, utm_y, utm_z])
+            local_coords = inv_rotation @ utm_coords + inv_translation
+            
+            return float(local_coords[0]), float(local_coords[1]), float(local_coords[2])
+            
+        except Exception as e:
+            logger.warning(f"Error in UTM to local coordinate transformation: {e}")
+            return utm_x, utm_y, utm_z
+    
+    def _transform_placement_coordinates(self, rotation_matrix, translation_vector) -> Tuple[float, float, float]:
+        """Transform coordinates using placement matrix."""
+        try:
+            import numpy as np
+            
+            # Use the translation vector directly (this is the element's position)
+            return float(translation_vector[0]), float(translation_vector[1]), float(translation_vector[2])
+            
+        except Exception as e:
+            logger.warning(f"Error transforming placement coordinates: {e}")
+            return 0.0, 0.0, 0.0
+    
+    def _get_element_geometry_center(self, element) -> Optional[Point3D]:
+        """Get element center position from geometry using the same method as walls."""
+        try:
+            # Extract geometry from IFC representation (same as walls)
+            representation = element.Representation
+            if not representation or not representation.Representations:
+                return None
+            
+            # Find the shape representation
+            shape_rep = None
+            for rep in representation.Representations:
+                if rep.is_a() == 'IfcShapeRepresentation':
+                    shape_rep = rep
+                    break
+            
+            if not shape_rep or not shape_rep.Items:
+                return None
+            
+            # Get element placement (same as walls)
+            if not hasattr(element, 'ObjectPlacement') or not element.ObjectPlacement:
+                return None
+            
+            placement = element.ObjectPlacement
+            if not hasattr(placement, 'RelativePlacement'):
+                return None
+            
+            rel_placement = placement.RelativePlacement
+            if not hasattr(rel_placement, 'Location'):
+                return None
+            
+            location = rel_placement.Location
+            if not hasattr(location, 'Coordinates'):
+                return None
+            
+            global_coords = location.Coordinates
+            global_x, global_y, global_z = global_coords[0], global_coords[1], global_coords[2]
+            
+            # Calculate center from geometry items
+            total_x, total_y, total_z = 0.0, 0.0, 0.0
+            point_count = 0
+            
+            for item in shape_rep.Items:
+                if item.is_a() == 'IfcPolyline' and item.Points:
+                    # For polylines, use the center of the line
+                    points = item.Points
+                    if len(points) >= 2:
+                        start_coords = points[0].Coordinates
+                        end_coords = points[-1].Coordinates
+                        
+                        # Handle 2D vs 3D coordinates
+                        if len(start_coords) == 2:
+                            start_x, start_y = start_coords
+                            start_z = 0.0
+                        else:
+                            start_x, start_y, start_z = start_coords[:3]
+                        
+                        if len(end_coords) == 2:
+                            end_x, end_y = end_coords
+                            end_z = 0.0
+                        else:
+                            end_x, end_y, end_z = end_coords[:3]
+                        
+                        # Calculate center
+                        center_x = (start_x + end_x) / 2
+                        center_y = (start_y + end_y) / 2
+                        center_z = (start_z + end_z) / 2
+                        
+                        # Apply rotation transformation
+                        rotated_x, rotated_y = self._apply_rotation(center_x, center_y, element)
+                        
+                        total_x += rotated_x
+                        total_y += rotated_y
+                        total_z += center_z
+                        point_count += 1
+                
+                elif item.is_a() == 'IfcPoint' and hasattr(item, 'Coordinates'):
+                    # For points, use the point directly
+                    coords = item.Coordinates
+                    if len(coords) == 2:
+                        x, y = coords
+                        z = 0.0
+                    else:
+                        x, y, z = coords[:3]
+                    
+                    # Apply rotation transformation
+                    rotated_x, rotated_y = self._apply_rotation(x, y, element)
+                    
+                    total_x += rotated_x
+                    total_y += rotated_y
+                    total_z += z
+                    point_count += 1
+            
+            if point_count == 0:
+                return None
+            
+            # Calculate average center
+            avg_x = total_x / point_count
+            avg_y = total_y / point_count
+            avg_z = total_z / point_count
+            
+            # Transform to global coordinates (same as walls)
+            return Point3D(
+                x=global_x + avg_x,
+                y=global_y + avg_y,
+                z=global_z + avg_z
+            )
+            
+        except Exception as e:
+            logger.warning(f"Error extracting element geometry center: {e}")
+            return None
     
     def _find_connected_spaces(self, door) -> Tuple[Optional[str], Optional[str]]:
         """Find spaces connected by a door."""

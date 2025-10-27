@@ -1,0 +1,2193 @@
+{
+  "metadata": {
+    "project_name": "2111B",
+    "file_name": "unknown.ifc",
+    "building_type": "element",
+    "total_area": 720.0,
+    "number_of_levels": 9
+  },
+  "levels": [
+    {
+      "name": "CSZ 34.0 (-0.50)",
+      "elevation": 33.99999999999997,
+      "rooms": [],
+      "doors": [],
+      "walls": [
+        {
+          "id": "W532",
+          "start_point": {
+            "x": 73.87494663760991,
+            "y": 208.56378594681064,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39502949695924,
+            "y": 208.56378594681064,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W34270",
+          "start_point": {
+            "x": 73.87494663761004,
+            "y": 202.64075020641158,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39502949695907,
+            "y": 202.64075020641158,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W34318",
+          "start_point": {
+            "x": 73.87494663761017,
+            "y": 196.71771446601272,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39502949695893,
+            "y": 196.71771446601272,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W34362",
+          "start_point": {
+            "x": 73.87494663761031,
+            "y": 190.7946787256137,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39502949695878,
+            "y": 190.7946787256137,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W34406",
+          "start_point": {
+            "x": 73.87498806728419,
+            "y": 184.87164298521478,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39494848703114,
+            "y": 184.87164298521478,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W34450",
+          "start_point": {
+            "x": 73.87620939629177,
+            "y": 178.94860724481583,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.3777356948324,
+            "y": 178.94860724481583,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W34517",
+          "start_point": {
+            "x": 73.87494663760988,
+            "y": 167.10253576401794,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39498806728406,
+            "y": 167.10253576401794,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W34472",
+          "start_point": {
+            "x": 73.87494663761072,
+            "y": 173.0255715044169,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 88.33502949695824,
+            "y": 173.0255715044169,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W125857",
+          "start_point": {
+            "x": 88.57502949695825,
+            "y": 173.0255715044169,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39502949695847,
+            "y": 173.0255715044169,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        }
+      ],
+      "windows": []
+    },
+    {
+      "name": "MUELLE",
+      "elevation": 34.49999999999997,
+      "rooms": [],
+      "doors": [
+        {
+          "id": "D3283",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3349373",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 79.48359719834116,
+            "y": 68.40390378353186,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3379",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368287",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 80.37158931710292,
+            "y": 67.38422867143527,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3392",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368456",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 76.81962047354318,
+            "y": 71.46292954322416,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3405",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368459",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 75.93162842413585,
+            "y": 72.48260457569268,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3418",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368465",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 75.04363593399466,
+            "y": 73.50228011421859,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3431",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368496",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 82.75068824124173,
+            "y": 70.83530869230162,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3442",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368497",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 80.08671152501483,
+            "y": 73.8943344418658,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3453",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368501",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 79.1987193616369,
+            "y": 74.91400960530154,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3464",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368502",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 77.42273489144281,
+            "y": 76.9533600966679,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3475",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368503",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 78.31072697688069,
+            "y": 75.93368502275553,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D3486",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3368566",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 81.86269599520892,
+            "y": 71.85498395049945,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D5169",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3385923",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 78.59560491680168,
+            "y": 69.42357908259146,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D5180",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3385924",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 80.97470377050922,
+            "y": 72.87465918425005,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D6630",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3428097",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 74.1556436571118,
+            "y": 74.52195540780667,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D6641",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3428098",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 76.5347426552471,
+            "y": 77.97303534368984,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D20610",
+          "name": "SVT_ARQ_PuertaUnaHoja:P1_90x210_1 hoja:3483085",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 84.39902929526579,
+            "y": 63.61477394704707,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D24868",
+          "name": "SVT_ARQ_PuertaUnaHoja:P1_90x210_1 hoja:3483507",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 81.08203652588418,
+            "y": 67.42365344334394,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D28943",
+          "name": "PUERTA IKEMA BASICA1:PI 3_5000x5000 mm:3483719",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 77.70761286007473,
+            "y": 70.44325412344187,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D41955",
+          "name": "SVT_ARQ_PuertaUnaHoja:P1_90x210_1 hoja:3587638",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 89.67172020117869,
+            "y": 62.66619843360968,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D41966",
+          "name": "SVT_ARQ_PuertaUnaHoja:P1_90x210_1 hoja:3587639",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 88.80332295423432,
+            "y": 61.90994783770293,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D119361",
+          "name": "SVT_ARQ_PuertaUnaHoja:P1_90x210_1 hoja:3643829",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 73.60918689706887,
+            "y": 75.14944786659908,
+            "z": 34.49999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        }
+      ],
+      "walls": [
+        {
+          "id": "W10889",
+          "start_point": {
+            "x": 93.66002907600418,
+            "y": 61.903785782916366,
+            "z": 7.051927271015642
+          },
+          "end_point": {
+            "x": 93.6600290760042,
+            "y": 208.76378594681063,
+            "z": 7.051927271015642
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W12626",
+          "start_point": {
+            "x": 93.66002907600435,
+            "y": 167.55587271587598,
+            "z": 7.851866349078201
+          },
+          "end_point": {
+            "x": 93.66002907600435,
+            "y": 180.19828234132063,
+            "z": 7.851866349078201
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W13610",
+          "start_point": {
+            "x": 93.51498806728407,
+            "y": 166.9037857829173,
+            "z": 6.0
+          },
+          "end_point": {
+            "x": 93.51498806728407,
+            "y": 208.71378611070438,
+            "z": 6.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W17458",
+          "start_point": {
+            "x": 73.6099880672842,
+            "y": 61.95378578291637,
+            "z": 7.051927271015642
+          },
+          "end_point": {
+            "x": 73.60998806728422,
+            "y": 208.76378594681063,
+            "z": 7.051927271015642
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W18442",
+          "start_point": {
+            "x": 73.75494663760976,
+            "y": 166.9037857829162,
+            "z": 6.0
+          },
+          "end_point": {
+            "x": 73.75494663760976,
+            "y": 208.71378578455506,
+            "z": 6.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20385",
+          "start_point": {
+            "x": 73.6100692887528,
+            "y": 167.55587271587598,
+            "z": 7.851866349078203
+          },
+          "end_point": {
+            "x": 73.6100692887528,
+            "y": 180.19828234132063,
+            "z": 7.851866349078203
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W24827",
+          "start_point": {
+            "x": 74.43494663760994,
+            "y": 114.30378626574695,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.3749466376099,
+            "y": 114.30378626574695,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W119320",
+          "start_point": {
+            "x": 73.62494663760987,
+            "y": 61.95378578291637,
+            "z": 5.998404727764084
+          },
+          "end_point": {
+            "x": 73.62494663760988,
+            "y": 208.7887859468106,
+            "z": 5.998404727764084
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W125373",
+          "start_point": {
+            "x": 93.64498806728386,
+            "y": 61.953785782916356,
+            "z": 5.998404727764083
+          },
+          "end_point": {
+            "x": 93.64498806728388,
+            "y": 208.7887859468105,
+            "z": 5.998404727764083
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W616",
+          "start_point": {
+            "x": 93.51498806728404,
+            "y": 166.90378578291612,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.51498806728404,
+            "y": 107.35378578291507,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W1205",
+          "start_point": {
+            "x": 73.75494663760988,
+            "y": 107.35378662555257,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 73.75494663760988,
+            "y": 166.9037857829162,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W1228",
+          "start_point": {
+            "x": 75.3849873444194,
+            "y": 157.3537867463167,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.88498734441939,
+            "y": 157.3537867463167,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W1255",
+          "start_point": {
+            "x": 91.78498734441939,
+            "y": 157.25378674631665,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.78498734441939,
+            "y": 155.95378674631658,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W1278",
+          "start_point": {
+            "x": 91.68498734441938,
+            "y": 156.05378674631658,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.3849873444194,
+            "y": 156.05378674631658,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W1301",
+          "start_point": {
+            "x": 75.4849873444194,
+            "y": 157.25378674631673,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.4849873444194,
+            "y": 156.15378674631668,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W3303",
+          "start_point": {
+            "x": 73.87498806728419,
+            "y": 62.07378578291623,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39494848703114,
+            "y": 62.07378578291623,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W3328",
+          "start_point": {
+            "x": 73.75494663760992,
+            "y": 61.95378620423497,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 73.75494663760992,
+            "y": 69.45378620423504,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W3351",
+          "start_point": {
+            "x": 93.51498806728415,
+            "y": 61.9537857829163,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.51498806728415,
+            "y": 69.4537857829163,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W3953",
+          "start_point": {
+            "x": 75.3849873444194,
+            "y": 163.85378451362985,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.88498734441939,
+            "y": 163.85378451362985,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W3976",
+          "start_point": {
+            "x": 91.78498734441939,
+            "y": 163.7537845136298,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.78498734441939,
+            "y": 162.4537845136297,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W3999",
+          "start_point": {
+            "x": 91.68498734441938,
+            "y": 162.55378451362972,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.38498734441941,
+            "y": 162.55378451362972,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4022",
+          "start_point": {
+            "x": 75.4849873444194,
+            "y": 163.75378451362985,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.4849873444194,
+            "y": 162.65378451362974,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4045",
+          "start_point": {
+            "x": 75.38498734441939,
+            "y": 150.8537848793515,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.88498734441937,
+            "y": 150.8537848793515,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4068",
+          "start_point": {
+            "x": 91.78498734441938,
+            "y": 150.75378487935146,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.78498734441938,
+            "y": 149.45378487935142,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4091",
+          "start_point": {
+            "x": 91.68498734441937,
+            "y": 149.5537848793514,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.38498734441939,
+            "y": 149.5537848793514,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4114",
+          "start_point": {
+            "x": 75.48498734441938,
+            "y": 150.7537848793515,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.48498734441938,
+            "y": 149.65378487935146,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4137",
+          "start_point": {
+            "x": 75.38498734441937,
+            "y": 144.3537862386307,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.88498734441934,
+            "y": 144.3537862386307,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4160",
+          "start_point": {
+            "x": 91.78498734441936,
+            "y": 144.25378623863062,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.78498734441936,
+            "y": 142.95378623863058,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4183",
+          "start_point": {
+            "x": 91.68498734441934,
+            "y": 143.05378623863058,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.38498734441937,
+            "y": 143.05378623863058,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4206",
+          "start_point": {
+            "x": 75.48498734441938,
+            "y": 144.25378623863068,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.48498734441938,
+            "y": 143.15378623863063,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4229",
+          "start_point": {
+            "x": 75.38498734441937,
+            "y": 131.35378643573375,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.88498734441936,
+            "y": 131.35378643573375,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4252",
+          "start_point": {
+            "x": 91.78498734441936,
+            "y": 131.2537864357337,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.78498734441936,
+            "y": 129.95378643573366,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4275",
+          "start_point": {
+            "x": 91.68498734441934,
+            "y": 130.05378643573363,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.38498734441936,
+            "y": 130.05378643573363,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4298",
+          "start_point": {
+            "x": 75.48498734441937,
+            "y": 131.25378643573376,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.48498734441937,
+            "y": 130.1537864357337,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4321",
+          "start_point": {
+            "x": 75.38498734441936,
+            "y": 124.85378609576013,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.88498734441934,
+            "y": 124.85378609576013,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4344",
+          "start_point": {
+            "x": 91.78498734441936,
+            "y": 124.75378609576006,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.78498734441936,
+            "y": 123.45378609576001,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4367",
+          "start_point": {
+            "x": 91.68498734441934,
+            "y": 123.55378609576,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.38498734441936,
+            "y": 123.55378609576,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4390",
+          "start_point": {
+            "x": 75.48498734441935,
+            "y": 124.75378609576012,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.48498734441935,
+            "y": 123.65378609576007,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4413",
+          "start_point": {
+            "x": 75.38498734441936,
+            "y": 118.3537869473533,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.88498734441936,
+            "y": 118.3537869473533,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4436",
+          "start_point": {
+            "x": 91.78498734441936,
+            "y": 118.25378694735323,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.78498734441936,
+            "y": 116.95378694735318,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4459",
+          "start_point": {
+            "x": 91.68498734441934,
+            "y": 117.05378694735317,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.38498734441934,
+            "y": 117.05378694735317,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4482",
+          "start_point": {
+            "x": 75.48498734441935,
+            "y": 118.25378694735329,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.48498734441935,
+            "y": 117.15378694735324,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4505",
+          "start_point": {
+            "x": 75.38498734441934,
+            "y": 137.8537848793515,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.88498734441936,
+            "y": 137.8537848793515,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4528",
+          "start_point": {
+            "x": 91.78498734441936,
+            "y": 137.75378487935146,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 91.78498734441936,
+            "y": 136.45378487935142,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4551",
+          "start_point": {
+            "x": 91.68498734441934,
+            "y": 136.55378487935138,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.38498734441933,
+            "y": 136.55378487935138,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4574",
+          "start_point": {
+            "x": 75.48498734441934,
+            "y": 137.75378487935149,
+            "z": -2.21
+          },
+          "end_point": {
+            "x": 75.48498734441934,
+            "y": 136.65378487935143,
+            "z": -2.21
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W5717",
+          "start_point": {
+            "x": 77.53494663760993,
+            "y": 68.73878578291624,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 77.53494663760993,
+            "y": 62.19378578291621,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W5825",
+          "start_point": {
+            "x": 73.87494663760985,
+            "y": 68.63878578291622,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 77.43494663760993,
+            "y": 68.63878578291622,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W6587",
+          "start_point": {
+            "x": 73.87494663760991,
+            "y": 166.78378578291617,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39498806728405,
+            "y": 166.78378578291617,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20467",
+          "start_point": {
+            "x": 73.75490520793564,
+            "y": 95.55378668706565,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 73.75490520793564,
+            "y": 87.85378668706565,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20513",
+          "start_point": {
+            "x": 74.43494663760994,
+            "y": 94.81878578291622,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.57494663760987,
+            "y": 94.81878578291622,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20536",
+          "start_point": {
+            "x": 76.47494663760986,
+            "y": 94.71878578291621,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.47494663760986,
+            "y": 88.52378578291622,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20559",
+          "start_point": {
+            "x": 74.43494663760995,
+            "y": 88.62378578291622,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.37494663760991,
+            "y": 88.62378578291622,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W24733",
+          "start_point": {
+            "x": 74.43494663760993,
+            "y": 108.1037862657469,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.57494663760986,
+            "y": 108.1037862657469,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W24756",
+          "start_point": {
+            "x": 76.47494663760986,
+            "y": 108.2037862657469,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.47494663760986,
+            "y": 114.40378626574693,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W34225",
+          "start_point": {
+            "x": 85.05928198058078,
+            "y": 62.193785782916265,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 85.05928198058078,
+            "y": 68.53878578291625,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W41877",
+          "start_point": {
+            "x": 84.95928198058078,
+            "y": 68.63878578291624,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39498806728412,
+            "y": 68.63878578291624,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W41904",
+          "start_point": {
+            "x": 90.0949880672841,
+            "y": 62.193785782916294,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 90.0949880672841,
+            "y": 68.53878578291624,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W113300",
+          "start_point": {
+            "x": 85.1592819805808,
+            "y": 65.10378578291628,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 86.05928198058079,
+            "y": 65.10378578291628,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        }
+      ],
+      "windows": []
+    },
+    {
+      "name": "H base de taller",
+      "elevation": 35.699999999999974,
+      "rooms": [],
+      "doors": [],
+      "walls": [],
+      "windows": []
+    },
+    {
+      "name": "PB",
+      "elevation": 35.699999999999974,
+      "rooms": [],
+      "doors": [],
+      "walls": [
+        {
+          "id": "W1383",
+          "start_point": {
+            "x": 74.47507014103381,
+            "y": 133.93878578291623,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.7950701410337,
+            "y": 133.93878578291623,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4734",
+          "start_point": {
+            "x": 74.47507014103378,
+            "y": 127.44378578291621,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103368,
+            "y": 127.44378578291621,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4804",
+          "start_point": {
+            "x": 74.47507014103374,
+            "y": 120.94878578291622,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103363,
+            "y": 120.94878578291622,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4874",
+          "start_point": {
+            "x": 74.17494663760995,
+            "y": 114.4537857829162,
+            "z": 9.399999999999999
+          },
+          "end_point": {
+            "x": 93.09494848703116,
+            "y": 114.4537857829162,
+            "z": 9.399999999999999
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W4944",
+          "start_point": {
+            "x": 74.47507014103385,
+            "y": 140.45378578291619,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103375,
+            "y": 140.45378578291619,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W5014",
+          "start_point": {
+            "x": 74.47507014103388,
+            "y": 146.95378578291619,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103378,
+            "y": 146.95378578291619,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W5084",
+          "start_point": {
+            "x": 74.47507014103392,
+            "y": 153.45378578291619,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103382,
+            "y": 153.45378578291619,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W5154",
+          "start_point": {
+            "x": 74.47507014103395,
+            "y": 159.91878578291622,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103385,
+            "y": 159.91878578291622,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W7930",
+          "start_point": {
+            "x": 74.47507014103371,
+            "y": 107.95878578291622,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103362,
+            "y": 107.95878578291622,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W8000",
+          "start_point": {
+            "x": 74.47507014103371,
+            "y": 101.46378578291626,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.7950701410336,
+            "y": 101.46378578291626,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W8070",
+          "start_point": {
+            "x": 74.47507014103371,
+            "y": 94.95378578291621,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103362,
+            "y": 94.95378578291621,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W8140",
+          "start_point": {
+            "x": 74.47507014103371,
+            "y": 88.45378578291623,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.7950701410336,
+            "y": 88.45378578291623,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W8210",
+          "start_point": {
+            "x": 74.47507014103371,
+            "y": 81.97878578291622,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103362,
+            "y": 81.97878578291622,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W8280",
+          "start_point": {
+            "x": 74.47507014103371,
+            "y": 75.48378578291623,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103362,
+            "y": 75.48378578291623,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W8350",
+          "start_point": {
+            "x": 74.47507014103371,
+            "y": 68.95378578291624,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103362,
+            "y": 68.95378578291624,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W8420",
+          "start_point": {
+            "x": 74.47507014103371,
+            "y": 62.493786265746955,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103362,
+            "y": 62.493786265746955,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W8490",
+          "start_point": {
+            "x": 74.47507014103395,
+            "y": 166.30378578291615,
+            "z": 9.399999999999997
+          },
+          "end_point": {
+            "x": 92.79507014103385,
+            "y": 166.30378578291615,
+            "z": 9.399999999999997
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        }
+      ],
+      "windows": []
+    },
+    {
+      "name": "REF_CubiertaAnexoFrio",
+      "elevation": 41.09999999999997,
+      "rooms": [],
+      "doors": [
+        {
+          "id": "D20729",
+          "name": "SVT_ARQ_PuertaUnaHoja:P1_90x210_1 hoja:3483089",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 84.39493080359534,
+            "y": 63.61948021617718,
+            "z": 41.09999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        },
+        {
+          "id": "D24986",
+          "name": "SVT_ARQ_PuertaUnaHoja:P1_90x210_1 hoja:3483511",
+          "width": 900.0,
+          "height": 2100.0,
+          "door_type": "single",
+          "position": {
+            "x": 81.08203652588418,
+            "y": 67.42365344334394,
+            "z": 41.09999999999997
+          },
+          "fire_rating": null,
+          "from_room": null,
+          "to_room": null,
+          "is_emergency_exit": false
+        }
+      ],
+      "walls": [
+        {
+          "id": "W4664",
+          "start_point": {
+            "x": 93.51498806728412,
+            "y": 69.4537857829163,
+            "z": -0.599999999999973
+          },
+          "end_point": {
+            "x": 93.51498806728412,
+            "y": 107.35378578291508,
+            "z": -0.599999999999973
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20490",
+          "start_point": {
+            "x": 73.75494663760978,
+            "y": 107.35378578291508,
+            "z": -0.599999999999973
+          },
+          "end_point": {
+            "x": 73.75494663760978,
+            "y": 69.4537857829163,
+            "z": -0.599999999999973
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20643",
+          "start_point": {
+            "x": 74.43494663760994,
+            "y": 94.80378626574694,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.57494663760988,
+            "y": 94.80378626574694,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20679",
+          "start_point": {
+            "x": 76.47494663760989,
+            "y": 94.70378626574693,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.47494663760989,
+            "y": 88.50378626574691,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20714",
+          "start_point": {
+            "x": 74.43494663760995,
+            "y": 88.6037862657469,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.37494663760992,
+            "y": 88.6037862657469,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W24900",
+          "start_point": {
+            "x": 74.43494663760993,
+            "y": 108.1037862657469,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.57494663760984,
+            "y": 108.1037862657469,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W24936",
+          "start_point": {
+            "x": 76.47494663760985,
+            "y": 108.2037862657469,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.47494663760985,
+            "y": 114.40378626574693,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W24971",
+          "start_point": {
+            "x": 74.43494663760994,
+            "y": 114.30378626574695,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 76.37494663760987,
+            "y": 114.30378626574695,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        }
+      ],
+      "windows": []
+    },
+    {
+      "name": "Altillo",
+      "elevation": 41.099999999999994,
+      "rooms": [],
+      "doors": [],
+      "walls": [
+        {
+          "id": "W18487",
+          "start_point": {
+            "x": 73.87494663760985,
+            "y": 140.103786265747,
+            "z": 0.0
+          },
+          "end_point": {
+            "x": 93.39498806728405,
+            "y": 140.103786265747,
+            "z": 0.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        }
+      ],
+      "windows": []
+    },
+    {
+      "name": "PANEL PREFABRICADO",
+      "elevation": 45.49999999999997,
+      "rooms": [],
+      "doors": [],
+      "walls": [],
+      "windows": []
+    },
+    {
+      "name": "Ref_PetoAnexoFrio",
+      "elevation": 46.29999999999997,
+      "rooms": [],
+      "doors": [],
+      "walls": [],
+      "windows": []
+    },
+    {
+      "name": "Ref_H Peto Max",
+      "elevation": 46.49999999999997,
+      "rooms": [],
+      "doors": [],
+      "walls": [
+        {
+          "id": "W3215",
+          "start_point": {
+            "x": 93.6600290760044,
+            "y": 208.7137861115245,
+            "z": -4.548133650921832
+          },
+          "end_point": {
+            "x": 93.66002907600442,
+            "y": 61.903785782916316,
+            "z": -4.548133650921832
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W15465",
+          "start_point": {
+            "x": 73.60998806728419,
+            "y": 208.71378578291615,
+            "z": -4.548133650921832
+          },
+          "end_point": {
+            "x": 73.6099880672842,
+            "y": 61.903785454307894,
+            "z": -4.548133650921832
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W569",
+          "start_point": {
+            "x": 73.87494663564316,
+            "y": 208.5937857868489,
+            "z": -6.0
+          },
+          "end_point": {
+            "x": 93.39498806925073,
+            "y": 208.5937857868489,
+            "z": -6.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W3246",
+          "start_point": {
+            "x": 73.58498806728419,
+            "y": 61.92878578291637,
+            "z": -0.3999999999999957
+          },
+          "end_point": {
+            "x": 93.6350290760042,
+            "y": 61.92878578291637,
+            "z": -0.3999999999999957
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W6487",
+          "start_point": {
+            "x": 73.63498806687487,
+            "y": 208.73878578291612,
+            "z": -4.946538378685915
+          },
+          "end_point": {
+            "x": 93.63502907641373,
+            "y": 208.73878578291612,
+            "z": -4.946538378685915
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W8826",
+          "start_point": {
+            "x": 73.5849880672842,
+            "y": 61.92878578291637,
+            "z": -0.8000000000000087
+          },
+          "end_point": {
+            "x": 93.63502907600419,
+            "y": 61.92878578291637,
+            "z": -0.8000000000000087
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W20409",
+          "start_point": {
+            "x": 73.58498806687446,
+            "y": 208.73878578209664,
+            "z": -4.546538378685916
+          },
+          "end_point": {
+            "x": 93.68502907641414,
+            "y": 208.73878578209664,
+            "z": -4.546538378685916
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        },
+        {
+          "id": "W42115",
+          "start_point": {
+            "x": 73.63498806712072,
+            "y": 208.75378578291614,
+            "z": -6.0
+          },
+          "end_point": {
+            "x": 93.645029076004,
+            "y": 208.75378578291614,
+            "z": -6.0
+          },
+          "thickness": 200.0,
+          "height": 2700.0,
+          "fire_rating": null,
+          "material": "concrete"
+        }
+      ],
+      "windows": []
+    }
+  ]
+}
