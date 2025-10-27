@@ -203,13 +203,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498388.1837104124,
-            "y": 4674441.16565687,
-            "z": 34.49999999999997
+            "x": 73.87494663754478,
+            "y": 121.70378665765747,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3379",
@@ -218,13 +219,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498392.4524784958,
-            "y": 4674436.263860467,
-            "z": 34.49999999999997
+            "x": 73.87494663801044,
+            "y": 115.20378750935197,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3392",
@@ -233,13 +235,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498375.37740439083,
-            "y": 4674455.871048115,
-            "z": 34.49999999999997
+            "x": 73.87494663801044,
+            "y": 141.20378680108115,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3405",
@@ -248,13 +251,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498371.10863664094,
-            "y": 4674460.772844136,
-            "z": 34.49999999999997
+            "x": 73.8749466384761,
+            "y": 147.70378544181585,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3418",
@@ -263,13 +267,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498366.8398667723,
-            "y": 4674465.674642589,
-            "z": 34.49999999999997
+            "x": 73.87494663801044,
+            "y": 154.20378730865195,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3431",
@@ -278,13 +283,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498403.88931598555,
-            "y": 4674452.853940418,
-            "z": 34.49999999999997
+            "x": 93.39498806744814,
+            "y": 120.20378622366115,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3442",
@@ -293,13 +299,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498391.08301000524,
-            "y": 4674467.5593316145,
-            "z": 34.49999999999997
+            "x": 93.39498806698248,
+            "y": 139.7037863037549,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3453",
@@ -308,13 +315,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498386.8142417074,
-            "y": 4674472.461128265,
-            "z": 34.49999999999997
+            "x": 93.39498806698248,
+            "y": 146.20378577895463,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3464",
@@ -323,13 +331,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498378.2767044222,
-            "y": 4674482.264722356,
-            "z": 34.49999999999997
+            "x": 93.39498806698248,
+            "y": 159.20378577848896,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3475",
@@ -338,13 +347,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498382.5454723454,
-            "y": 4674477.362926136,
-            "z": 34.49999999999997
+            "x": 93.39498806698248,
+            "y": 152.7037868737243,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D3486",
@@ -353,13 +363,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498399.6205472904,
-            "y": 4674457.755737524,
-            "z": 34.49999999999997
+            "x": 93.39498806698248,
+            "y": 126.7037863037549,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D5169",
@@ -368,13 +379,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498383.91494154657,
-            "y": 4674446.067454172,
-            "z": 34.49999999999997
+            "x": 73.87494663754478,
+            "y": 128.20378699805588,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D5180",
@@ -383,13 +395,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498395.3517786978,
-            "y": 4674462.657534512,
-            "z": 34.49999999999997
+            "x": 93.39498806698248,
+            "y": 133.2037862278521,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D6630",
@@ -398,13 +411,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498362.5710979288,
-            "y": 4674470.576439865,
-            "z": 34.49999999999997
+            "x": 73.87494663801044,
+            "y": 160.70378761412576,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D6641",
@@ -413,13 +427,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498374.00793577434,
-            "y": 4674487.166519407,
-            "z": 34.49999999999997
+            "x": 93.39498806698248,
+            "y": 165.70378578687087,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D20610",
@@ -428,13 +443,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498411.8132440624,
-            "y": 4674418.143285206,
-            "z": 34.49999999999997
+            "x": 76.57494663726538,
+            "y": 88.82378578232601,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D24868",
@@ -443,13 +459,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498395.86775021465,
-            "y": 4674436.453383779,
-            "z": 34.49999999999997
+            "x": 76.57494663679972,
+            "y": 113.10378750879318,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D28943",
@@ -458,13 +475,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498379.64617376146,
-            "y": 4674450.969250233,
-            "z": 34.49999999999997
+            "x": 73.87494663801044,
+            "y": 134.70378569234163,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D41955",
@@ -473,13 +491,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498437.16019723576,
-            "y": 4674413.583279784,
-            "z": 34.49999999999997
+            "x": 92.69494848698378,
+            "y": 68.73878578282893,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D41966",
@@ -488,13 +507,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498432.98562589317,
-            "y": 4674409.947821384,
-            "z": 34.49999999999997
+            "x": 87.15928198071197,
+            "y": 68.73878578282893,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D119361",
@@ -503,13 +523,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498359.94416337955,
-            "y": 4674473.592930354,
-            "z": 34.49999999999997
+            "x": 73.87494663754478,
+            "y": 164.70378761412576,
+            "z": -1.0
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         }
       ],
       "walls": [
@@ -1870,13 +1891,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498411.7935417362,
-            "y": 4674418.165909248,
-            "z": 41.09999999999997
+            "x": 76.57494663679972,
+            "y": 88.85378626501188,
+            "z": 5.600000000000001
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         },
         {
           "id": "D24986",
@@ -1885,13 +1907,14 @@
           "height": 2100.0,
           "door_type": "single",
           "position": {
-            "x": 498395.86775021465,
-            "y": 4674436.453383779,
-            "z": 41.09999999999997
+            "x": 76.57494663679972,
+            "y": 113.10378750879318,
+            "z": 5.600000000000001
           },
           "fire_rating": null,
           "from_room": null,
-          "to_room": null
+          "to_room": null,
+          "is_emergency_exit": false
         }
       ],
       "walls": [
