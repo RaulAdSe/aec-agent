@@ -55,6 +55,13 @@ class BuildingDataLoader:
             self.all_doors.extend(level.get('doors', []))
             self.all_walls.extend(level.get('walls', []))
         
+        # Normalize coordinates first
+        self.normalize_coordinates()
+        
+        # Enhance room data with calculated centroids
+        self._calculate_room_centroids_from_walls()
+        self._validate_spatial_data()
+        
         logger.info(f"Loaded building data: {self.get_summary()}")
         return self.data
     
@@ -126,6 +133,128 @@ class BuildingDataLoader:
         
         logger.info(f"Enhanced {connections_added} door connections")
     
+    def _calculate_room_centroids_from_walls(self):
+        """Calculate room centroids from wall positions when boundary data is missing."""
+        print("🔧 Calculating room centroids from wall data...")
+        
+        # Group walls by level
+        walls_by_level = {}
+        for level in self.levels:
+            level_name = level['name']
+            walls_by_level[level_name] = level.get('walls', [])
+        
+        # Calculate centroids for each room
+        for room in self.all_rooms:
+            if not room.get('centroid'):
+                # Try to get centroid from boundary first
+                if room.get('boundary') and room['boundary'].get('points'):
+                    centroid = self._calculate_polygon_centroid(room['boundary']['points'])
+                    if centroid:
+                        room['centroid'] = centroid
+                        continue
+                
+                # Calculate from walls on the same level
+                level_name = room.get('level', 'MUELLE')
+                level_walls = walls_by_level.get(level_name, [])
+                
+                if level_walls:
+                    centroid = self._calculate_centroid_from_walls(level_walls, room['id'])
+                    if centroid:
+                        room['centroid'] = centroid
+                        print(f"  ✓ Calculated centroid for {room['id']}: ({centroid['x']:.1f}, {centroid['y']:.1f})")
+                    else:
+                        # Fallback: use building center
+                        building_bounds = self.calculate_building_bounds()
+                        room['centroid'] = {
+                            'x': (building_bounds[0] + building_bounds[2]) / 2,
+                            'y': (building_bounds[1] + building_bounds[3]) / 2
+                        }
+                        print(f"  ⚠️ Using building center for {room['id']}")
+                else:
+                    # No walls available, use building center
+                    building_bounds = self.calculate_building_bounds()
+                    room['centroid'] = {
+                        'x': (building_bounds[0] + building_bounds[2]) / 2,
+                        'y': (building_bounds[1] + building_bounds[3]) / 2
+                    }
+                    print(f"  ⚠️ No walls found, using building center for {room['id']}")
+    
+    def _calculate_polygon_centroid(self, points: List[Dict]) -> Optional[Dict]:
+        """Calculate centroid of a polygon from boundary points."""
+        if not points or len(points) < 3:
+            return None
+        
+        try:
+            x_coords = [p['x'] for p in points]
+            y_coords = [p['y'] for p in points]
+            
+            centroid_x = sum(x_coords) / len(x_coords)
+            centroid_y = sum(y_coords) / len(y_coords)
+            
+            return {'x': centroid_x, 'y': centroid_y}
+        except (KeyError, TypeError):
+            return None
+    
+    def _calculate_centroid_from_walls(self, walls: List[Dict], room_id: str) -> Optional[Dict]:
+        """Calculate room centroid from surrounding walls."""
+        if not walls:
+            return None
+        
+        try:
+            # Get all wall endpoints
+            all_x = []
+            all_y = []
+            
+            for wall in walls:
+                start = wall.get('start_point', {})
+                end = wall.get('end_point', {})
+                
+                if start.get('x') is not None and start.get('y') is not None:
+                    all_x.append(start['x'])
+                    all_y.append(start['y'])
+                
+                if end.get('x') is not None and end.get('y') is not None:
+                    all_x.append(end['x'])
+                    all_y.append(end['y'])
+            
+            if all_x and all_y:
+                # Calculate centroid from all wall points
+                centroid_x = sum(all_x) / len(all_x)
+                centroid_y = sum(all_y) / len(all_y)
+                
+                return {'x': centroid_x, 'y': centroid_y}
+            
+        except (KeyError, TypeError, ZeroDivisionError):
+            pass
+        
+        return None
+    
+    def _validate_spatial_data(self):
+        """Validate that all rooms have usable coordinate data."""
+        print("🔍 Validating spatial data...")
+        
+        rooms_with_centroids = 0
+        rooms_without_centroids = 0
+        
+        for room in self.all_rooms:
+            if room.get('centroid') and room['centroid'].get('x') is not None and room['centroid'].get('y') is not None:
+                rooms_with_centroids += 1
+            else:
+                rooms_without_centroids += 1
+                print(f"  ⚠️ Room {room['id']} missing centroid data")
+        
+        print(f"  ✓ Rooms with centroids: {rooms_with_centroids}")
+        if rooms_without_centroids > 0:
+            print(f"  ⚠️ Rooms without centroids: {rooms_without_centroids}")
+        
+        # Also validate door positions
+        doors_with_positions = 0
+        for door in self.all_doors:
+            if door.get('position') and door['position'].get('x') is not None and door['position'].get('y') is not None:
+                doors_with_positions += 1
+        
+        print(f"  ✓ Doors with positions: {doors_with_positions}/{len(self.all_doors)}")
+    
     def get_level_data(self, level_name: str) -> Optional[Dict]:
         """Get data for a specific level."""
         for level in self.levels:
@@ -173,6 +302,45 @@ class BuildingDataLoader:
             coords.append((start, end))
         return coords
     
+    def normalize_coordinates(self):
+        """Normalize UTM coordinates to local building coordinates."""
+        print("🔧 Normalizing coordinates from UTM to local building coordinates...")
+        
+        # Get bounds from all walls
+        all_x = []
+        all_y = []
+        for wall in self.all_walls:
+            all_x.extend([wall['start_point']['x'], wall['end_point']['x']])
+            all_y.extend([wall['start_point']['y'], wall['end_point']['y']])
+        
+        if not all_x or not all_y:
+            print("  ⚠️ No wall coordinates found for normalization")
+            return
+        
+        min_x, min_y = min(all_x), min(all_y)
+        print(f"  📐 Original bounds: ({min_x:.1f}, {min_y:.1f}) to ({max(all_x):.1f}, {max(all_y):.1f})")
+        
+        # Normalize all walls
+        for wall in self.all_walls:
+            wall['start_point']['x'] -= min_x
+            wall['start_point']['y'] -= min_y
+            wall['end_point']['x'] -= min_x
+            wall['end_point']['y'] -= min_y
+        
+        # Normalize all doors
+        for door in self.all_doors:
+            if door.get('position'):
+                door['position']['x'] -= min_x
+                door['position']['y'] -= min_y
+        
+        # Update room centroids if they exist
+        for room in self.all_rooms:
+            if room.get('centroid'):
+                room['centroid']['x'] -= min_x
+                room['centroid']['y'] -= min_y
+        
+        print(f"  ✅ Normalized to local coordinates: (0, 0) to ({max(all_x) - min_x:.1f}, {max(all_y) - min_y:.1f})")
+
     def calculate_building_bounds(self) -> Tuple[float, float, float, float]:
         """Calculate overall building bounds from walls."""
         if not self.all_walls:

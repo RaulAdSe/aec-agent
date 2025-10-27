@@ -699,18 +699,128 @@ class IFCExtractor:
     def _get_wall_geometry(self, wall) -> Tuple[Optional[Point3D], Optional[Point3D]]:
         """Get wall start and end points from IFC geometry."""
         try:
-            # This is a simplified implementation
-            # Full implementation would extract actual wall geometry
-            position = self._get_element_position(wall)
+            # Extract real wall geometry from IFC polyline
+            representation = wall.Representation
+            if not representation or not representation.Representations:
+                return None, None
             
-            # Create default start and end points
-            start_point = Point3D(x=position.x, y=position.y, z=position.z)
-            end_point = Point3D(x=position.x + 3.0, y=position.y, z=position.z)  # 3m wall
+            # Find the polyline representation
+            polyline = None
+            for rep in representation.Representations:
+                if rep.is_a() == 'IfcShapeRepresentation':
+                    for item in rep.Items:
+                        if item.is_a() == 'IfcPolyline':
+                            polyline = item
+                            break
+                    if polyline:
+                        break
+            
+            if not polyline or not polyline.Points:
+                return None, None
+            
+            # Get wall placement (global position and rotation)
+            if not hasattr(wall, 'ObjectPlacement') or not wall.ObjectPlacement:
+                return None, None
+            
+            placement = wall.ObjectPlacement
+            if not hasattr(placement, 'RelativePlacement'):
+                return None, None
+            
+            rel_placement = placement.RelativePlacement
+            if not hasattr(rel_placement, 'Location'):
+                return None, None
+            
+            location = rel_placement.Location
+            if not hasattr(location, 'Coordinates'):
+                return None, None
+            
+            global_coords = location.Coordinates
+            global_x, global_y, global_z = global_coords[0], global_coords[1], global_coords[2]
+            
+            # Extract polyline points (local coordinates)
+            points = polyline.Points
+            if len(points) < 2:
+                return None, None
+            
+            # Get start and end points from polyline
+            start_local = points[0]
+            end_local = points[-1]
+            
+            # Extract coordinates (handle 2D points)
+            start_coords = start_local.Coordinates
+            end_coords = end_local.Coordinates
+            
+            if len(start_coords) == 2:
+                start_x, start_y = start_coords
+                start_z = 0.0
+            else:
+                start_x, start_y, start_z = start_coords[:3]
+            
+            if len(end_coords) == 2:
+                end_x, end_y = end_coords
+                end_z = 0.0
+            else:
+                end_x, end_y, end_z = end_coords[:3]
+            
+            # Apply rotation transformation if present
+            start_x_rot, start_y_rot = self._apply_rotation(start_x, start_y, wall)
+            end_x_rot, end_y_rot = self._apply_rotation(end_x, end_y, wall)
+            
+            # Transform local coordinates to global coordinates
+            # Add the wall's global placement to rotated local polyline coordinates
+            start_point = Point3D(
+                x=global_x + start_x_rot,
+                y=global_y + start_y_rot,
+                z=global_z + start_z
+            )
+            
+            end_point = Point3D(
+                x=global_x + end_x_rot,
+                y=global_y + end_y_rot,
+                z=global_z + end_z
+            )
             
             return start_point, end_point
             
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error extracting wall geometry: {e}")
             return None, None
+    
+    def _apply_rotation(self, x: float, y: float, wall) -> Tuple[float, float]:
+        """Apply rotation transformation to local coordinates."""
+        try:
+            # Get rotation from wall placement
+            if hasattr(wall, 'ObjectPlacement') and wall.ObjectPlacement:
+                placement = wall.ObjectPlacement
+                
+                if hasattr(placement, 'RelativePlacement'):
+                    rel_placement = placement.RelativePlacement
+                    
+                    # Check for RefDirection (rotation)
+                    if hasattr(rel_placement, 'RefDirection'):
+                        ref_dir = rel_placement.RefDirection
+                        if hasattr(ref_dir, 'DirectionRatios'):
+                            ratios = ref_dir.DirectionRatios
+                            
+                            # Calculate rotation angle
+                            import math
+                            angle = math.atan2(ratios[1], ratios[0])
+                            
+                            # Apply rotation transformation
+                            cos_a = math.cos(angle)
+                            sin_a = math.sin(angle)
+                            
+                            x_rot = x * cos_a - y * sin_a
+                            y_rot = x * sin_a + y * cos_a
+                            
+                            return x_rot, y_rot
+            
+            # No rotation, return original coordinates
+            return x, y
+            
+        except Exception as e:
+            logger.warning(f"Error applying rotation: {e}")
+            return x, y
     
     def _get_wall_thickness(self, wall) -> float:
         """Get wall thickness from IFC properties."""
