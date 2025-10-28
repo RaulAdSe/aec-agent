@@ -959,9 +959,20 @@ def calculate_clearance_tool(element1_type: str, element1_id: str, element2_type
         elem2 = get_element(element2_type, element2_id)
         
         if elem1 is None:
-            return {"error": f"{element1_type} with ID {element1_id} not found"}
+            if element1_type == 'room':
+                return {"error": f"Room with ID '{element1_id}' not found. SOLUTION: Use list_all_rooms() or get_available_element_ids() FIRST to discover real room IDs!"}
+            elif element1_type == 'door':
+                return {"error": f"Door with ID '{element1_id}' not found. SOLUTION: Use list_all_doors() or get_available_element_ids() FIRST to discover real door IDs!"}
+            else:
+                return {"error": f"{element1_type} with ID '{element1_id}' not found. SOLUTION: Use get_available_element_ids() FIRST to discover real IDs!"}
+        
         if elem2 is None:
-            return {"error": f"{element2_type} with ID {element2_id} not found"}
+            if element2_type == 'room':
+                return {"error": f"Room with ID '{element2_id}' not found. SOLUTION: Use list_all_rooms() or get_available_element_ids() FIRST to discover real room IDs!"}
+            elif element2_type == 'door':
+                return {"error": f"Door with ID '{element2_id}' not found. SOLUTION: Use list_all_doors() or get_available_element_ids() FIRST to discover real door IDs!"}
+            else:
+                return {"error": f"{element2_type} with ID '{element2_id}' not found. SOLUTION: Use get_available_element_ids() FIRST to discover real IDs!"}
         
         # Convert Pydantic models to dictionaries for geometry calculations
         def convert_to_dict(element, elem_type: str):
@@ -988,7 +999,10 @@ def calculate_clearance_tool(element1_type: str, element1_id: str, element2_type
         elem2_dict = convert_to_dict(elem2, element2_type)
         
         if elem1_dict is None or elem2_dict is None:
-            return {"error": f"Cannot calculate clearance for {element1_type} or {element2_type} - missing position data"}
+            if element1_type == 'room' or element2_type == 'room':
+                return {"error": f"Cannot calculate clearance for rooms - they don't have position data. SOLUTION: Use door-to-door clearance instead! Try calculate_clearance_tool('door', 'D3283', 'door', 'D3379') after calling list_all_doors()"}
+            else:
+                return {"error": f"Cannot calculate clearance for {element1_type} or {element2_type} - missing position data. SOLUTION: Use get_available_element_ids() to find elements with position data"}
         
         # Calculate clearance using the geometry function
         result = calculate_clearance_between_elements(elem1_dict, elem2_dict)
