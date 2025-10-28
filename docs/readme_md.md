@@ -374,6 +374,12 @@ Sources:
 ---
 
 ## 🚧 Limitations (POC)
+---
+
+## 📘 Related Docs
+
+- CTE Coverage vs Toolkit Capabilities: [docs/cte_coverage.md](cte_coverage.md)
+
 
 This is a **Proof of Concept** with known limitations:
 
