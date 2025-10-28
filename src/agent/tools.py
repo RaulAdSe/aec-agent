@@ -909,8 +909,35 @@ def calculate_clearance_tool(element1_type: str, element1_id: str, element2_type
         if elem2 is None:
             return {"error": f"{element2_type} with ID {element2_id} not found"}
         
+        # Convert Pydantic models to dictionaries for geometry calculations
+        def convert_to_dict(element, elem_type: str):
+            if elem_type == 'door':
+                # Convert door to dict with position
+                return {
+                    'id': element.id,
+                    'position': {
+                        'x': element.position.x,
+                        'y': element.position.y,
+                        'z': element.position.z
+                    }
+                }
+            elif elem_type == 'room':
+                # Rooms don't have position data, so we can't calculate clearance
+                return None
+            elif elem_type == 'wall':
+                # Walls should already be dictionaries
+                return element
+            return None
+        
+        # Convert elements to proper format
+        elem1_dict = convert_to_dict(elem1, element1_type)
+        elem2_dict = convert_to_dict(elem2, element2_type)
+        
+        if elem1_dict is None or elem2_dict is None:
+            return {"error": f"Cannot calculate clearance for {element1_type} or {element2_type} - missing position data"}
+        
         # Calculate clearance using the geometry function
-        result = calculate_clearance_between_elements(elem1, elem2)
+        result = calculate_clearance_between_elements(elem1_dict, elem2_dict)
         
         if not result['success']:
             return {"error": result['error']}
