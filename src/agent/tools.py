@@ -326,10 +326,13 @@ def list_all_doors() -> List[Dict[str, Any]]:
 @tool
 def list_all_rooms() -> List[Dict[str, Any]]:
     """
-    List all rooms in the project with basic information.
+    CRITICAL: List all rooms in the project with their ACTUAL IDs.
+    
+    IMPORTANT: Use this tool FIRST before calling calculate_clearance_tool with rooms!
+    Do NOT make up room IDs like "0", "1", "Room_0", etc. - they don't exist!
     
     Returns:
-        List of dictionaries with room information
+        List of dictionaries with room information including REAL room IDs
     """
     if _project_data is None:
         return [{"error": "No project data loaded. Call load_project_data() first."}]
@@ -352,7 +355,11 @@ def list_all_rooms() -> List[Dict[str, Any]]:
 @tool
 def get_available_element_ids() -> Dict[str, Any]:
     """
-    Get all available element IDs (rooms, doors, walls) for the agent to use.
+    CRITICAL: Get all available element IDs (rooms, doors, walls) for the agent to use.
+    
+    IMPORTANT: Use this tool FIRST before calling calculate_clearance_tool!
+    Do NOT make up room IDs like "0", "1", "Room_0", etc. - they don't exist!
+    This tool provides the REAL IDs that actually exist in the building data.
     
     Returns:
         Dictionary with lists of available IDs for each element type
@@ -918,11 +925,14 @@ def calculate_clearance_tool(element1_type: str, element1_id: str, element2_type
     """
     Calculate minimum clearance distance between two building elements.
     
+    WARNING: Use list_all_rooms() or get_available_element_ids() FIRST to get REAL IDs!
+    Do NOT use made-up IDs like "0", "1", "Room_0" - they don't exist!
+    
     Args:
         element1_type: Type of first element ('door', 'wall', 'room')
-        element1_id: ID of first element
+        element1_id: ID of first element (must be REAL ID from list_all_rooms/get_available_element_ids)
         element2_type: Type of second element ('door', 'wall', 'room') 
-        element2_id: ID of second element
+        element2_id: ID of second element (must be REAL ID from list_all_rooms/get_available_element_ids)
     
     Returns:
         Dictionary with clearance information and compliance status
@@ -1252,12 +1262,12 @@ def get_available_tools() -> List[Dict[str, str]]:
         },
         {
             "name": "list_all_rooms",
-            "description": "List all rooms in the project with basic information",
+            "description": "CRITICAL: List all rooms with ACTUAL IDs. Use FIRST before calculate_clearance_tool! Do NOT make up room IDs!",
             "parameters": []
         },
         {
             "name": "get_available_element_ids",
-            "description": "Get all available element IDs (rooms, doors, walls) for the agent to use",
+            "description": "CRITICAL: Get all REAL element IDs (rooms, doors, walls). Use FIRST before calculate_clearance_tool! Do NOT make up IDs!",
             "parameters": []
         },
         {
@@ -1312,7 +1322,7 @@ def get_available_tools() -> List[Dict[str, str]]:
         },
         {
             "name": "calculate_clearance_tool",
-            "description": "Calculate minimum clearance distance between two building elements",
+            "description": "WARNING: Use list_all_rooms() FIRST! Calculate clearance between elements. Do NOT use made-up IDs!",
             "parameters": ["element1_type: str", "element1_id: str", "element2_type: str", "element2_id: str"]
         },
         {
