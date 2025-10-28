@@ -350,6 +350,50 @@ def list_all_rooms() -> List[Dict[str, Any]]:
 
 
 @tool
+def get_available_element_ids() -> Dict[str, Any]:
+    """
+    Get all available element IDs (rooms, doors, walls) for the agent to use.
+    
+    Returns:
+        Dictionary with lists of available IDs for each element type
+    """
+    if _project_data is None:
+        return {"error": "No project data loaded. Call load_project_data() first."}
+    
+    try:
+        # Get all room IDs
+        rooms = _project_data.get_all_rooms()
+        room_ids = [room.id for room in rooms]
+        
+        # Get all door IDs
+        doors = _project_data.get_all_doors()
+        door_ids = [door.id for door in doors]
+        
+        # Get all wall IDs
+        wall_ids = []
+        for level in _project_data.levels:
+            for wall in level.walls:
+                if 'id' in wall:
+                    wall_ids.append(wall['id'])
+        
+        return {
+            "success": True,
+            "room_ids": room_ids,
+            "door_ids": door_ids,
+            "wall_ids": wall_ids,
+            "counts": {
+                "rooms": len(room_ids),
+                "doors": len(door_ids),
+                "walls": len(wall_ids)
+            },
+            "message": f"Found {len(room_ids)} rooms, {len(door_ids)} doors, {len(wall_ids)} walls"
+        }
+        
+    except Exception as e:
+        return {"error": f"Error getting element IDs: {str(e)}"}
+
+
+@tool
 def check_door_width_compliance(door_id: str) -> Dict[str, Any]:
     """
     Check if a door meets minimum width requirements for compliance.
@@ -1209,6 +1253,11 @@ def get_available_tools() -> List[Dict[str, str]]:
         {
             "name": "list_all_rooms",
             "description": "List all rooms in the project with basic information",
+            "parameters": []
+        },
+        {
+            "name": "get_available_element_ids",
+            "description": "Get all available element IDs (rooms, doors, walls) for the agent to use",
             "parameters": []
         },
         {
