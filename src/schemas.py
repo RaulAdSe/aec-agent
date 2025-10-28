@@ -122,8 +122,8 @@ class Wall(BaseModel):
     id: str = Field(..., description="Unique wall identifier")
     start_point: Point3D = Field(..., description="Wall start point")
     end_point: Point3D = Field(..., description="Wall end point")
-    thickness_mm: float = Field(..., gt=0, description="Wall thickness in millimeters")
-    height_mm: float = Field(..., gt=0, description="Wall height in millimeters")
+    thickness_mm: Optional[float] = Field(None, gt=0, description="Wall thickness in millimeters")
+    height_mm: Optional[float] = Field(None, gt=0, description="Wall height in millimeters")
     fire_rating: Optional[FireRating] = Field(None, description="Fire resistance rating")
     material: Optional[str] = Field(None, description="Wall material")
     

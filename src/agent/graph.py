@@ -15,12 +15,13 @@ from langgraph.prebuilt import ToolNode
 from langgraph.graph.message import add_messages
 
 from .tools import (
-    get_room_info,
-    get_door_info, 
+    extract_ifc_data,
     list_all_doors,
+    create_circulation_graph_tool,
+    find_nearest_door_tool,
+    calculate_clearance_tool,
     check_door_width_compliance,
-    query_normativa,
-    calculate_egress_distance
+    query_normativa
 )
 from .memory import SlidingWindowMemory
 
@@ -64,14 +65,15 @@ class ReActAgent:
         self.max_iterations = max_iterations
         self.memory_window_size = memory_window_size
         
-        # Define available tools
+        # Define available tools (simplified to 7 essential tools)
         self.tools = [
-            get_room_info,
-            get_door_info,
+            extract_ifc_data,
             list_all_doors,
+            create_circulation_graph_tool,
+            find_nearest_door_tool,
+            calculate_clearance_tool,
             check_door_width_compliance,
-            query_normativa,
-            calculate_egress_distance
+            query_normativa
         ]
         
         # Bind tools to LLM
@@ -133,29 +135,27 @@ class ReActAgent:
                 "memory": memory
             }
         
-        # Get the last human message to understand the task
+        # Get the task from the first human message
         if not messages:
             return state
         
-        last_message = messages[-1]
-        if isinstance(last_message, HumanMessage):
-            # This is the initial task
-            current_task = last_message.content
-        else:
-            # Continue with existing task
-            current_task = state.get("current_task", "Continue compliance verification")
+        # Find the first human message for the task
+        task_message = None
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                task_message = msg
+                break
+        
+        current_task = task_message.content if task_message else "Continue compliance verification"
         
         # Create system prompt for reasoning
         system_prompt = self._create_system_prompt(current_task, iterations)
         
-        # Get messages from memory (includes summaries)
-        memory_messages = memory.get_messages_for_llm()
-        
-        # Prepare messages for LLM (system prompt + memory context)
-        llm_messages = [HumanMessage(content=system_prompt)] + memory_messages
-        
-        # Get LLM response
-        response = self.llm_with_tools.invoke(llm_messages)
+        # Use the existing messages directly (this is key for LangGraph)
+        # LangGraph expects the messages to flow naturally through the graph
+        response = self.llm_with_tools.invoke([
+            HumanMessage(content=system_prompt)
+        ] + messages)
         
         # Add response to memory
         memory.add_message(response)
@@ -192,14 +192,20 @@ class ReActAgent:
 
 Your task: {task}
 
-You have access to 6 specialized tools for building compliance verification:
+You have access to 7 essential tools for building compliance verification:
 
-1. **get_room_info(room_id)** - Get detailed information about a specific room
-2. **get_door_info(door_id)** - Get detailed information about a specific door  
-3. **list_all_doors()** - List all doors in the project
-4. **check_door_width_compliance(door_id)** - Check if a door meets width requirements
-5. **query_normativa(question)** - Query Spanish building codes (CTE) for regulations
-6. **calculate_egress_distance(room_id)** - Calculate evacuation distance from a room
+**Data & Building Information:**
+1. **extract_ifc_data(ifc_file_path, output_path)** - Extract building data from IFC files
+2. **list_all_doors()** - List all doors in the project
+
+**Core Geometric Analysis:**
+3. **create_circulation_graph_tool()** - Create circulation graph for pathfinding and connectivity
+4. **find_nearest_door_tool(point_x, point_y)** - Find nearest door to any point
+5. **calculate_clearance_tool(elem1_type, elem1_id, elem2_type, elem2_id)** - Calculate clearance between elements
+
+**Compliance Verification:**
+6. **check_door_width_compliance(door_id)** - Check if a door meets width requirements
+7. **query_normativa(question)** - Query Spanish building codes (CTE) for regulations
 
 **ReAct Process:**
 1. **Reason** about what information you need
