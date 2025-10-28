@@ -970,6 +970,68 @@ def find_nearest_door_tool(point_x: float, point_y: float) -> Dict[str, Any]:
 
 
 @tool
+def load_json_data(json_file_path: str) -> Dict[str, Any]:
+    """
+    Load building data from a JSON file.
+    
+    Args:
+        json_file_path: Path to the JSON file containing building data
+    
+    Returns:
+        Dictionary with loading results and project summary
+    """
+    global _project_data
+    
+    try:
+        json_path = Path(json_file_path)
+        if not json_path.exists():
+            return {"error": f"JSON file not found: {json_file_path}"}
+        
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Transform field names for compatibility
+        def transform_data(obj):
+            if isinstance(obj, dict):
+                new_obj = {}
+                for key, value in obj.items():
+                    # Transform field names
+                    if key == 'width':
+                        new_obj['width_mm'] = value
+                    elif key == 'height':
+                        new_obj['height_mm'] = value
+                    elif key == 'thickness':
+                        new_obj['thickness_mm'] = value
+                    else:
+                        new_obj[key] = transform_data(value)
+                return new_obj
+            elif isinstance(obj, list):
+                return [transform_data(item) for item in obj]
+            else:
+                return obj
+        
+        transformed_data = transform_data(data)
+        _project_data = Project(**transformed_data)
+        
+        return {
+            "success": True,
+            "json_file": str(json_path),
+            "project_name": _project_data.metadata.project_name,
+            "building_type": _project_data.metadata.building_type,
+            "levels": len(_project_data.levels),
+            "rooms": len(_project_data.get_all_rooms()),
+            "doors": len(_project_data.get_all_doors()),
+            "walls": len(_project_data.get_all_walls()),
+            "message": f"Successfully loaded building data from {json_path.name}"
+        }
+    
+    except json.JSONDecodeError as e:
+        return {"error": f"Invalid JSON in file: {e}"}
+    except Exception as e:
+        return {"error": f"Error loading JSON data: {e}"}
+
+
+@tool
 def calculate_wall_angles_tool(wall1_id: str, wall2_id: str) -> Dict[str, Any]:
     """
     Calculate the angle between two walls and determine their relationship.

@@ -15,6 +15,7 @@ from langgraph.prebuilt import ToolNode
 from langgraph.graph.message import add_messages
 
 from .tools import (
+    load_json_data,
     extract_ifc_data,
     list_all_doors,
     create_circulation_graph_tool,
@@ -65,8 +66,9 @@ class ReActAgent:
         self.max_iterations = max_iterations
         self.memory_window_size = memory_window_size
         
-        # Define available tools (simplified to 7 essential tools)
+        # Define available tools (simplified to 8 essential tools)
         self.tools = [
+            load_json_data,
             extract_ifc_data,
             list_all_doors,
             create_circulation_graph_tool,
@@ -192,20 +194,21 @@ class ReActAgent:
 
 Your task: {task}
 
-You have access to 7 essential tools for building compliance verification:
+You have access to 8 essential tools for building compliance verification:
 
 **Data & Building Information:**
-1. **extract_ifc_data(ifc_file_path, output_path)** - Extract building data from IFC files
-2. **list_all_doors()** - List all doors in the project
+1. **load_json_data(json_file_path)** - Load building data from JSON files
+2. **extract_ifc_data(ifc_file_path, output_path)** - Extract building data from IFC files
+3. **list_all_doors()** - List all doors in the project
 
 **Core Geometric Analysis:**
-3. **create_circulation_graph_tool()** - Create circulation graph for pathfinding and connectivity
-4. **find_nearest_door_tool(point_x, point_y)** - Find nearest door to any point
-5. **calculate_clearance_tool(elem1_type, elem1_id, elem2_type, elem2_id)** - Calculate clearance between elements
+4. **create_circulation_graph_tool()** - Create circulation graph for pathfinding and connectivity
+5. **find_nearest_door_tool(point_x, point_y)** - Find nearest door to any point
+6. **calculate_clearance_tool(elem1_type, elem1_id, elem2_type, elem2_id)** - Calculate clearance between elements
 
 **Compliance Verification:**
-6. **check_door_width_compliance(door_id)** - Check if a door meets width requirements
-7. **query_normativa(question)** - Query Spanish building codes (CTE) for regulations
+7. **check_door_width_compliance(door_id)** - Check if a door meets width requirements
+8. **query_normativa(question)** - Query Spanish building codes (CTE) for regulations
 
 **ReAct Process:**
 1. **Reason** about what information you need
