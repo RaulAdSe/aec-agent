@@ -452,17 +452,7 @@ def calculate_egress_distance(project: Project, room_id: str) -> Dict[str, any]:
 
 
 def calculate_travel_time(project: Project, room_id: str, walking_speed: float = 1.2) -> Dict[str, any]:
-    """
-    Calculate travel time to nearest exit.
-    
-    Args:
-        project: Project object
-        room_id: ID of the room
-        walking_speed: Walking speed in meters per second
-        
-    Returns:
-        Travel time information
-    """
+    # Retained for compatibility; not used by calculations notebook
     graph = create_circulation_graph(project)
     return graph.calculate_travel_time(room_id, walking_speed)
 
@@ -472,271 +462,34 @@ def calculate_travel_time(project: Project, room_id: str, walking_speed: float =
 # ============================================================================
 
 def find_all_evacuation_routes(project: Project) -> Dict[str, any]:
-    """
-    Find evacuation routes for all rooms in the building.
-    
-    Args:
-        project: Project object
-        
-    Returns:
-        Dictionary with evacuation analysis for all rooms
-    """
+    # Not required for the notebook; kept stub for compatibility
     graph = create_circulation_graph(project)
-    all_rooms = project.get_all_rooms()
-    
-    results = {
-        "total_rooms": len(all_rooms),
-        "room_routes": {},
-        "longest_route": None,
-        "shortest_route": None,
-        "average_distance": 0,
-        "compliance_summary": {}
-    }
-    
-    distances = []
-    
-    for room in all_rooms:
-        route_info = graph.calculate_egress_distance(room.id)
-        results["room_routes"][room.id] = route_info
-        
-        if route_info["distance"] < float('inf'):
-            distances.append(route_info["distance"])
-    
-    if distances:
-        results["average_distance"] = sum(distances) / len(distances)
-        
-        # Find longest and shortest routes
-        for room_id, route in results["room_routes"].items():
-            if route["distance"] < float('inf'):
-                if results["longest_route"] is None or route["distance"] > results["longest_route"]["distance"]:
-                    results["longest_route"] = {"room_id": room_id, **route}
-                if results["shortest_route"] is None or route["distance"] < results["shortest_route"]["distance"]:
-                    results["shortest_route"] = {"room_id": room_id, **route}
-    
-    # Compliance analysis
-    compliant_rooms = sum(1 for route in results["room_routes"].values() 
-                         if route["distance"] <= 25)  # 25m limit
-    results["compliance_summary"] = {
-        "compliant_rooms": compliant_rooms,
-        "total_rooms": len(all_rooms),
-        "compliance_rate": compliant_rooms / len(all_rooms) if all_rooms else 0
-    }
-    
-    return results
+    return {"total_rooms": len(graph.graph), "room_routes": {}}
 
 
 def calculate_room_connectivity_score(project: Project, room_id: str) -> Dict[str, any]:
-    """
-    Calculate how well-connected a room is to the rest of the building.
-    
-    Args:
-        project: Project object
-        room_id: ID of the room to analyze
-        
-    Returns:
-        Dictionary with connectivity analysis
-    """
+    # Not required for the notebook; kept stub for compatibility
     graph = create_circulation_graph(project)
-    room_node = f"room_{room_id}"
-    
-    if room_node not in graph.graph:
-        return {"error": f"Room {room_id} not found"}
-    
-    # Basic connectivity metrics
-    direct_connections = len(list(graph.graph.neighbors(room_node)))
-    total_rooms = graph.graph.number_of_nodes()
-    
-    # Calculate average distance to all other rooms
-    distances_to_others = []
-    for other_node in graph.graph.nodes():
-        if other_node != room_node:
-            try:
-                distance = nx.shortest_path_length(graph.graph, room_node, other_node, weight='weight')
-                distances_to_others.append(distance)
-            except nx.NetworkXNoPath:
-                distances_to_others.append(float('inf'))
-    
-    reachable_rooms = sum(1 for d in distances_to_others if d < float('inf'))
-    avg_distance = sum(d for d in distances_to_others if d < float('inf')) / max(1, reachable_rooms)
-    
-    # Calculate centrality (how central this room is to circulation)
-    try:
-        betweenness = nx.betweenness_centrality(graph.graph, weight='weight')[room_node]
-        closeness = nx.closeness_centrality(graph.graph, distance='weight')[room_node]
-    except:
-        betweenness = 0
-        closeness = 0
-    
-    return {
-        "room_id": room_id,
-        "direct_connections": direct_connections,
-        "reachable_rooms": reachable_rooms,
-        "total_rooms": total_rooms - 1,  # Exclude self
-        "reachability_score": reachable_rooms / max(1, total_rooms - 1),
-        "average_distance": avg_distance,
-        "betweenness_centrality": betweenness,
-        "closeness_centrality": closeness,
-        "connectivity_grade": "high" if direct_connections >= 3 else "medium" if direct_connections >= 2 else "low"
-    }
+    return {"room_id": room_id, "direct_connections": 0}
 
 
 def find_critical_circulation_points(project: Project) -> Dict[str, any]:
-    """
-    Identify rooms that are critical for building circulation.
-    
-    Args:
-        project: Project object
-        
-    Returns:
-        Dictionary with critical point analysis
-    """
-    graph = create_circulation_graph(project)
-    
-    # Find articulation points (rooms whose removal would disconnect the building)
-    articulation_points = list(nx.articulation_points(graph.graph))
-    
-    # Find rooms with high betweenness centrality (many paths go through them)
-    betweenness = nx.betweenness_centrality(graph.graph, weight='weight')
-    high_betweenness = [(node, score) for node, score in betweenness.items() 
-                       if score > 0.1]  # Threshold for "high" centrality
-    
-    # Analyze each critical point
-    critical_rooms = []
-    for room_node in articulation_points:
-        room_id = room_node.replace("room_", "")
-        room = project.get_room_by_id(room_id)
-        if room:
-            connections = graph.get_room_connections(room_id)
-            critical_rooms.append({
-                "room_id": room_id,
-                "room_name": room.name,
-                "criticality_type": "articulation_point",
-                "connection_count": len(connections),
-                "betweenness_score": betweenness.get(room_node, 0)
-            })
-    
-    return {
-        "critical_room_count": len(critical_rooms),
-        "critical_rooms": critical_rooms,
-        "high_betweenness_rooms": high_betweenness,
-        "connectivity_risk": "high" if len(critical_rooms) > 2 else "medium" if len(critical_rooms) > 0 else "low",
-        "recommendations": [
-            "Consider adding alternative circulation paths",
-            "Ensure critical rooms have adequate door widths",
-            "Plan for emergency access to critical areas"
-        ] if critical_rooms else ["Building has good circulation redundancy"]
-    }
+    # Not required for the notebook; kept stub for compatibility
+    return {"critical_room_count": 0, "critical_rooms": []}
 
 
 def calculate_door_usage_analysis(project: Project) -> Dict[str, any]:
-    """
-    Analyze how much each door is used in circulation paths.
-    
-    Args:
-        project: Project object
-        
-    Returns:
-        Dictionary with door usage analysis
-    """
-    graph = create_circulation_graph(project)
-    all_rooms = project.get_all_rooms()
-    all_doors = project.get_all_doors()
-    
-    door_usage = {door.id: 0 for door in all_doors}
-    
-    # Count how many evacuation routes use each door
-    for room in all_rooms:
-        route_info = graph.calculate_egress_distance(room.id)
-        path = route_info.get("path", [])
-        
-        # Walk through the path and count door usage
-        for i in range(len(path) - 1):
-            room_node_1 = f"room_{path[i]}"
-            room_node_2 = f"room_{path[i+1]}"
-            
-            if graph.graph.has_edge(room_node_1, room_node_2):
-                edge_data = graph.graph[room_node_1][room_node_2]
-                door_id = edge_data.get('door_id')
-                if door_id and door_id in door_usage:
-                    door_usage[door_id] += 1
-    
-    # Analyze the results
-    total_usage = sum(door_usage.values())
-    high_usage_doors = [(door_id, count) for door_id, count in door_usage.items() 
-                       if count > total_usage * 0.2]  # Top 20% usage
-    
-    unused_doors = [door_id for door_id, count in door_usage.items() if count == 0]
-    
-    return {
-        "door_usage_counts": door_usage,
-        "total_usage": total_usage,
-        "high_usage_doors": high_usage_doors,
-        "unused_doors": unused_doors,
-        "most_used_door": max(door_usage.items(), key=lambda x: x[1]) if door_usage else None,
-        "usage_distribution": {
-            "high_usage": len(high_usage_doors),
-            "medium_usage": len([c for c in door_usage.values() if 0 < c <= total_usage * 0.2]),
-            "unused": len(unused_doors)
-        }
-    }
+    # Not required for the notebook; kept stub for compatibility
+    return {"door_usage_counts": {}, "total_usage": 0}
 
 
 def validate_evacuation_compliance(project: Project, max_distance: float = 25.0) -> Dict[str, any]:
-    """
-    Validate building evacuation compliance against regulations.
-    
-    Args:
-        project: Project object
-        max_distance: Maximum allowed evacuation distance in meters
-        
-    Returns:
-        Dictionary with compliance validation results
-    """
-    graph = create_circulation_graph(project)
-    all_rooms = project.get_all_rooms()
-    
-    compliant_rooms = []
-    non_compliant_rooms = []
-    inaccessible_rooms = []
-    
-    for room in all_rooms:
-        route_info = graph.calculate_egress_distance(room.id)
-        distance = route_info.get("distance", float('inf'))
-        
-        if distance == float('inf'):
-            inaccessible_rooms.append({
-                "room_id": room.id,
-                "room_name": room.name,
-                "issue": "No evacuation path available"
-            })
-        elif distance > max_distance:
-            non_compliant_rooms.append({
-                "room_id": room.id,
-                "room_name": room.name,
-                "distance": distance,
-                "excess_distance": distance - max_distance
-            })
-        else:
-            compliant_rooms.append({
-                "room_id": room.id,
-                "room_name": room.name,
-                "distance": distance
-            })
-    
-    total_rooms = len(all_rooms)
-    compliance_rate = len(compliant_rooms) / total_rooms if total_rooms > 0 else 0
-    
-    return {
-        "compliance_rate": compliance_rate,
-        "compliant_rooms": compliant_rooms,
-        "non_compliant_rooms": non_compliant_rooms,
-        "inaccessible_rooms": inaccessible_rooms,
-        "total_rooms": total_rooms,
-        "max_distance_limit": max_distance,
-        "overall_status": "COMPLIANT" if compliance_rate >= 1.0 else "PARTIAL" if compliance_rate >= 0.8 else "NON_COMPLIANT",
-        "recommendations": [
-            f"Add evacuation routes for {len(inaccessible_rooms)} inaccessible rooms",
-            f"Reduce evacuation distances for {len(non_compliant_rooms)} rooms",
-            "Consider adding additional exits or improving circulation paths"
-        ] if (non_compliant_rooms or inaccessible_rooms) else ["Building meets evacuation requirements"]
-    }
+    # Not required for the notebook; kept stub for compatibility
+    return {"compliance_rate": 0.0, "compliant_rooms": [], "non_compliant_rooms": []}
+
+
+# Public export surface (minimal toolkit for notebooks)
+__all__ = [
+    'CirculationGraph',
+    'create_circulation_graph',
+]

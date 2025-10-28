@@ -1014,3 +1014,13 @@ def calculate_clearance_between_elements(elem1: Dict, elem2: Dict) -> Dict[str, 
         
     except Exception as e:
         return {'success': False, 'error': f'Clearance calculation failed: {str(e)}'}
+
+
+# Public export surface (minimal toolkit for notebooks)
+__all__ = [
+    'calculate_angle_between_walls',
+    'find_nearest_door',
+    'find_walls_within_radius',
+    'calculate_wall_cardinal_direction',
+    'calculate_clearance_between_elements',
+]
