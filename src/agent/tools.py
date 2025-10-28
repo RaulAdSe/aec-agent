@@ -324,6 +324,32 @@ def list_all_doors() -> List[Dict[str, Any]]:
 
 
 @tool
+def list_all_rooms() -> List[Dict[str, Any]]:
+    """
+    List all rooms in the project with basic information.
+    
+    Returns:
+        List of dictionaries with room information
+    """
+    if _project_data is None:
+        return [{"error": "No project data loaded. Call load_project_data() first."}]
+    
+    rooms = _project_data.get_all_rooms()
+    
+    room_list = []
+    for room in rooms:
+        room_list.append({
+            "id": room.id,
+            "name": room.name,
+            "area": room.area,
+            "use": room.use,
+            "level": room.level
+        })
+    
+    return room_list
+
+
+@tool
 def check_door_width_compliance(door_id: str) -> Dict[str, Any]:
     """
     Check if a door meets minimum width requirements for compliance.
@@ -1151,6 +1177,11 @@ def get_available_tools() -> List[Dict[str, str]]:
         {
             "name": "list_all_doors",
             "description": "List all doors in the project with basic information",
+            "parameters": []
+        },
+        {
+            "name": "list_all_rooms",
+            "description": "List all rooms in the project with basic information",
             "parameters": []
         },
         {
