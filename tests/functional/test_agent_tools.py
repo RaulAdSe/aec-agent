@@ -27,7 +27,7 @@ def test_agent_tools():
     # Test 1: Load project data
     print("\n1. Testing load_project_data()...")
     try:
-        mock_data_path = Path("data/blueprints/revit/2201A_R24_BAUHAUS_LEGANÉS_V8_LT_mock_data.json")
+        mock_data_path = Path("data/blueprints/cad/I01.4_mock_data.json")
         project = load_project_data(mock_data_path)
         print(f"✅ Successfully loaded project: {project.metadata.project_name}")
         print(f"   - Building type: {project.metadata.building_type}")

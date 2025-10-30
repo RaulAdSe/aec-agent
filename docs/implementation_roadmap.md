@@ -61,7 +61,7 @@ cd aec-compliance-agent
 #### 2. Project Structure (30 min)
 ```bash
 # Create all directories
-mkdir -p data/{raw/{rvt,dwg},extracted,normativa}
+mkdir -p data/{raw/dwg,extracted,normativa}
 mkdir -p src/{extraction,calculations,rag,agent,utils}
 mkdir -p notebooks
 mkdir -p docs

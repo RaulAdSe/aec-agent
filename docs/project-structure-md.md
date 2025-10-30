@@ -17,26 +17,29 @@ aec-compliance-agent/
 │   ├── TECH_STACK.md                 # Stack tecnológico detallado
 │   ├── PROJECT_STRUCTURE.md          # ⭐ Este archivo
 │   ├── DEVELOPMENT_GUIDE.md          # Guía para developers
+│   ├── cad_extraction_guide.md       # Guía extracción CAD/DWG
+│   ├── ifc_extraction_guide.md       # Guía extracción IFC
 │   ├── RAG_EXPLAINED.md              # Explicación técnica de RAG
 │   ├── REACT_EXPLAINED.md            # Explicación técnica de ReAct
 │   ├── TESTING_GUIDE.md              # Guía de testing
 │   └── API_REFERENCE.md              # Referencia de APIs
 │
 ├── 📁 notebooks/                     # 📓 Tutoriales Jupyter
-│   ├── 01_extraction_tutorial.ipynb  # Pilar 1: Extracción de datos
-│   ├── 02_calculations_tutorial.ipynb# Pilar 2: Cálculos geométricos
-│   ├── 03_rag_tutorial.ipynb         # Pilar 3: RAG
-│   ├── 04_agent_tutorial.ipynb       # Pilar 4: Agente ReAct
-│   └── 00_complete_demo.ipynb        # Demo completa integrada
+│   ├── 01_data_extraction_simple.ipynb  # Pilar 1: Extracción DWG/DXF
+│   ├── 02_calculations_simple.ipynb     # Pilar 2: Cálculos geométricos
+│   ├── 03_rag_simple.ipynb             # Pilar 3: RAG
+│   ├── 04_agent_simple.ipynb           # Pilar 4: Agente ReAct
+│   ├── 05_ifc_extraction_tutorial.ipynb # Tutorial extracción IFC
+│   └── 04_agent_comprehensive_tutorial.ipynb # Demo completa integrada
 │
 ├── 📁 src/                           # 💻 Código fuente
 │   ├── __init__.py
 │   │
 │   ├── 📁 extraction/                # Pilar 1: Extracción
 │   │   ├── __init__.py
-│   │   ├── rvt_export.py             # Script para Revit (pyRevit)
-│   │   ├── dxf_export.py             # Script para DWG/DXF (ezdxf)
-│   │   └── json_validator.py         # Validación de JSON extraídos
+│   │   ├── dwg_extractor.py          # Extractor para DWG/DXF (ezdxf)
+│   │   ├── ifc_extractor.py          # Extractor para IFC (ifcopenshell)
+│   │   └── unified_extractor.py      # Extractor unificado multi-formato
 │   │
 │   ├── 📁 calculations/              # Pilar 2: Cálculos
 │   │   ├── __init__.py
@@ -68,7 +71,6 @@ aec-compliance-agent/
 │
 ├── 📁 data/                          # 💾 Datos
 │   ├── 📁 raw/                       # Archivos originales
-│   │   ├── 📁 rvt/                   # Archivos Revit
 │   │   └── 📁 dwg/                   # Archivos CAD
 │   │
 │   ├── 📁 extracted/                 # JSON extraídos
@@ -208,9 +210,6 @@ notebooks/
 #### 3.1 `src/extraction/`
 
 ```python
-# src/extraction/rvt_export.py
-"""
-Script para ejecutar dentro de Revit con pyRevit.
 Extrae rooms, doors, walls, exits → JSON
 """
 
@@ -366,7 +365,7 @@ def create_compliance_agent() -> StateGraph:
 
 ```
 data/
-├── raw/              # Archivos originales (RVT, DWG)
+├── raw/              # Archivos originales (DWG)
 ├── extracted/        # JSON procesados
 └── normativa/        # PDFs de normativa
 ```
@@ -385,7 +384,6 @@ RD_{number}_{year}_{name}.pdf
 **.gitignore**:
 ```
 # Ignorar archivos grandes
-data/raw/*.rvt
 data/raw/*.dwg
 
 # Pero SÍ incluir JSONs y PDFs
@@ -548,7 +546,6 @@ ENV/
 .env                    # ⚠️ NUNCA committear API keys
 vectorstore/            # Regenerable
 outputs/                # Auto-generados
-data/raw/*.rvt          # Archivos grandes
 data/raw/*.dwg
 
 # Logs
@@ -583,7 +580,7 @@ pydantic==2.5.3
 echo "🚀 Setting up AEC Compliance Agent..."
 
 # 1. Crear estructura de carpetas
-mkdir -p data/{raw/{rvt,dwg},extracted,normativa}
+mkdir -p data/{raw/dwg,extracted,normativa}
 mkdir -p vectorstore
 mkdir -p outputs/{reports,logs,visualizations}
 mkdir -p tests/{unit,integration,fixtures}

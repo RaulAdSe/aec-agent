@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aec-compliance-agent/schemas/element.json",
+  "title": "IFC LLM Element Schema",
+  "description": "Schema for individual elements in JSONL files",
+  "type": "object",
+  "required": ["guid", "ifc_class", "name", "spatial", "coordinates", "geometry_summary", "properties", "relations", "source"],
+  "properties": {
+    "guid": {
+      "type": "string",
+      "pattern": "^[0-9A-Za-z_$]{22}$",
+      "description": "IFC Global Unique Identifier"
+    },
+    "ifc_class": {
+      "type": "string",
+      "pattern": "^Ifc",
+      "description": "IFC class name (e.g., IfcWall, IfcDoor)"
+    },
+    "name": {
+      "type": "string",
+      "description": "Element name or label"
+    },
+    "type": {
+      "type": "string",
+      "description": "Element type definition"
+    },
+    "spatial": {
+      "type": "object",
+      "description": "Spatial containment information",
+      "properties": {
+        "site": { "type": ["string", "null"] },
+        "building": { "type": ["string", "null"] },
+        "storey": { "type": ["string", "null"] },
+        "zone": { "type": ["string", "null"] },
+        "space": { "type": ["string", "null"] }
+      }
+    },
+    "coordinates": {
+      "type": "object",
+      "description": "Complete coordinate information",
+      "required": ["transform_local_to_model", "transform_model_to_world", "reference_point_model_m", "bbox_model_m"],
+      "properties": {
+        "local_placement": {
+          "type": "object",
+          "description": "IFC local placement information"
+        },
+        "transform_local_to_model": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 16,
+          "maxItems": 16,
+          "description": "4x4 transformation matrix from local to model coordinates"
+        },
+        "transform_model_to_world": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 16,
+          "maxItems": 16,
+          "description": "4x4 transformation matrix from model to world coordinates"
+        },
+        "reference_point_model_m": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Reference point in model coordinates [x, y, z]"
+        },
+        "reference_point_world_m": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Reference point in world coordinates [x, y, z]"
+        },
+        "bbox_model_m": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 6,
+          "maxItems": 6,
+          "description": "Bounding box in model coordinates [min_x, min_y, min_z, max_x, max_y, max_z]"
+        },
+        "bbox_world_m": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 6,
+          "maxItems": 6,
+          "description": "Bounding box in world coordinates [min_x, min_y, min_z, max_x, max_y, max_z]"
+        }
+      }
+    },
+    "geometry_summary": {
+      "type": "object",
+      "description": "Geometric properties and summary",
+      "required": ["shape"],
+      "properties": {
+        "shape": {
+          "type": "string",
+          "enum": ["extruded", "mesh", "curve", "surface", "solid", "unknown"],
+          "description": "Shape classification"
+        },
+        "length_m": { "type": ["number", "null"], "minimum": 0 },
+        "width_m": { "type": ["number", "null"], "minimum": 0 },
+        "height_m": { "type": ["number", "null"], "minimum": 0 },
+        "thickness_m": { "type": ["number", "null"], "minimum": 0 },
+        "area_m2": { "type": ["number", "null"], "minimum": 0 },
+        "volume_m3": { "type": ["number", "null"], "minimum": 0 },
+        "perimeter_m": { "type": ["number", "null"], "minimum": 0 },
+        "mesh_ref": {
+          "type": ["string", "null"],
+          "pattern": "^meshes/.*\\.(glb|obj|ply)$",
+          "description": "Reference to external mesh file"
+        }
+      }
+    },
+    "materials": {
+      "type": "array",
+      "description": "Associated materials",
+      "items": { "$ref": "#/definitions/material" }
+    },
+    "quantities": {
+      "type": "object",
+      "description": "Quantity take-off data",
+      "patternProperties": {
+        "^Qto_": { "$ref": "#/definitions/property_set" }
+      }
+    },
+    "properties": {
+      "type": "object",
+      "description": "Property sets",
+      "patternProperties": {
+        "^(Pset_|Type_)": { "$ref": "#/definitions/property_set" }
+      }
+    },
+    "relations": {
+      "type": "object",
+      "description": "Element relationships",
+      "properties": {
+        "type_defined_by": { 
+          "type": ["string", "null"],
+          "pattern": "^[0-9A-Za-z_$]{22}$",
+          "description": "Type definition GUID"
+        },
+        "connects_to": {
+          "type": "array",
+          "items": { 
+            "type": "string",
+            "pattern": "^[0-9A-Za-z_$]{22}$"
+          },
+          "description": "Connected element GUIDs"
+        },
+        "voids": {
+          "type": "array",
+          "items": { 
+            "type": "string",
+            "pattern": "^[0-9A-Za-z_$]{22}$"
+          },
+          "description": "Elements this element voids"
+        },
+        "voided_by": {
+          "type": "array",
+          "items": { 
+            "type": "string",
+            "pattern": "^[0-9A-Za-z_$]{22}$"
+          },
+          "description": "Elements that void this element"
+        },
+        "adjacent_spaces": {
+          "type": "array",
+          "items": { 
+            "type": "string",
+            "pattern": "^[0-9A-Za-z_$]{22}$"
+          },
+          "description": "Adjacent space GUIDs"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "description": "Source information for traceability",
+      "properties": {
+        "ifc_label": { "type": "string" },
+        "ifc_id": { "type": "integer" },
+        "file_name": { "type": "string" },
+        "extraction_date": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "definitions": {
+    "property_set": {
+      "type": "object",
+      "description": "IFC property set or quantity set",
+      "patternProperties": {
+        ".*": { "$ref": "#/definitions/property_value" }
+      }
+    },
+    "property_value": {
+      "type": "object",
+      "description": "Individual property value with metadata",
+      "required": ["value", "type"],
+      "properties": {
+        "value": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "boolean" },
+            { "type": "array", "items": { "type": ["string", "number", "boolean"] } }
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["single_value", "enumerated_value", "list_value", "bounded_value", "table_value", "reference_value"]
+        },
+        "unit": { "type": ["string", "null"] },
+        "data_type": { "type": ["string", "null"] }
+      }
+    },
+    "material": {
+      "type": "object",
+      "description": "Material information",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": ["string", "null"] },
+        "properties": {
+          "type": "object",
+          "patternProperties": {
+            ".*": { "$ref": "#/definitions/property_value" }
+          }
+        },
+        "layers": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/material_layer" }
+        },
+        "constituents": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "material_layer": {
+      "type": "object",
+      "description": "Material layer in layered material",
+      "required": ["material"],
+      "properties": {
+        "material": { "type": "string" },
+        "thickness": { "type": ["number", "null"], "minimum": 0 },
+        "is_ventilated": { "type": ["boolean", "null"] },
+        "priority": { "type": ["integer", "null"] }
+      }
+    }
+  }
+}

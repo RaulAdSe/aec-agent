@@ -6,7 +6,7 @@ for representing building elements, project metadata, and compliance checks.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 
 
@@ -64,9 +64,10 @@ class Point3D(BaseModel):
 
 class Boundary(BaseModel):
     """Room boundary as a list of 2D points."""
-    points: List[Point2D] = Field(..., min_items=3, description="List of boundary points")
+    points: List[Point2D] = Field(..., min_length=3, description="List of boundary points")
     
-    @validator('points')
+    @field_validator('points')
+    @classmethod
     def validate_closed_polygon(cls, v):
         """Ensure the polygon is closed (first point == last point)."""
         if len(v) < 3:
@@ -121,8 +122,8 @@ class Wall(BaseModel):
     id: str = Field(..., description="Unique wall identifier")
     start_point: Point3D = Field(..., description="Wall start point")
     end_point: Point3D = Field(..., description="Wall end point")
-    thickness_mm: float = Field(..., gt=0, description="Wall thickness in millimeters")
-    height_mm: float = Field(..., gt=0, description="Wall height in millimeters")
+    thickness_mm: Optional[float] = Field(None, gt=0, description="Wall thickness in millimeters")
+    height_mm: Optional[float] = Field(None, gt=0, description="Wall height in millimeters")
     fire_rating: Optional[FireRating] = Field(None, description="Fire resistance rating")
     material: Optional[str] = Field(None, description="Wall material")
     
@@ -153,7 +154,7 @@ class ProjectMetadata(BaseModel):
 class Project(BaseModel):
     """Complete project representation."""
     metadata: ProjectMetadata = Field(..., description="Project metadata")
-    levels: List[Level] = Field(..., min_items=1, description="Building levels")
+    levels: List[Level] = Field(..., min_length=1, description="Building levels")
     
     def get_all_rooms(self) -> List[Room]:
         """Get all rooms from all levels."""
@@ -224,12 +225,13 @@ class ComplianceReport(BaseModel):
     summary: str = Field(..., description="Executive summary of compliance status")
     recommendations: List[str] = Field(default_factory=list, description="Recommendations for improvement")
     
-    @validator('compliance_percentage')
-    def calculate_compliance_percentage(cls, v, values):
+    @field_validator('compliance_percentage')
+    @classmethod
+    def calculate_compliance_percentage(cls, v, info):
         """Calculate compliance percentage if not provided."""
-        if 'total_checks' in values and 'compliant_checks' in values:
-            total = values['total_checks']
-            compliant = values['compliant_checks']
+        if info.data and 'total_checks' in info.data and 'compliant_checks' in info.data:
+            total = info.data['total_checks']
+            compliant = info.data['compliant_checks']
             if total > 0:
                 return round((compliant / total) * 100, 2)
         return v

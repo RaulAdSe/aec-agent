@@ -254,10 +254,6 @@ def main():
     if cad_dir.exists():
         mock_files.extend(cad_dir.glob("*mock_data.json"))
     
-    # Check Revit mock files
-    revit_dir = data_dir / "revit"
-    if revit_dir.exists():
-        mock_files.extend(revit_dir.glob("*mock_data.json"))
     
     if not mock_files:
         print("❌ No mock data files found!")
