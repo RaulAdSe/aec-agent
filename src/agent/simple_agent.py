@@ -25,7 +25,7 @@ class SimpleReActAgent:
     
     def __init__(
         self,
-        model_name: str = "gpt-3.5-turbo",
+        model_name: str = "gpt-5-mini",
         temperature: float = 0.1,
         max_iterations: int = 10
     ):

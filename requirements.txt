@@ -4,7 +4,7 @@ pydantic==2.5.3
 
 # CAD Processing
 ezdxf==1.2.0
-ifcopenshell==0.7.0
+ifcopenshell==0.8.3.post2
 
 # Geometry and Graph Analysis
 shapely==2.0.2

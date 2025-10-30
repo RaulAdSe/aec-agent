@@ -23,7 +23,7 @@ class SlidingWindowMemory:
     def __init__(
         self,
         window_size: int = 5,
-        model_name: str = "gpt-3.5-turbo",
+        model_name: str = "gpt-5-mini",
         temperature: float = 0.1
     ):
         """

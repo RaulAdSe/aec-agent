@@ -42,7 +42,7 @@ class ReActAgent:
     
     def __init__(
         self,
-        model_name: str = "gpt-3.5-turbo",
+        model_name: str = "gpt-4o-mini",
         temperature: float = 0.1,
         max_iterations: int = 10,
         memory_window_size: int = 5
@@ -99,6 +99,7 @@ class ReActAgent:
             self._should_continue,
             {
                 "tools": "tools",
+                "final_summary": "agent",
                 "end": END
             }
         )
@@ -148,14 +149,37 @@ class ReActAgent:
         
         current_task = task_message.content if task_message else "Continue compliance verification"
         
+        # Check if this is a final summary request
+        tool_message_count = sum(1 for msg in messages if isinstance(msg, ToolMessage))
+        
+        # Count unique tool types used
+        tool_names_used = set()
+        for msg in messages:
+            if isinstance(msg, ToolMessage) and hasattr(msg, 'name'):
+                tool_names_used.add(msg.name)
+        
+        unique_tool_count = len(tool_names_used)
+        
+        # Determine if this should be final summary or continued analysis
+        is_final_summary = (tool_message_count >= 5 and unique_tool_count >= 3 and iterations > 0)
+        needs_more_analysis = (tool_message_count > 0 and 
+                              (unique_tool_count < 3 or tool_message_count < 5) and 
+                              iterations < max_iterations - 2)
+        
         # Create system prompt for reasoning
-        system_prompt = self._create_system_prompt(current_task, iterations)
+        system_prompt = self._create_system_prompt(current_task, iterations, is_final_summary, needs_more_analysis, unique_tool_count, tool_message_count)
         
         # Use the existing messages directly (this is key for LangGraph)
         # LangGraph expects the messages to flow naturally through the graph
-        response = self.llm_with_tools.invoke([
-            HumanMessage(content=system_prompt)
-        ] + messages)
+        if is_final_summary:
+            # For final summary, use LLM without tools to force text response
+            response = self.llm.invoke([
+                HumanMessage(content=system_prompt)
+            ] + messages)
+        else:
+            response = self.llm_with_tools.invoke([
+                HumanMessage(content=system_prompt)
+            ] + messages)
         
         # Add response to memory
         memory.add_message(response)
@@ -183,11 +207,91 @@ class ReActAgent:
         if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
             return "tools"
         
+        # Check if we've used any tools and should provide a final summary
+        # Count how many ToolMessage instances we have
+        tool_message_count = sum(1 for msg in messages if isinstance(msg, ToolMessage))
+        ai_message_count = sum(1 for msg in messages if isinstance(msg, AIMessage))
+        
+        # Count unique tool types used (to ensure comprehensive analysis)
+        tool_names_used = set()
+        for msg in messages:
+            if isinstance(msg, ToolMessage) and hasattr(msg, 'name'):
+                tool_names_used.add(msg.name)
+        
+        unique_tool_count = len(tool_names_used)
+        
+        # Require at least 3 different tools and 5 total tool calls before allowing final summary
+        # unless we're near max iterations
+        minimum_tools_required = 3
+        minimum_calls_required = 5
+        
+        # If we haven't used enough tools yet, continue with tools (don't go to final summary yet)
+        if (unique_tool_count < minimum_tools_required or 
+            tool_message_count < minimum_calls_required) and iterations < max_iterations - 2:
+            # If the last message has no tool calls, the agent thinks it's done but we want more analysis
+            return "final_summary"  # This will prompt the agent to continue analysis, not end
+        
+        # If we've used enough tools and the last AI message doesn't contain a comprehensive summary,
+        # give the agent one more chance to provide a final synthesis
+        if tool_message_count >= minimum_calls_required and unique_tool_count >= minimum_tools_required:
+            # Check if the last AI message looks like a final summary
+            if isinstance(last_message, AIMessage):
+                content = str(last_message.content).lower() if last_message.content else ""
+                # If it's empty, very short, or doesn't contain summary keywords, continue
+                if len(content) < 200 or not any(keyword in content for keyword in 
+                    ['summary', 'conclusion', 'findings', 'recommendations', 'compliance assessment', 'analysis']):
+                    # Only allow one more iteration for final summary
+                    if iterations < max_iterations - 1:
+                        return "final_summary"
+        
         # If no tool calls, end the workflow
         return "end"
     
-    def _create_system_prompt(self, task: str, iteration: int) -> str:
+    def _create_system_prompt(self, task: str, iteration: int, is_final_summary: bool = False, needs_more_analysis: bool = False, unique_tool_count: int = 0, tool_message_count: int = 0) -> str:
         """Create system prompt for the agent."""
+        if is_final_summary:
+            return f"""You are an expert AEC compliance verification agent providing a FINAL SUMMARY.
+
+Your original task: {task}
+
+You have completed {iteration} iterations and used multiple tools to gather information. 
+
+**IMPORTANT: DO NOT USE ANY MORE TOOLS - PROVIDE A COMPREHENSIVE FINAL SUMMARY**
+
+Based on the tool results you've gathered, provide a comprehensive final analysis that includes:
+
+1. **Summary of findings** - What did you discover about the building?
+2. **Compliance assessment** - What meets/doesn't meet requirements?
+3. **Key risks or issues** - What should be prioritized?
+4. **Actionable recommendations** - What specific steps should be taken?
+
+Structure your response as a professional compliance report. Be thorough but concise.
+This is your final message - make it count!"""
+        
+        elif needs_more_analysis:
+            return f"""You are an expert AEC compliance verification agent continuing your analysis.
+
+Your original task: {task}
+
+**ANALYSIS PROGRESS CHECK:**
+- You have used {unique_tool_count} different tools (need at least 3)
+- You have made {tool_message_count} tool calls (need at least 5) 
+- Current iteration: {iteration}
+
+**YOU MUST CONTINUE ANALYSIS - DO NOT PROVIDE A FINAL SUMMARY YET**
+
+Based on the Tool Usage Strategy, you still need to use more tools. Continue with:
+
+1. If you haven't done comprehensive door width compliance checking, use `check_door_width_compliance(door_id)` on multiple doors (at least 5 different doors)
+2. If you haven't checked building connectivity, use `create_circulation_graph_tool()` 
+3. If you haven't consulted regulations, use `query_normativa(question)` for DB-SUA and DB-SI requirements
+4. If you need proximity analysis, use `find_nearest_door_tool(point_x, point_y)`
+5. If you need clearance checks, use `calculate_clearance_tool(elem1_type, elem1_id, elem2_type, elem2_id)`
+
+**Continue your systematic analysis. Use tools to gather more evidence before concluding.**
+
+Reason about what additional information you need, then use the appropriate tools to gather it."""
+        
         return f"""You are an expert AEC (Architecture, Engineering, Construction) compliance verification agent.
 
 Your task: {task}
@@ -215,10 +319,19 @@ You have access to 7 essential tools for building compliance verification:
 
 **Current iteration:** {iteration}
 
+**Tool Usage Strategy (follow unless the user explicitly requests a single check):**
+1. Start by calling `list_all_doors()` to understand the dataset.
+2. Call `query_normativa()` to retrieve current thresholds/clauses before judging compliance (DB-SUA, DB-SI).
+3. Sample multiple doors with `check_door_width_compliance(door_id)` — at least 5 calls across different doors unless the dataset is smaller.
+4. Construct a connectivity basis with `create_circulation_graph_tool()` to prepare for egress assessment; if needed, use `find_nearest_door_tool()` and `calculate_clearance_tool()` to investigate potential bottlenecks.
+5. When uncertain, consult `query_normativa()` again for clarification.
+
+Aim to use at least 3 different tools and make several tool calls before concluding, unless the user asks you to stop early or the evidence is conclusive.
+
 **Instructions:**
-- Use tools to gather information systematically
-- Query building codes when you need regulatory information
-- Check compliance for each relevant element
+- Use tools to gather information systematically and iteratively
+- Query building codes proactively for regulatory grounding
+- Check compliance for each relevant element you inspect
 - Provide clear, actionable conclusions
 - When you have enough information, provide a final comprehensive answer
 
@@ -273,7 +386,7 @@ You have access to 7 essential tools for building compliance verification:
 
 
 def create_compliance_agent(
-    model_name: str = "gpt-3.5-turbo",
+    model_name: str = "gpt-4o-mini",
     temperature: float = 0.1,
     max_iterations: int = 10,
     memory_window_size: int = 5
