@@ -1,21 +1,21 @@
-# 🏗️ AEC Compliance Agent
+# 🏗️ AEC Compliance Agent 2.0
 
-## Agentic AI for Building Code Compliance Verification
+## Clean Architecture with TOON Optimization
 
-An autonomous AI agent that verifies building code compliance by extracting data from architectural drawings (DWG/DXF/IFC), performing geometric calculations, and querying Spanish building codes using RAG technology.
+A fresh, minimal implementation of an autonomous AI agent for building code compliance verification. Optimized for LLM token efficiency using TOON (Token-Oriented Object Notation) format.
 
 ## 🎯 Project Overview
 
-**Presentation**: October 29, 2025 at UPC-EPSEB  
-**Course**: Intel·ligència Artificial Aplicada a la Construcció  
-**Type**: Proof of Concept (POC)
+**Status**: Clean restart with minimal scaffold  
+**Architecture**: Token-optimized agent with TOON format support  
+**Purpose**: Building code compliance verification for Spanish regulations
 
 ### Key Features
 
-- **📦 Data Extraction**: Parse DWG/DXF and IFC files
-- **📐 Geometric Analysis**: Calculate areas, distances, and evacuation routes
-- **📚 RAG System**: Query Spanish building codes (CTE DB-SI, CTE DB-SUA)
-- **🤖 ReAct Agent**: Autonomous compliance verification with LangGraph
+- **🎒 TOON Format**: 30-60% token reduction for LLM efficiency
+- **🤖 Clean Agent**: Minimal, focused compliance verification
+- **📐 Basic Geometry**: Essential spatial calculations
+- **🔧 Modular Design**: Clean separation of concerns
 
 ## 🚀 Quick Start
 
@@ -23,7 +23,6 @@ An autonomous AI agent that verifies building code compliance by extracting data
 
 - Python 3.10+
 - Google API key (for Gemini LLM)
-- 4GB RAM (for embeddings)
 
 ### Installation
 
@@ -32,6 +31,9 @@ An autonomous AI agent that verifies building code compliance by extracting data
 git clone https://github.com/RaulAdSe/aec-agent.git
 cd aec-agent
 
+# Switch to clean version
+git checkout main-2.0
+
 # Create virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
@@ -39,77 +41,103 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY
+# Configure environment (create .env file)
+echo "GOOGLE_API_KEY=your_api_key_here" > .env
 ```
 
-### Run Example
+### Basic Usage
 
-```bash
-# Extract data from CAD files (DWG/DXF)
-python scripts/extract_cad_files.py
+```python
+from src.agent import ComplianceAgent
 
-# Extract data from IFC files
-python scripts/extract_ifc_files.py -f building.ifc
+# Initialize agent
+agent = ComplianceAgent()
 
-# Run compliance verification
-python scripts/run_full_pipeline.py
+# Sample building data
+building_data = {
+    "metadata": {"project_name": "Test Building", "total_area": 500.0},
+    "rooms": [{"id": "R001", "area": 25.0, "use": "office"}],
+    "doors": [{"id": "D001", "width": 0.9, "fire_rated": True}]
+}
+
+# Run compliance analysis
+result = agent.analyze_building(building_data)
+print(result)
 ```
 
-### Tutorial Notebooks
-
-Open Jupyter and explore the tutorial notebooks:
-
-```bash
-jupyter notebook
-
-# Navigate to notebooks/
-# Start with 01_data_extraction_simple.ipynb
-# Or 05_ifc_extraction_tutorial.ipynb for IFC files
-```
-
-## 📁 Project Structure
+## 📁 Clean Project Structure
 
 ```
 aec-agent/
-├── src/                    # Source code
-│   ├── extraction/         # DWG/DXF/IFC extraction
-│   ├── calculations/       # Geometry and graph analysis
-│   ├── rag/               # RAG system for normativa
-│   └── agent/             # ReAct agent implementation
-├── data/                  # Data files
-│   ├── blueprints/        # Original CAD files
-│   ├── extracted/         # JSON extracted data
-│   └── normativa/         # PDF building codes
-├── notebooks/             # Tutorial notebooks
-├── tests/                 # Test suite
-└── scripts/               # Utility scripts
+├── src/                    # Clean source code
+│   ├── agent/              # Core agent implementation
+│   │   ├── core.py         # Main agent class
+│   │   ├── tools.py        # Compliance tools
+│   │   └── memory.py       # Agent memory system
+│   └── utils/              # Utilities
+│       └── toon_converter.py  # TOON format support
+├── data/                   # Minimal data
+│   ├── blueprints/         # IFC files
+│   └── archive/            # Archived old data
+├── tests/                  # Clean test structure
+└── requirements.txt        # Dependencies with TOON support
 ```
 
 ## 🛠️ Technology Stack
 
 - **LLM**: Google Gemini (gemini-2.0-flash-exp)
-- **Agent Framework**: LangChain + LangGraph
-- **Vector Database**: ChromaDB
-- **Embeddings**: HuggingFace Multilingual
-- **CAD Processing**: ezdxf (DWG/DXF), ifcopenshell (IFC)
-- **Geometry**: Shapely + NetworkX
+- **Agent Framework**: LangChain
+- **Data Format**: TOON (Token-Oriented Object Notation)
 - **Validation**: Pydantic
+- **Testing**: Minimal pytest structure
+
+## 🎒 TOON Format Benefits
+
+TOON (Token-Oriented Object Notation) provides:
+- 30-60% token reduction vs JSON
+- Human-readable format
+- LLM-optimized structure
+- Maintains data integrity
+
+### Example Comparison
+
+**JSON (verbose):**
+```json
+{
+  "rooms": [
+    {"id": "R001", "area": 25.0, "type": "office"},
+    {"id": "R002", "area": 30.0, "type": "office"}
+  ]
+}
+```
+
+**TOON (compact):**
+```
+rooms[2]{id,area,type}:
+R001,25.0,office
+R002,30.0,office
+```
+
+## 🔧 Development
+
+This is a clean restart focusing on:
+- Minimal viable functionality
+- Token-optimized data exchange
+- Clean, maintainable code
+- Essential compliance features only
+
+### Adding Features
+
+1. Keep additions minimal and focused
+2. Use TOON format for data exchange
+3. Follow clean architecture principles
+4. Test with real building data
 
 ## 📚 Documentation
 
-- [Development Guide](docs/DEVELOPMENT_GUIDE.md)
-- [API Reference](docs/API_REFERENCE.md)
-- [RAG Explained](docs/RAG_EXPLAINED.md)
-- [ReAct Framework](docs/REACT_EXPLAINED.md)
-- [Testing Guide](docs/TESTING_GUIDE.md)
-
-## 🔬 Current Test Files
-
-- **CAD Files**:
-  - `I01.4 PCI - EXTINCIÓN AUTOMÁTICA.dwg` - Fire extinguishing systems
-  - `I01.6 PCI - SECTORIZACIÓN.dwg` - Fire compartmentation
+- Architecture documentation coming soon
+- API reference will be minimal and focused
+- Focus on practical usage examples
 
 ## 👥 Author
 
@@ -121,12 +149,6 @@ UPC-EPSEB Student
 
 MIT License - See [LICENSE](LICENSE) file for details
 
-## 🙏 Acknowledgments
-
-- UPC-EPSEB for the opportunity
-- Course instructors for guidance
-- Open source community for amazing tools
-
 ---
 
-*Built with ❤️ for the AEC industry*
+*Clean architecture for the AEC industry - TOON optimized* 🎒

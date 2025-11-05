@@ -12,13 +12,8 @@ from pathlib import Path
 from langchain.tools import Tool
 from pydantic import BaseModel, Field
 
-from ..calculations import (
-    calculate_clearance_between_elements,
-    calculate_angle_between_walls,
-    find_nearest_door,
-    CirculationGraph,
-    create_circulation_graph
-)
+# Basic geometry calculations - simplified for clean start
+import math
 from ..utils import ToonConverter
 
 
@@ -96,8 +91,10 @@ class ComplianceToolkit:
             if not element1 or not element2:
                 return "Error: Both element1 and element2 coordinates are required"
             
-            # Calculate clearance
-            clearance = calculate_clearance_between_elements(element1, element2)
+            # Calculate simple clearance distance
+            x1, y1 = element1.get("x", 0), element1.get("y", 0)
+            x2, y2 = element2.get("x", 0), element2.get("y", 0)
+            clearance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
             
             return f"Clearance distance: {clearance:.2f} meters"
             
@@ -148,22 +145,32 @@ class ComplianceToolkit:
             if not rooms or not doors:
                 return "Error: Both rooms and doors are required for evacuation analysis"
             
-            # Create circulation graph for route analysis
-            graph = create_circulation_graph(rooms, doors)
-            
             results = ["EVACUATION ROUTE ANALYSIS:"]
             
             for room in rooms:
                 room_id = room.get("id", "Unknown")
                 room_area = room.get("area", 0)
                 
-                # Find nearest exit
-                nearest_door = find_nearest_door(room, doors)
+                # Find nearest door (simplified)
+                min_distance = float('inf')
+                nearest_door = None
+                
+                room_center_x = room.get("center_x", 0) or 0
+                room_center_y = room.get("center_y", 0) or 0
+                
+                for door in doors:
+                    door_x = door.get("x", 0) or 0
+                    door_y = door.get("y", 0) or 0
+                    distance = math.sqrt((door_x - room_center_x)**2 + (door_y - room_center_y)**2)
+                    
+                    if distance < min_distance:
+                        min_distance = distance
+                        nearest_door = door
                 
                 if nearest_door:
                     door_id = nearest_door.get("id", "Unknown")
                     # Calculate approximate travel distance (simplified)
-                    travel_distance = 25.0  # Placeholder - would calculate actual path
+                    travel_distance = min_distance  # Simplified straight-line distance
                     
                     # Check compliance (max 25m travel distance in most cases)
                     compliant = travel_distance <= 25.0
@@ -263,11 +270,32 @@ class ComplianceToolkit:
                 for i, wall1 in enumerate(walls[:5]):  # Limit to avoid too much output
                     for wall2 in walls[i+1:i+3]:  # Check a few wall pairs
                         try:
-                            angle = calculate_angle_between_walls(wall1, wall2)
-                            if angle is not None:
-                                wall1_id = wall1.get("id", "Unknown")
-                                wall2_id = wall2.get("id", "Unknown")
-                                results.append(f"Walls {wall1_id}-{wall2_id}: {angle:.1f}° angle")
+                            # Simple angle calculation between walls
+                            wall1_start = wall1.get("start_point", {})
+                            wall1_end = wall1.get("end_point", {})
+                            wall2_start = wall2.get("start_point", {})
+                            wall2_end = wall2.get("end_point", {})
+                            
+                            if all(p for p in [wall1_start, wall1_end, wall2_start, wall2_end]):
+                                # Calculate wall vectors
+                                v1_x = wall1_end.get("x", 0) - wall1_start.get("x", 0)
+                                v1_y = wall1_end.get("y", 0) - wall1_start.get("y", 0)
+                                v2_x = wall2_end.get("x", 0) - wall2_start.get("x", 0)
+                                v2_y = wall2_end.get("y", 0) - wall2_start.get("y", 0)
+                                
+                                # Calculate angle between vectors
+                                dot_product = v1_x * v2_x + v1_y * v2_y
+                                mag1 = math.sqrt(v1_x**2 + v1_y**2)
+                                mag2 = math.sqrt(v2_x**2 + v2_y**2)
+                                
+                                if mag1 > 0 and mag2 > 0:
+                                    cos_angle = dot_product / (mag1 * mag2)
+                                    cos_angle = max(-1, min(1, cos_angle))  # Clamp to [-1, 1]
+                                    angle = math.degrees(math.acos(cos_angle))
+                                    
+                                    wall1_id = wall1.get("id", "Unknown")
+                                    wall2_id = wall2.get("id", "Unknown")
+                                    results.append(f"Walls {wall1_id}-{wall2_id}: {angle:.1f}° angle")
                         except:
                             continue
             
