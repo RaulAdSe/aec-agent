@@ -1,332 +1,311 @@
 """
-Memory management for the ReAct agent.
+Clean agent memory system with TOON optimization.
 
-This module implements a sliding window memory system that maintains a fixed
-number of messages and automatically summarizes old messages when the limit is reached.
+Efficient memory management for building data and analysis results.
 """
 
-from typing import List, Dict, Any, Optional
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-import json
+import logging
+from datetime import datetime
+from typing import Dict, List, Any, Optional
+from dataclasses import dataclass, field
+
+from pydantic import BaseModel
 
 
-class SlidingWindowMemory:
+@dataclass
+class MemoryEntry:
+    """Single memory entry with timestamp."""
+    timestamp: datetime = field(default_factory=datetime.now)
+    entry_type: str = ""
+    data: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+class AgentMemory:
     """
-    Sliding window memory with automatic summarization.
+    Clean memory system for the AEC compliance agent.
     
-    Maintains a fixed number of messages (window_size). When a new message
-    would exceed the limit, the oldest messages are summarized into a single
-    summary message, keeping the total count at window_size.
+    Stores building data, analysis results, and interaction history
+    with efficient retrieval and TOON format support.
     """
     
-    def __init__(
-        self,
-        window_size: int = 5,
-        model_name: str = "gpt-5-mini",
-        temperature: float = 0.1
-    ):
+    def __init__(self, max_entries: int = 100):
+        """Initialize agent memory with optional size limit."""
+        self.max_entries = max_entries
+        self.logger = logging.getLogger(__name__)
+        
+        # Memory storage
+        self.building_data_history: List[MemoryEntry] = []
+        self.analysis_results: List[MemoryEntry] = []
+        self.interaction_history: List[MemoryEntry] = []
+        
+        self.logger.info("AgentMemory initialized")
+    
+    def add_building_data(self, building_data: Dict[str, Any], 
+                         metadata: Optional[Dict[str, Any]] = None) -> None:
         """
-        Initialize the sliding window memory.
+        Store building data in memory.
         
         Args:
-            window_size: Maximum number of messages to keep (default: 5)
-            model_name: LLM model for summarization
-            temperature: Temperature for summarization
+            building_data: Building data to store
+            metadata: Optional metadata about the building data
         """
-        self.window_size = window_size
-        self.messages: List[BaseMessage] = []
-        self.summary_messages: List[BaseMessage] = []  # Store summarized messages
-        
-        # Initialize LLM for summarization
-        self.llm = ChatOpenAI(
-            model=model_name,
-            temperature=temperature,
-            max_tokens=1000
+        entry = MemoryEntry(
+            entry_type="building_data",
+            data=building_data,
+            metadata=metadata or {}
         )
+        
+        self.building_data_history.append(entry)
+        self._trim_memory_if_needed()
+        
+        project_name = building_data.get("metadata", {}).get("project_name", "Unknown")
+        self.logger.info(f"Stored building data for project: {project_name}")
     
-    def add_message(self, message: BaseMessage) -> None:
+    def add_analysis_result(self, result: Dict[str, Any],
+                          analysis_type: str = "general",
+                          metadata: Optional[Dict[str, Any]] = None) -> None:
         """
-        Add a message to memory, handling window size and summarization.
+        Store analysis result in memory.
         
         Args:
-            message: Message to add
+            result: Analysis result to store
+            analysis_type: Type of analysis performed
+            metadata: Optional metadata about the analysis
         """
-        self.messages.append(message)
+        entry = MemoryEntry(
+            entry_type=analysis_type,
+            data=result,
+            metadata=metadata or {}
+        )
         
-        # Check if we need to summarize
-        if len(self.messages) > self.window_size:
-            self._summarize_oldest_messages()
+        self.analysis_results.append(entry)
+        self._trim_memory_if_needed()
+        
+        self.logger.info(f"Stored {analysis_type} analysis result")
     
-    def get_messages(self) -> List[BaseMessage]:
+    def add_interaction(self, interaction_data: Dict[str, Any],
+                       interaction_type: str = "query") -> None:
         """
-        Get all current messages in memory.
-        
-        Returns:
-            List of messages in chronological order
-        """
-        return self.messages.copy()
-    
-    def get_messages_for_llm(self) -> List[BaseMessage]:
-        """
-        Get messages formatted for LLM consumption.
-        
-        Returns:
-            List of messages including summaries
-        """
-        # Combine summary messages and current messages
-        all_messages = []
-        
-        # Add summary messages first (if any)
-        if self.summary_messages:
-            summary_content = self._format_summary_messages()
-            all_messages.append(SystemMessage(content=summary_content))
-        
-        # Add current messages
-        all_messages.extend(self.messages)
-        
-        return all_messages
-    
-    def _summarize_oldest_messages(self) -> None:
-        """
-        Summarize the oldest messages when window size is exceeded.
-        
-        When we have window_size + 1 messages, we summarize the first
-        window_size messages into a single summary message, then keep
-        the newest message.
-        """
-        if len(self.messages) <= self.window_size:
-            return
-        
-        # Get the oldest messages to summarize (all except the last one)
-        messages_to_summarize = self.messages[:-1]
-        newest_message = self.messages[-1]
-        
-        # Create summary
-        summary = self._create_summary(messages_to_summarize)
-        
-        # Store the summary
-        summary_message = SystemMessage(content=summary)
-        self.summary_messages.append(summary_message)
-        
-        # Keep only the newest message
-        self.messages = [newest_message]
-    
-    def _create_summary(self, messages: List[BaseMessage]) -> str:
-        """
-        Create a summary of the given messages.
+        Store user interaction in memory.
         
         Args:
-            messages: Messages to summarize
+            interaction_data: Interaction data to store
+            interaction_type: Type of interaction
+        """
+        entry = MemoryEntry(
+            entry_type=interaction_type,
+            data=interaction_data,
+            metadata={}
+        )
+        
+        self.interaction_history.append(entry)
+        self._trim_memory_if_needed()
+        
+        self.logger.debug(f"Stored {interaction_type} interaction")
+    
+    def get_latest_building_data(self) -> Optional[Dict[str, Any]]:
+        """Get the most recently stored building data."""
+        if self.building_data_history:
+            return self.building_data_history[-1].data
+        return None
+    
+    def get_latest_analysis(self, analysis_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get the most recent analysis result.
+        
+        Args:
+            analysis_type: Optional filter by analysis type
             
         Returns:
-            Summary string
+            Latest analysis result or None
         """
-        if not messages:
-            return ""
+        if not self.analysis_results:
+            return None
         
-        # Format messages for summarization
-        formatted_messages = []
-        for msg in messages:
-            if isinstance(msg, HumanMessage):
-                formatted_messages.append(f"User: {msg.content}")
-            elif isinstance(msg, AIMessage):
-                formatted_messages.append(f"Assistant: {msg.content}")
-            elif isinstance(msg, SystemMessage):
-                formatted_messages.append(f"System: {msg.content}")
-            else:
-                formatted_messages.append(f"Other: {msg.content}")
+        if analysis_type:
+            # Filter by analysis type
+            filtered_results = [
+                entry for entry in self.analysis_results 
+                if entry.entry_type == analysis_type
+            ]
+            if filtered_results:
+                return filtered_results[-1].data
+            return None
         
-        conversation_text = "\n".join(formatted_messages)
-        
-        # Create summarization prompt
-        summary_prompt = f"""Please summarize the following conversation between a user and an AEC compliance verification agent. 
-Focus on:
-1. The main compliance tasks or questions asked
-2. Key findings or results from compliance checks
-3. Important decisions or conclusions made
-4. Any compliance issues identified
-
-Keep the summary concise but comprehensive. This summary will be used to maintain context in a sliding window memory system.
-
-Conversation to summarize:
-{conversation_text}
-
-Summary:"""
-        
-        try:
-            # Get summary from LLM
-            response = self.llm.invoke([HumanMessage(content=summary_prompt)])
-            return f"[Previous conversation summary: {response.content}]"
-        except Exception as e:
-            # Fallback to simple summary if LLM fails
-            return f"[Previous conversation summary: {len(messages)} messages about AEC compliance verification]"
+        return self.analysis_results[-1].data
     
-    def _format_summary_messages(self) -> str:
+    def get_building_history(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        Format all summary messages into a single string.
+        Get recent building data history.
+        
+        Args:
+            limit: Maximum number of entries to return
+            
+        Returns:
+            List of recent building data entries
+        """
+        recent_entries = self.building_data_history[-limit:]
+        return [
+            {
+                "timestamp": entry.timestamp.isoformat(),
+                "data": entry.data,
+                "metadata": entry.metadata
+            }
+            for entry in recent_entries
+        ]
+    
+    def get_analysis_history(self, limit: int = 10,
+                           analysis_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get recent analysis history.
+        
+        Args:
+            limit: Maximum number of entries to return
+            analysis_type: Optional filter by analysis type
+            
+        Returns:
+            List of recent analysis entries
+        """
+        results = self.analysis_results
+        
+        if analysis_type:
+            results = [entry for entry in results if entry.entry_type == analysis_type]
+        
+        recent_entries = results[-limit:]
+        return [
+            {
+                "timestamp": entry.timestamp.isoformat(),
+                "type": entry.entry_type,
+                "data": entry.data,
+                "metadata": entry.metadata
+            }
+            for entry in recent_entries
+        ]
+    
+    def search_memory(self, query: str, entry_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Search memory entries by text query.
+        
+        Args:
+            query: Search query
+            entry_type: Optional filter by entry type
+            
+        Returns:
+            List of matching entries
+        """
+        query_lower = query.lower()
+        matching_entries = []
+        
+        # Search all memory types
+        all_entries = (
+            self.building_data_history + 
+            self.analysis_results + 
+            self.interaction_history
+        )
+        
+        for entry in all_entries:
+            if entry_type and entry.entry_type != entry_type:
+                continue
+            
+            # Search in data and metadata
+            entry_text = str(entry.data).lower() + str(entry.metadata).lower()
+            
+            if query_lower in entry_text:
+                matching_entries.append({
+                    "timestamp": entry.timestamp.isoformat(),
+                    "type": entry.entry_type,
+                    "data": entry.data,
+                    "metadata": entry.metadata
+                })
+        
+        return matching_entries
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """
+        Get a summary of current memory state.
         
         Returns:
-            Formatted summary string
+            Memory summary with statistics
         """
-        if not self.summary_messages:
-            return ""
+        latest_building = self.get_latest_building_data()
+        latest_analysis = self.get_latest_analysis()
         
-        summaries = []
-        for i, summary_msg in enumerate(self.summary_messages, 1):
-            summaries.append(f"Summary {i}: {summary_msg.content}")
+        summary = {
+            "memory_stats": {
+                "building_data_entries": len(self.building_data_history),
+                "analysis_results": len(self.analysis_results),
+                "interaction_history": len(self.interaction_history),
+                "total_entries": (
+                    len(self.building_data_history) + 
+                    len(self.analysis_results) + 
+                    len(self.interaction_history)
+                )
+            },
+            "latest_building": {
+                "project_name": latest_building.get("metadata", {}).get("project_name") if latest_building else None,
+                "total_area": latest_building.get("metadata", {}).get("total_area") if latest_building else None,
+                "levels": latest_building.get("metadata", {}).get("levels") if latest_building else None
+            } if latest_building else None,
+            "latest_analysis": {
+                "timestamp": self.analysis_results[-1].timestamp.isoformat() if self.analysis_results else None,
+                "type": self.analysis_results[-1].entry_type if self.analysis_results else None
+            } if latest_analysis else None
+        }
         
-        return "\n\n".join(summaries)
+        return summary
     
     def clear(self) -> None:
-        """Clear all messages and summaries."""
-        self.messages = []
-        self.summary_messages = []
+        """Clear all memory entries."""
+        self.building_data_history.clear()
+        self.analysis_results.clear()
+        self.interaction_history.clear()
+        
+        self.logger.info("Memory cleared")
     
-    def get_memory_stats(self) -> Dict[str, Any]:
-        """
-        Get statistics about the current memory state.
+    def _trim_memory_if_needed(self) -> None:
+        """Trim memory if it exceeds the maximum size."""
+        total_entries = (
+            len(self.building_data_history) + 
+            len(self.analysis_results) + 
+            len(self.interaction_history)
+        )
         
-        Returns:
-            Dictionary with memory statistics
-        """
-        return {
-            "current_messages": len(self.messages),
-            "summary_messages": len(self.summary_messages),
-            "window_size": self.window_size,
-            "total_context": len(self.messages) + len(self.summary_messages),
-            "memory_usage": f"{len(self.messages)}/{self.window_size} messages"
-        }
-    
-    def export_memory(self) -> Dict[str, Any]:
-        """
-        Export memory state for persistence.
-        
-        Returns:
-            Dictionary containing memory state
-        """
-        return {
-            "messages": [{"type": msg.__class__.__name__, "content": msg.content} for msg in self.messages],
-            "summary_messages": [{"type": msg.__class__.__name__, "content": msg.content} for msg in self.summary_messages],
-            "window_size": self.window_size
-        }
-    
-    def import_memory(self, memory_data: Dict[str, Any]) -> None:
-        """
-        Import memory state from persistence.
-        
-        Args:
-            memory_data: Dictionary containing memory state
-        """
-        self.window_size = memory_data.get("window_size", 5)
-        
-        # Reconstruct messages
-        self.messages = []
-        for msg_data in memory_data.get("messages", []):
-            msg_type = msg_data["type"]
-            content = msg_data["content"]
+        if total_entries > self.max_entries:
+            # Remove oldest entries first
+            if self.interaction_history:
+                self.interaction_history.pop(0)
+            elif self.analysis_results:
+                self.analysis_results.pop(0)
+            elif self.building_data_history:
+                self.building_data_history.pop(0)
             
-            if msg_type == "HumanMessage":
-                self.messages.append(HumanMessage(content=content))
-            elif msg_type == "AIMessage":
-                self.messages.append(AIMessage(content=content))
-            elif msg_type == "SystemMessage":
-                self.messages.append(SystemMessage(content=content))
-        
-        # Reconstruct summary messages
-        self.summary_messages = []
-        for msg_data in memory_data.get("summary_messages", []):
-            msg_type = msg_data["type"]
-            content = msg_data["content"]
-            
-            if msg_type == "SystemMessage":
-                self.summary_messages.append(SystemMessage(content=content))
+            self.logger.debug("Trimmed memory to stay within limits")
 
 
-class MemoryManager:
-    """
-    High-level memory manager for the agent.
-    
-    Provides convenient methods for managing memory across agent sessions.
-    """
-    
-    def __init__(self, window_size: int = 5):
-        """
-        Initialize the memory manager.
-        
-        Args:
-            window_size: Size of the sliding window
-        """
-        self.memory = SlidingWindowMemory(window_size=window_size)
-        self.session_id: Optional[str] = None
-    
-    def start_session(self, session_id: str) -> None:
-        """
-        Start a new session with the given ID.
-        
-        Args:
-            session_id: Unique identifier for the session
-        """
-        self.session_id = session_id
-        self.memory.clear()
-    
-    def add_user_message(self, content: str) -> None:
-        """
-        Add a user message to memory.
-        
-        Args:
-            content: User message content
-        """
-        self.memory.add_message(HumanMessage(content=content))
-    
-    def add_agent_message(self, content: str) -> None:
-        """
-        Add an agent message to memory.
-        
-        Args:
-            content: Agent message content
-        """
-        self.memory.add_message(AIMessage(content=content))
-    
-    def get_context_for_llm(self) -> List[BaseMessage]:
-        """
-        Get formatted context for LLM consumption.
-        
-        Returns:
-            List of messages with summaries
-        """
-        return self.memory.get_messages_for_llm()
-    
-    def get_memory_info(self) -> Dict[str, Any]:
-        """
-        Get information about current memory state.
-        
-        Returns:
-            Dictionary with memory information
-        """
-        stats = self.memory.get_memory_stats()
-        stats["session_id"] = self.session_id
-        return stats
-
-
-# Example usage and testing
+# Example usage
 if __name__ == "__main__":
-    # Test the sliding window memory
-    memory = SlidingWindowMemory(window_size=5)
+    memory = AgentMemory()
     
-    # Add some test messages
-    for i in range(7):
-        if i % 2 == 0:
-            memory.add_message(HumanMessage(content=f"User message {i}"))
-        else:
-            memory.add_message(AIMessage(content=f"Agent response {i}"))
-        
-        print(f"After message {i}: {memory.get_memory_stats()}")
+    # Test adding building data
+    sample_building = {
+        "metadata": {
+            "project_name": "Test Building",
+            "total_area": 500.0
+        },
+        "rooms": [{"id": "R001", "area": 25.0}]
+    }
     
-    print("\nFinal messages:")
-    for msg in memory.get_messages():
-        print(f"- {msg.__class__.__name__}: {msg.content}")
+    memory.add_building_data(sample_building)
     
-    print("\nSummary messages:")
-    for msg in memory.summary_messages:
-        print(f"- {msg.__class__.__name__}: {msg.content}")
+    # Test adding analysis result
+    sample_analysis = {
+        "compliance_status": "COMPLIANT",
+        "issues_found": 0
+    }
+    
+    memory.add_analysis_result(sample_analysis, "fire_safety")
+    
+    # Get summary
+    summary = memory.get_summary()
+    print(f"Memory summary: {summary}")

@@ -66,3 +66,6 @@ openpyxl==3.1.2
 
 # JSON Schema Validation
 jsonschema==4.20.0
+
+# TOON Format Support
+python-toon==0.1.3
