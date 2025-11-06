@@ -21,8 +21,8 @@ class AppConfig(BaseModel):
     log_level: str = Field(default="INFO", description="Logging level")
     log_file: Optional[str] = Field(default=None, description="Log file path")
     
-    # Model Configuration
-    default_model: str = Field(default="gemini-2.0-flash-exp", description="Default LLM model")
+    # OpenAI Configuration
+    default_model: str = Field(default="gpt-4", description="Default OpenAI model")
     temperature: float = Field(default=0.1, description="LLM temperature")
     max_tokens: int = Field(default=8192, description="Maximum tokens per response")
     
@@ -30,8 +30,12 @@ class AppConfig(BaseModel):
     use_toon: bool = Field(default=True, description="Enable TOON format")
     
     # API Keys (loaded from environment)
-    google_api_key: Optional[str] = Field(default=None, description="Google AI API key")
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
+    
+    # Optional: LangSmith Configuration (commented out for clean start)
+    # langchain_tracing_v2: bool = Field(default=False, description="Enable LangSmith tracing")
+    # langchain_api_key: Optional[str] = Field(default=None, description="LangSmith API key")
+    # langchain_project: str = Field(default="aec-compliance-agent", description="LangSmith project name")
     
     class Config:
         env_file = ".env"
@@ -40,9 +44,7 @@ class AppConfig(BaseModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        # Load API keys from environment
-        if not self.google_api_key:
-            self.google_api_key = os.getenv("GOOGLE_API_KEY")
+        # Load OpenAI API key from environment
         if not self.openai_api_key:
             self.openai_api_key = os.getenv("OPENAI_API_KEY")
 

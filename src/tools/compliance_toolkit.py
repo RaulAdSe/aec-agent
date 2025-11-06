@@ -3,7 +3,6 @@
 import logging
 from typing import Dict, List, Any, Optional
 
-from langchain.tools import Tool
 from ..utils.toon_converter import ToonConverter
 
 
@@ -21,24 +20,23 @@ class ComplianceToolkit:
         self.logger = logging.getLogger(__name__)
         self.tools = self._create_tools()
     
-    def _create_tools(self) -> List[Tool]:
+    def _create_tools(self) -> List[Dict[str, Any]]:
         """Create the compliance analysis tools."""
         tools = [
-            Tool(
-                name="example_compliance_tool",
-                description="Example tool for compliance analysis - replace with your implementation",
-                func=self._example_compliance_tool
-            ),
-            
-            Tool(
-                name="convert_data_format",
-                description="Convert building data between JSON and TOON formats",
-                func=self._convert_data_format_tool
-            )
+            {
+                "name": "example_compliance_tool",
+                "description": "Example tool for compliance analysis - replace with your implementation",
+                "func": self._example_compliance_tool
+            },
+            {
+                "name": "convert_data_format", 
+                "description": "Convert building data between JSON and TOON formats",
+                "func": self._convert_data_format_tool
+            }
         ]
         return tools
     
-    def get_tools(self) -> List[Tool]:
+    def get_tools(self) -> List[Dict[str, Any]]:
         """Get the list of available tools."""
         return self.tools
     

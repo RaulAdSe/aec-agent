@@ -1,0 +1,59 @@
+{
+  "metadata": {
+    "project_name": "Sample Office Building",
+    "total_area": 500.0,
+    "levels": 2,
+    "location": "Madrid, Spain",
+    "building_use": "office"
+  },
+  "rooms": [
+    {
+      "id": "R001",
+      "name": "Reception",
+      "area": 30.0,
+      "use": "reception",
+      "occupancy_load": 5,
+      "level": 0
+    },
+    {
+      "id": "R002", 
+      "name": "Office 1",
+      "area": 25.0,
+      "use": "office",
+      "occupancy_load": 3,
+      "level": 1
+    },
+    {
+      "id": "R003",
+      "name": "Conference Room",
+      "area": 50.0,
+      "use": "assembly",
+      "occupancy_load": 20,
+      "level": 1
+    }
+  ],
+  "doors": [
+    {
+      "id": "D001",
+      "width": 0.9,
+      "height": 2.1,
+      "fire_rated": true,
+      "connects": ["R001", "exterior"]
+    },
+    {
+      "id": "D002",
+      "width": 1.2,
+      "height": 2.1,
+      "fire_rated": false,
+      "connects": ["R002", "corridor"]
+    }
+  ],
+  "stairs": [
+    {
+      "id": "S001",
+      "width": 1.2,
+      "fire_rated": true,
+      "connects_levels": [0, 1]
+    }
+  ]
+}

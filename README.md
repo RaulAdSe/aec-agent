@@ -1,143 +1,143 @@
-# 🏗️ AEC Compliance Agent 2.0
+# AEC Compliance Agent 🏗️
 
-## Clean Architecture with TOON Optimization
-
-A fresh, minimal implementation of an autonomous AI agent for building code compliance verification. Optimized for LLM token efficiency using TOON (Token-Oriented Object Notation) format.
-
-## 🎯 Project Overview
-
-**Status**: Clean restart with minimal scaffold  
-**Architecture**: Token-optimized agent with TOON format support  
-**Purpose**: Building code compliance verification for Spanish regulations
-
-### Key Features
-
-- **🎒 TOON Format**: 30-60% token reduction for LLM efficiency
-- **🤖 Clean Agent**: Minimal, focused compliance verification
-- **📐 Basic Geometry**: Essential spatial calculations
-- **🔧 Modular Design**: Clean separation of concerns
+**Building Code Compliance Verification System** with Streamlit deployment and LangSmith integration.
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- Python 3.10+
-- Google API key (for Gemini LLM)
-
-### Installation
-
+### 1. Setup Environment
 ```bash
-# Clone repository
-git clone https://github.com/RaulAdSe/aec-agent.git
-cd aec-agent
-
-# Switch to clean version
-git checkout main-2.0
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+# Clone and install
 pip install -r requirements.txt
 
-# Configure environment (create .env file)
-echo "GOOGLE_API_KEY=your_api_key_here" > .env
+# Configure API keys
+cp .env.example .env
+# Edit .env with your API keys
 ```
 
-### Basic Usage
+### 2. Run Streamlit App
+```bash
+streamlit run streamlit_app.py
+```
 
+### 3. Use CLI (Optional)
+```bash
+python -m src.main status
+python -m src.main analyze data/sample.json
+```
+
+## 🔑 API Keys Required
+
+| Service | Purpose | Required |
+|---------|---------|----------|
+| **OpenAI** | LLM for compliance analysis | ✅ Yes |
+| **LangSmith** | Tracing & monitoring | ✅ Recommended |
+
+## 🎯 Features
+
+### 🌐 Streamlit Deployment
+- **Web Interface**: User-friendly building analysis
+- **File Upload**: JSON building data support
+- **Real-time Analysis**: Instant compliance checking
+- **Results Export**: Download analysis reports
+
+### 📊 LangSmith Integration
+- **Tracing**: Track all agent operations
+- **Monitoring**: Performance metrics
+- **Debugging**: Step-by-step analysis
+- **LangChain Studio**: Visual workflow analysis
+
+### 🏗️ Professional Architecture
+- **Modular Design**: Scalable agent system
+- **Clean Separation**: Core/Agents/Tools/Services
+- **Extensible**: Easy to add new compliance checks
+
+## 📁 Architecture
+
+```
+src/
+├── streamlit_app.py          # 🌐 Streamlit deployment
+├── main.py                   # 🖥️ CLI interface
+├── core/                     # ⚙️ Framework
+│   ├── config.py             # Configuration + LangSmith
+│   ├── logger.py             # Logging system
+│   └── registry.py           # Agent registry
+├── agents/                   # 🤖 Agent implementations
+│   └── compliance_agent/     # AEC compliance agent
+├── memory/                   # 🧠 Memory systems
+├── tools/                    # 🔧 Analysis tools
+├── services/                 # 🌍 External integrations
+└── utils/                    # 🛠️ Utilities
+```
+
+## 🛠️ Development
+
+### Add New Tools
 ```python
-from src.agent import ComplianceAgent
-
-# Initialize agent
-agent = ComplianceAgent()
-
-# Sample building data
-building_data = {
-    "metadata": {"project_name": "Test Building", "total_area": 500.0},
-    "rooms": [{"id": "R001", "area": 25.0, "use": "office"}],
-    "doors": [{"id": "D001", "width": 0.9, "fire_rated": True}]
-}
-
-# Run compliance analysis
-result = agent.analyze_building(building_data)
-print(result)
+# src/tools/compliance_toolkit.py
+def _your_new_tool(self, input_params: str) -> str:
+    # Your compliance logic here
+    return "Analysis result"
 ```
 
-## 📁 Clean Project Structure
-
-```
-aec-agent/
-├── src/                    # Clean source code
-│   ├── agent/              # Core agent implementation
-│   │   ├── core.py         # Main agent class
-│   │   ├── tools.py        # Compliance tools
-│   │   └── memory.py       # Agent memory system
-│   └── utils/              # Utilities
-│       └── toon_converter.py  # TOON format support
-├── data/                   # Minimal data
-│   ├── blueprints/         # IFC files
-│   └── archive/            # Archived old data
-├── tests/                  # Clean test structure
-└── requirements.txt        # Dependencies with TOON support
+### Add New Agents
+```bash
+mkdir src/agents/your_agent
+# Implement agent.py, config.py, prompts.py
 ```
 
-## 🛠️ Technology Stack
+### LangSmith Monitoring
+- View traces in [LangSmith dashboard](https://smith.langchain.com/)
+- Use LangChain Studio for visual debugging
+- All agent operations automatically tracked
 
-- **LLM**: Google Gemini (gemini-2.0-flash-exp)
-- **Agent Framework**: LangChain
-- **Data Format**: TOON (Token-Oriented Object Notation)
-- **Validation**: Pydantic
-- **Testing**: Minimal pytest structure
+## 🔧 Configuration
 
-## 🎒 TOON Format Benefits
-
-TOON (Token-Oriented Object Notation) provides:
-- 30-60% token reduction vs JSON
-- Human-readable format
-- LLM-optimized structure
-- Maintains data integrity
-
-### Example Comparison
-
-**JSON (verbose):**
-```json
-{
-  "rooms": [
-    {"id": "R001", "area": 25.0, "type": "office"},
-    {"id": "R002", "area": 30.0, "type": "office"}
-  ]
-}
+```bash
+# .env file
+GOOGLE_API_KEY=your_key
+LANGCHAIN_API_KEY=your_langsmith_key
+LANGCHAIN_PROJECT=aec-compliance-agent
 ```
 
-**TOON (compact):**
+## 📋 Usage Examples
+
+### Streamlit Web App
+1. Open `http://localhost:8501`
+2. Upload JSON building data or use sample
+3. Select analysis type (general/fire_safety/accessibility)
+4. Get compliance report with downloadable results
+
+### CLI Analysis
+```bash
+# Analyze building file
+python -m src.main analyze data/building.json --analysis-type fire_safety
+
+# Initialize new project
+python -m src.main init-project my-building
+
+# Check status
+python -m src.main status
 ```
-rooms[2]{id,area,type}:
-R001,25.0,office
-R002,30.0,office
+
+## 🎯 Spanish Building Codes Supported
+
+- **CTE DB-SI**: Fire Safety (Seguridad en caso de incendio)
+- **CTE DB-SUA**: Accessibility (Seguridad de utilización y accesibilidad)
+- **General Compliance**: Spatial and structural requirements
+
+## 🚀 Deployment
+
+### Streamlit Cloud
+```bash
+# Deploy to Streamlit Cloud
+# Point to: streamlit_app.py
+# Add secrets for API keys
 ```
 
-## 🔧 Development
-
-This is a clean restart focusing on:
-- Minimal viable functionality
-- Token-optimized data exchange
-- Clean, maintainable code
-- Essential compliance features only
-
-### Adding Features
-
-1. Keep additions minimal and focused
-2. Use TOON format for data exchange
-3. Follow clean architecture principles
-4. Test with real building data
-
-## 📚 Documentation
-
-- Architecture documentation coming soon
-- API reference will be minimal and focused
-- Focus on practical usage examples
+### Local Development
+```bash
+streamlit run streamlit_app.py --server.port 8501
+```
 
 ## 👥 Author
 
@@ -145,10 +145,4 @@ This is a clean restart focusing on:
 UPC-EPSEB Student  
 [GitHub](https://github.com/RaulAdSe)
 
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) file for details
-
----
-
-*Clean architecture for the AEC industry - TOON optimized* 🎒
+Ready for building code compliance analysis! 🎉

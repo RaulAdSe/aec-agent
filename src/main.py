@@ -88,8 +88,8 @@ def status():
     click.echo(f"Log Level: {config.log_level}")
     
     # Check API key availability
-    api_status = "✓ Available" if config.google_api_key else "✗ Not configured"
-    click.echo(f"Google API Key: {api_status}")
+    openai_status = "✓ Available" if config.openai_api_key else "✗ Not configured"
+    click.echo(f"OpenAI API Key: {openai_status}")
 
 
 @cli.command()

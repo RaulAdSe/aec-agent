@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, Optional
 
+
 from ..base_agent import BaseAgent
 from .config import ComplianceAgentConfig
 from .prompts import get_analysis_prompt, get_tool_prompt
@@ -9,6 +10,8 @@ from .prompts import get_analysis_prompt, get_tool_prompt
 from ...memory.conversation_history import ConversationHistory
 from ...tools.compliance_toolkit import ComplianceToolkit
 from ...utils.toon_converter import ToonConverter
+from ...services.ai_client import AIClient
+from ...core.config import config
 
 
 class ComplianceAgent(BaseAgent):
@@ -36,7 +39,8 @@ class ComplianceAgent(BaseAgent):
     def _initialize_tools(self) -> None:
         """Initialize compliance analysis tools."""
         self.toolkit = ComplianceToolkit(toon_converter=self.toon_converter)
-        self.logger.info(f"Initialized {len(self.toolkit.get_tools())} tools")
+        self.ai_client = AIClient()
+        self.logger.info(f"Initialized {len(self.toolkit.get_tools())} tools and OpenAI client")
     
     def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -96,38 +100,78 @@ class ComplianceAgent(BaseAgent):
         # Get appropriate prompt
         prompt = get_analysis_prompt(compliance_type, data_str)
         
-        # Placeholder for actual LLM integration
-        result = {
-            "compliance_type": compliance_type,
-            "status": "success",
-            "message": "Specific analysis not implemented yet",
-            "prompt_used": prompt[:100] + "...",  # First 100 chars for reference
-            "data": building_data
-        }
-        
-        return result
+        # Perform AI analysis
+        try:
+            ai_response = self.ai_client.analyze_compliance(prompt)
+            
+            if ai_response.get("status") == "success":
+                return {
+                    "compliance_type": compliance_type,
+                    "status": "success",
+                    "analysis": ai_response.get("analysis"),
+                    "model_used": ai_response.get("model_used"),
+                    "usage": ai_response.get("usage", {}),
+                    "building_data": building_data
+                }
+            else:
+                return {
+                    "compliance_type": compliance_type,
+                    "status": "failed",
+                    "error": ai_response.get("error"),
+                    "building_data": building_data
+                }
+        except Exception as e:
+            return {
+                "compliance_type": compliance_type,
+                "status": "failed",
+                "error": str(e),
+                "building_data": building_data
+            }
     
     def _analyze_building(self, building_data_str: str) -> Dict[str, Any]:
         """
-        Internal method to analyze building data.
-        
-        This is where you'll implement your actual analysis logic.
+        Internal method to analyze building data using AI.
         """
-        # Placeholder implementation
-        return {
-            "status": "success",
-            "message": "Analysis completed (placeholder)",
-            "compliance_summary": {
-                "fire_safety": "Not implemented",
-                "accessibility": "Not implemented",
-                "general": "Not implemented"
-            },
-            "recommendations": [
-                "Implement actual analysis logic",
-                "Integrate with LLM for real compliance checking",
-                "Add specific building code verification"
-            ]
-        }
+        try:
+            # Create comprehensive prompt for general analysis
+            prompt = get_analysis_prompt("general", building_data_str)
+            
+            # Get AI analysis
+            ai_response = self.ai_client.analyze_compliance(prompt)
+            
+            if ai_response.get("status") == "success":
+                analysis_text = ai_response.get("analysis", "")
+                
+                return {
+                    "status": "success",
+                    "analysis": analysis_text,
+                    "model_used": ai_response.get("model_used"),
+                    "usage": ai_response.get("usage", {}),
+                    "compliance_summary": {
+                        "general": "Analysis completed with AI",
+                        "details": analysis_text[:200] + "..." if len(analysis_text) > 200 else analysis_text
+                    }
+                }
+            else:
+                # Fallback if AI fails
+                self.logger.error(f"AI analysis failed: {ai_response.get('error')}")
+                return {
+                    "status": "partial_success",
+                    "analysis": "AI analysis unavailable, using basic checks",
+                    "error": ai_response.get("error"),
+                    "compliance_summary": {
+                        "general": "Basic checks only - AI unavailable"
+                    }
+                }
+        except Exception as e:
+            self.logger.error(f"Analysis failed: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "compliance_summary": {
+                    "general": "Analysis failed"
+                }
+            }
     
     def get_memory_summary(self) -> Dict[str, Any]:
         """Get agent memory summary."""

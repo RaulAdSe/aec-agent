@@ -1,20 +1,25 @@
-# Minimal dependencies for AEC compliance agent
+# AEC Compliance Agent - Clean OpenAI Setup
 
 # Core
 pydantic==2.5.3
 python-dotenv==1.0.1
 
-# CLI & Web
-click==8.1.7
-flask==3.0.0
+# AI Integration
+openai==1.51.0
 
-# LangChain (optional)
-langchain==0.2.16
+# Streamlit Web Interface
+streamlit==1.28.0
+
+# CLI Interface
+click==8.1.7
 
 # Testing
 pytest==7.4.4
 
-# Add as needed:
-# python-toon==0.1.3   # TOON format
-# numpy==1.26.4        # Calculations
-# requests==2.31.0     # API calls
+# Optional: Add back if needed
+# langchain==0.2.16        # For advanced LLM workflows
+# langsmith==0.0.87        # For tracing and monitoring
+# streamlit-authenticator==0.2.3  # For authentication
+# python-toon==0.1.3       # TOON format support
+# numpy==1.26.4            # Numerical calculations
+# pandas==2.1.4            # Data analysis
