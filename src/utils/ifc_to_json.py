@@ -122,6 +122,9 @@ class IFCToJSONConverter:
             door_data.update(self._get_element_properties(door))
             door_data.update(self._get_element_quantities(door))
             door_data.update(self._get_element_geometry(door))
+            
+            # Get connected spaces (rooms this door connects)
+            door_data["connected_spaces"] = self._get_door_connected_spaces(door)
 
             doors.append(door_data)
 
@@ -229,6 +232,69 @@ class IFCToJSONConverter:
 
         except Exception:
             return {"geometry": None}
+    
+    def _get_door_connected_spaces(self, door) -> List[Dict[str, str]]:
+        """
+        Find spaces (rooms) that a door connects.
+        
+        Uses geometric analysis to determine which spaces are on either side
+        of the door by checking which spaces' bounding boxes contain or are
+        near the door's location.
+        
+        Returns list of connected spaces with id and name.
+        """
+        try:
+            import ifcopenshell.geom
+            
+            # Get door center point
+            door_geom = self._get_element_geometry(door)
+            if not door_geom.get("geometry") or not door_geom["geometry"].get("bbox"):
+                return []
+            
+            bbox = door_geom["geometry"]["bbox"]
+            door_center = [
+                (bbox["min"][0] + bbox["max"][0]) / 2,
+                (bbox["min"][1] + bbox["max"][1]) / 2,
+                (bbox["min"][2] + bbox["max"][2]) / 2
+            ]
+            
+            # Get all spaces and check which ones contain or are near the door
+            spaces = self.model.by_type("IfcSpace")
+            connected_spaces = []
+            
+            # Tolerance for determining if door is "in" a space (1 meter)
+            tolerance = 1.0
+            
+            settings = ifcopenshell.geom.settings()
+            settings.set(settings.USE_WORLD_COORDS, True)
+            
+            for space in spaces:
+                try:
+                    space_geom = self._get_element_geometry(space)
+                    if not space_geom.get("geometry") or not space_geom["geometry"].get("bbox"):
+                        continue
+                    
+                    space_bbox = space_geom["geometry"]["bbox"]
+                    min_x, min_y, min_z = space_bbox["min"]
+                    max_x, max_y, max_z = space_bbox["max"]
+                    
+                    # Check if door center is within space bounding box (with tolerance)
+                    if (min_x - tolerance <= door_center[0] <= max_x + tolerance and
+                        min_y - tolerance <= door_center[1] <= max_y + tolerance and
+                        min_z - tolerance <= door_center[2] <= max_z + tolerance):
+                        connected_spaces.append({
+                            "id": space.GlobalId,
+                            "name": space.Name or f"Space_{space.id()}"
+                        })
+                except Exception:
+                    # Skip spaces that can't be processed
+                    continue
+            
+            return connected_spaces
+            
+        except Exception as e:
+            self.logger.warning(f"Could not determine connected spaces for door {door.GlobalId}: {e}")
+            return []
     
 
 
