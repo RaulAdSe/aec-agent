@@ -9,10 +9,10 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 import sys
 
-# Add src to path for imports
-sys.path.append(str(Path(__file__).parent.parent.parent / "src"))
+# Add aec_agent to path for imports
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from tools.document_retrieval_toolkit import (
+from aec_agent.tools.document_retrieval_toolkit import (
     initialize_gemini_client,
     create_document_store,
     upload_documents,
@@ -29,7 +29,7 @@ class TestDocumentRetrievalToolkit:
     def setup_method(self):
         """Set up test fixtures."""
         # Reset global state
-        import tools.document_retrieval_toolkit as toolkit
+        import aec_agent.tools.document_retrieval_toolkit as toolkit
         toolkit._gemini_client = None
         toolkit._document_stores = {}
 
