@@ -51,8 +51,9 @@ for citation in result["formatted_citations"]:
 ## 🔧 **System Components**
 
 ### **Core Files**
-- **`bin/kb-manager`** - Main script for document management
-- **`aec_agent/tools/document_retrieval_toolkit.py`** - Gemini File Search integration
+- **`bin/kb-manager-stateless`** - Stateless document management (no local tracking)
+- **`kb`** - Convenience wrapper script for knowledge base operations
+- **`aec_agent/tools/document_retrieval_toolkit.py`** - Gemini File Search integration with citation extraction
 - **`aec_agent/tools/compliance_search.py`** - Agent-friendly search interface
 - **`aec_agent/tools/citation_utils.py`** - Citation formatting utilities
 
@@ -124,7 +125,23 @@ Each query returns answers with citations showing exactly which compliance docum
 ## 🛠️ **Troubleshooting**
 
 **No documents:** Add files to `data/doc/` and run `./kb sync`  
-**No citations:** Wait a few seconds after sync for Gemini processing  
-**Upload fails:** Check file sizes and internet connection  
+**Citations not showing:** Citations are extracted from grounding_metadata in Gemini responses  
+**Upload fails:** Check file sizes (max 100MB each) and internet connection  
+**"Upload already terminated" error:** File may already be uploaded, check `./kb status`  
+**Slow uploads:** Large PDFs take 30-120 seconds each to process and index  
+
+## 🔧 **Technical Details**
+
+### **Citation Extraction**
+Citations are extracted from Gemini's `grounding_metadata`:
+- **Source documents**: From `grounding_chunks` with document titles
+- **Cited segments**: From `grounding_supports` with text and source mapping
+- **No local tracking**: All duplicate detection via Gemini API queries
+
+### **Stateless Architecture**
+- No `.document_tracking.json` files needed
+- Multi-user safe - no local state conflicts
+- Direct API queries for uploaded document lists
+- Perfect for teams and CI/CD environments
 
 The RAG system provides reliable compliance answers with proper source tracking! 🏗️
