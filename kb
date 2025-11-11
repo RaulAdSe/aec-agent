@@ -1,13 +1,13 @@
 #!/bin/bash
-# Knowledge Base Management Convenience Script
+# Knowledge Base Management Convenience Script (Stateless)
 # 
-# This script provides easy access to the knowledge base management functionality
-# from the project root directory.
+# This script provides easy access to the stateless knowledge base management
+# functionality from the project root directory. No local tracking files needed!
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KB_SCRIPT="$SCRIPT_DIR/bin/kb-manager"
+KB_SCRIPT="$SCRIPT_DIR/bin/kb-manager-stateless"
 
 # Check if the knowledge base script exists
 if [ ! -f "$KB_SCRIPT" ]; then

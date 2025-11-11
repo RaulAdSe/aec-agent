@@ -99,6 +99,8 @@ Every search returns:
 ✅ **Multi-format Support** - PDF, Word, text files  
 ✅ **Agent-Ready** - Simple API for AI agents  
 ✅ **Professional Citations** - Proper source tracking for compliance  
+✅ **Stateless Operation** - No local tracking files, queries Gemini API directly  
+✅ **Multi-User Friendly** - Works seamlessly across teams without conflicts  
 
 ## 🔍 **Examples**
 

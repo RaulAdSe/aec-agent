@@ -122,7 +122,7 @@ def create_document_store(store_name: str, description: str = "") -> Dict:
         }
     
     try:
-        # Check if store already exists
+        # Check if store already exists locally
         if store_name in _document_stores:
             logs.append(f"Document store '{store_name}' already exists")
             return {
@@ -131,9 +131,37 @@ def create_document_store(store_name: str, description: str = "") -> Dict:
                 "logs": logs
             }
         
-        # Create the file search store
+        # Check if store already exists in Gemini API (stateless approach)
+        expected_display_name = f'aec-compliance-{store_name}'
+        try:
+            # List all file search stores from Gemini
+            all_stores = _gemini_client.file_search_stores.list()
+            for existing_store in all_stores:
+                if hasattr(existing_store, 'display_name') and existing_store.display_name == expected_display_name:
+                    # Found existing store, populate local tracking
+                    store_info = {
+                        "name": store_name,
+                        "description": description,
+                        "gemini_store_name": existing_store.name,
+                        "gemini_store_id": existing_store.name.split('/')[-1],
+                        "created_at": str(existing_store.create_time) if hasattr(existing_store, 'create_time') else "unknown",
+                        "document_count": 0,  # Will be updated when we list documents
+                        "documents": []
+                    }
+                    _document_stores[store_name] = store_info
+                    logs.append(f"Found existing document store '{store_name}' in Gemini API")
+                    return {
+                        "status": "success",
+                        "data": store_info,
+                        "logs": logs
+                    }
+        except Exception as list_error:
+            # If listing fails, continue to try creating
+            logs.append(f"Could not list existing stores (will try to create): {list_error}")
+        
+        # Create the file search store if it doesn't exist
         file_search_store = _gemini_client.file_search_stores.create(
-            config={'display_name': f'aec-compliance-{store_name}'}
+            config={'display_name': expected_display_name}
         )
         
         # Store the store info locally
@@ -332,25 +360,68 @@ def search_documents(store_name: str, query: str, max_results: int = 5) -> Dict:
             "logs": ["Gemini client not initialized. Call initialize_gemini_client() first."]
         }
     
+    # If store not in local dict, try to discover it from Gemini API
     if store_name not in _document_stores:
-        return {
-            "status": "error", 
-            "data": None,
-            "logs": [f"Document store '{store_name}' not found. Create it first with create_document_store()."]
-        }
+        # Try to find and register the store from Gemini API
+        expected_display_name = f'aec-compliance-{store_name}'
+        try:
+            all_stores = _gemini_client.file_search_stores.list()
+            for existing_store in all_stores:
+                if hasattr(existing_store, 'display_name') and existing_store.display_name == expected_display_name:
+                    # Found it, register locally
+                    store_info = {
+                        "name": store_name,
+                        "description": "",
+                        "gemini_store_name": existing_store.name,
+                        "gemini_store_id": existing_store.name.split('/')[-1],
+                        "created_at": str(existing_store.create_time) if hasattr(existing_store, 'create_time') else "unknown",
+                        "document_count": 0,
+                        "documents": []
+                    }
+                    _document_stores[store_name] = store_info
+                    break
+        except Exception as e:
+            return {
+                "status": "error",
+                "data": None,
+                "logs": [f"Document store '{store_name}' not found and could not discover from API: {e}"]
+            }
+        
+        # Still not found after discovery attempt
+        if store_name not in _document_stores:
+            return {
+                "status": "error", 
+                "data": None,
+                "logs": [f"Document store '{store_name}' not found. Create it first with create_document_store()."]
+            }
     
     store_info = _document_stores[store_name]
     
-    if store_info["document_count"] == 0:
-        return {
-            "status": "warning",
-            "data": {
-                "query": query,
-                "results": [],
-                "total_results": 0
-            },
-            "logs": [f"No documents in store '{store_name}'. Upload documents first."]
-        }
+    # If local count is zero, double-check via Gemini API (stateless hydration)
+    if store_info.get("document_count", 0) == 0:
+        try:
+            api_check = list_uploaded_documents(store_name)
+            if api_check.get("status") == "success":
+                doc_count = api_check["data"].get("document_count", 0)
+                if doc_count == 0:
+                    return {
+                        "status": "warning",
+                        "data": {
+                            "query": query,
+                            "results": [],
+                            "total_results": 0
+                        },
+                        "logs": [f"No documents in store '{store_name}'. Upload documents first."]
+                    }
+                # Hydrate local cache with document count so we can proceed
+                store_info["document_count"] = doc_count
+                _document_stores[store_name] = store_info
+            else:
+                # If API check fails, proceed and let Gemini handle availability
+                pass
+        except Exception:
+            # On any unexpected error, proceed and rely on Gemini behavior
+            pass
     
     try:
         from google.genai import types
@@ -485,6 +556,109 @@ def get_store_info(store_name: Optional[str] = None) -> Dict:
                 "stores": _document_stores
             },
             "logs": logs
+        }
+
+
+def list_uploaded_documents(store_name: str) -> Dict:
+    """
+    Get list of already uploaded documents from Gemini API (stateless approach).
+    
+    This replaces local tracking by directly querying the Gemini File Search API
+    to see what documents are already uploaded.
+    
+    Args:
+        store_name: Name of the document store
+        
+    Returns:
+        Dict with uploaded document information
+        
+    Examples:
+        # Check what's already uploaded
+        result = list_uploaded_documents("compliance_knowledge_base")
+        uploaded_files = [doc["display_name"] for doc in result["data"]["documents"]]
+    """
+    global _gemini_client, _document_stores
+    logs = []
+    
+    if _gemini_client is None:
+        return {
+            "status": "error",
+            "data": None,
+            "logs": ["Gemini client not initialized. Call initialize_gemini_client() first."]
+        }
+    
+    # If store not in local dict, try to discover it from Gemini API
+    if store_name not in _document_stores:
+        # Try to find and register the store from Gemini API
+        expected_display_name = f'aec-compliance-{store_name}'
+        try:
+            all_stores = _gemini_client.file_search_stores.list()
+            for existing_store in all_stores:
+                if hasattr(existing_store, 'display_name') and existing_store.display_name == expected_display_name:
+                    # Found it, register locally
+                    store_info = {
+                        "name": store_name,
+                        "description": "",
+                        "gemini_store_name": existing_store.name,
+                        "gemini_store_id": existing_store.name.split('/')[-1],
+                        "created_at": str(existing_store.create_time) if hasattr(existing_store, 'create_time') else "unknown",
+                        "document_count": 0,
+                        "documents": []
+                    }
+                    _document_stores[store_name] = store_info
+                    break
+        except Exception as e:
+            return {
+                "status": "error",
+                "data": None,
+                "logs": [f"Document store '{store_name}' not found and could not discover from API: {e}"]
+            }
+        
+        # Still not found after discovery attempt
+        if store_name not in _document_stores:
+            return {
+                "status": "error",
+                "data": None,
+                "logs": [f"Document store '{store_name}' not found."]
+            }
+    
+    try:
+        store_info = _document_stores[store_name]
+        gemini_store_name = store_info["gemini_store_name"]
+        
+        # Get all documents from Gemini API
+        documents_response = _gemini_client.file_search_stores.documents.list(parent=gemini_store_name)
+        document_list = list(documents_response)
+        
+        # Extract document information
+        uploaded_docs = []
+        for doc in document_list:
+            doc_info = {
+                "name": doc.name,
+                "display_name": getattr(doc, 'display_name', 'Unknown'),
+                "created_time": str(getattr(doc, 'create_time', 'Unknown')),
+                "file_id": doc.name.split('/')[-1] if hasattr(doc, 'name') else 'Unknown'
+            }
+            uploaded_docs.append(doc_info)
+        
+        logs.append(f"Found {len(uploaded_docs)} documents in store '{store_name}'")
+        
+        return {
+            "status": "success",
+            "data": {
+                "store_name": store_name,
+                "document_count": len(uploaded_docs),
+                "documents": uploaded_docs
+            },
+            "logs": logs
+        }
+        
+    except Exception as e:
+        _logger.error(f"Error listing documents: {e}")
+        return {
+            "status": "error",
+            "data": None,
+            "logs": [f"Error listing documents: {e}"]
         }
     else:
         # Return specific store

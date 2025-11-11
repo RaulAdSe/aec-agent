@@ -17,7 +17,8 @@ from .document_retrieval_toolkit import (
     search_documents,
     get_store_info,
     delete_document_store,
-    list_available_stores
+    list_available_stores,
+    list_uploaded_documents
 )
 
 from .compliance_search import (
@@ -50,6 +51,7 @@ __all__ = [
     'get_store_info',
     'delete_document_store',
     'list_available_stores',
+    'list_uploaded_documents',
     # Agent-Friendly Compliance Search
     'search_compliance_docs',
     'check_knowledge_base_status',
