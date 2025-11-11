@@ -1,0 +1,353 @@
+#!/usr/bin/env python3
+"""
+Knowledge Base Manager for AEC Compliance Agent
+
+This script automatically manages the document knowledge base:
+- Scans data/doc folder for new documents
+- Checks if documents are already indexed (by filename)  
+- Ingests new documents into Gemini File Search
+- Provides easy query interface for the agent
+
+Usage:
+    python3 manage_knowledge_base.py sync        # Sync new documents
+    python3 manage_knowledge_base.py query "question"  # Query the knowledge base
+    python3 manage_knowledge_base.py status     # Show knowledge base status
+    python3 manage_knowledge_base.py reset      # Clear and rebuild knowledge base
+"""
+
+import os
+import sys
+import argparse
+from pathlib import Path
+from typing import List, Set, Dict, Any
+import json
+
+# Add aec_agent to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from aec_agent.tools.document_retrieval_toolkit import (
+    initialize_gemini_client,
+    create_document_store,
+    upload_documents, 
+    search_documents,
+    get_store_info,
+    delete_document_store
+)
+
+# Configuration (paths relative to project root)
+PROJECT_ROOT = Path(__file__).parent.parent
+DOC_FOLDER = PROJECT_ROOT / "data" / "doc"
+STORE_NAME = "compliance_knowledge_base"
+STORE_DESCRIPTION = "AEC compliance documents knowledge base"
+SUPPORTED_EXTENSIONS = {'.pdf', '.txt', '.docx', '.json', '.md'}
+
+# Local tracking file to remember what's been uploaded
+TRACKING_FILE = PROJECT_ROOT / "data" / ".document_tracking.json"
+
+class KnowledgeBaseManager:
+    def __init__(self):
+        self.doc_folder = Path(DOC_FOLDER)
+        self.tracking_file = Path(TRACKING_FILE)
+        self.tracking_data = self._load_tracking_data()
+        
+    def _load_tracking_data(self) -> Dict:
+        """Load tracking data from local file."""
+        if self.tracking_file.exists():
+            try:
+                with open(self.tracking_file, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Warning: Could not load tracking file: {e}")
+        
+        return {
+            "indexed_files": {},  # filename -> file_info
+            "last_sync": None,
+            "total_documents": 0
+        }
+    
+    def _save_tracking_data(self):
+        """Save tracking data to local file."""
+        try:
+            # Ensure parent directory exists
+            self.tracking_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(self.tracking_file, 'w') as f:
+                json.dump(self.tracking_data, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Could not save tracking file: {e}")
+    
+    def _get_file_info(self, file_path: Path) -> Dict:
+        """Get file metadata for tracking."""
+        stat = file_path.stat()
+        return {
+            "path": str(file_path),
+            "size": stat.st_size,
+            "modified": stat.st_mtime,
+            "name": file_path.name
+        }
+    
+    def scan_documents(self) -> List[Path]:
+        """Scan doc folder for supported documents."""
+        if not self.doc_folder.exists():
+            print(f"📁 Document folder {self.doc_folder} doesn't exist. Creating it...")
+            self.doc_folder.mkdir(parents=True, exist_ok=True)
+            return []
+        
+        documents = []
+        for file_path in self.doc_folder.rglob("*"):
+            if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
+                documents.append(file_path)
+        
+        return sorted(documents)
+    
+    def find_new_documents(self) -> List[Path]:
+        """Find documents that haven't been indexed yet."""
+        all_docs = self.scan_documents()
+        new_docs = []
+        
+        indexed_files = set(self.tracking_data["indexed_files"].keys())
+        
+        for doc_path in all_docs:
+            filename = doc_path.name
+            
+            # Check if file is new or modified
+            if filename not in indexed_files:
+                new_docs.append(doc_path)
+            else:
+                # Check if file was modified since last index
+                current_info = self._get_file_info(doc_path)
+                stored_info = self.tracking_data["indexed_files"][filename]
+                
+                if current_info["modified"] > stored_info["modified"]:
+                    print(f"📝 Document {filename} was modified, will re-index")
+                    new_docs.append(doc_path)
+        
+        return new_docs
+    
+    def initialize_knowledge_base(self) -> bool:
+        """Initialize Gemini client and create document store."""
+        print("🔧 Initializing knowledge base...")
+        
+        # Initialize client
+        result = initialize_gemini_client()
+        if result["status"] != "success":
+            print(f"❌ Failed to initialize Gemini client: {result['logs'][0]}")
+            return False
+        
+        print("✅ Gemini client initialized")
+        
+        # Create or verify document store
+        result = create_document_store(STORE_NAME, STORE_DESCRIPTION)
+        if result["status"] == "success":
+            print(f"✅ Document store '{STORE_NAME}' ready")
+            return True
+        else:
+            print(f"❌ Failed to create document store: {result['logs'][0]}")
+            return False
+    
+    def sync_documents(self) -> bool:
+        """Sync new documents to the knowledge base."""
+        print("🔄 Scanning for new documents...")
+        
+        if not self.initialize_knowledge_base():
+            return False
+        
+        new_docs = self.find_new_documents()
+        
+        if not new_docs:
+            print("✅ Knowledge base is up to date - no new documents found")
+            return True
+        
+        print(f"📚 Found {len(new_docs)} new/modified documents:")
+        for doc in new_docs:
+            print(f"   📄 {doc.name}")
+        
+        # Upload documents in batches
+        batch_size = 10  # Upload 10 files at a time
+        successful_uploads = 0
+        
+        for i in range(0, len(new_docs), batch_size):
+            batch = new_docs[i:i + batch_size]
+            batch_paths = [str(doc) for doc in batch]
+            
+            print(f"\n📤 Uploading batch {i//batch_size + 1}/{(len(new_docs) + batch_size - 1)//batch_size}...")
+            
+            result = upload_documents(STORE_NAME, batch_paths)
+            
+            if result["status"] == "success":
+                batch_successful = result["data"]["successful_uploads"]
+                successful_uploads += batch_successful
+                
+                # Update tracking data for successful uploads
+                for j, doc_path in enumerate(batch):
+                    if j < batch_successful:  # Only count successful uploads
+                        file_info = self._get_file_info(doc_path)
+                        self.tracking_data["indexed_files"][doc_path.name] = file_info
+                        print(f"   ✅ {doc_path.name}")
+                    else:
+                        print(f"   ❌ {doc_path.name}")
+            else:
+                print(f"   ❌ Batch upload failed: {result['logs'][0]}")
+        
+        # Update tracking metadata
+        self.tracking_data["total_documents"] = len(self.tracking_data["indexed_files"])
+        self.tracking_data["last_sync"] = str(Path().resolve())  # Current timestamp indicator
+        self._save_tracking_data()
+        
+        print(f"\n🎉 Sync complete: {successful_uploads}/{len(new_docs)} documents uploaded")
+        print(f"📊 Total documents in knowledge base: {self.tracking_data['total_documents']}")
+        
+        return successful_uploads > 0
+    
+    def query_knowledge_base(self, query: str, max_results: int = 5) -> Dict[str, Any]:
+        """Query the knowledge base."""
+        if not self.initialize_knowledge_base():
+            return {"status": "error", "message": "Failed to initialize knowledge base"}
+        
+        print(f"🔍 Searching knowledge base for: '{query}'")
+        
+        result = search_documents(STORE_NAME, query, max_results)
+        
+        if result["status"] == "success":
+            return {
+                "status": "success",
+                "query": query,
+                "answer": result["data"]["content"],
+                "citations": result["data"].get("citations", []),
+                "documents_searched": result["data"].get("documents_in_store", 0)
+            }
+        else:
+            return {
+                "status": "error", 
+                "message": result["logs"][0] if result["logs"] else "Search failed"
+            }
+    
+    def show_status(self):
+        """Show knowledge base status."""
+        print("📊 Knowledge Base Status")
+        print("=" * 40)
+        
+        # Local tracking info
+        total_files = len(self.tracking_data["indexed_files"])
+        print(f"📄 Tracked documents: {total_files}")
+        
+        if total_files > 0:
+            print("📋 Indexed documents:")
+            for filename, info in sorted(self.tracking_data["indexed_files"].items()):
+                size_kb = info["size"] // 1024
+                print(f"   📄 {filename} ({size_kb} KB)")
+        
+        # Document folder info
+        all_docs = self.scan_documents()
+        new_docs = self.find_new_documents()
+        
+        print(f"\n📁 Documents in {DOC_FOLDER}: {len(all_docs)}")
+        print(f"🆕 New/modified documents: {len(new_docs)}")
+        
+        if new_docs:
+            print("📋 Ready to sync:")
+            for doc in new_docs:
+                print(f"   📄 {doc.name}")
+        
+        # Remote store info (if available)
+        if self.initialize_knowledge_base():
+            result = get_store_info(STORE_NAME)
+            if result["status"] == "success":
+                store_info = result["data"]
+                print(f"\n🏪 Gemini store info:")
+                print(f"   📊 Documents: {store_info.get('document_count', 'unknown')}")
+                print(f"   🏷️  Description: {store_info.get('description', 'N/A')}")
+    
+    def reset_knowledge_base(self):
+        """Reset the entire knowledge base."""
+        print("🔄 Resetting knowledge base...")
+        
+        # Delete remote store
+        if self.initialize_knowledge_base():
+            result = delete_document_store(STORE_NAME)
+            if result["status"] == "success":
+                print("✅ Deleted remote document store")
+            else:
+                print(f"⚠️  Could not delete remote store: {result['logs'][0]}")
+        
+        # Reset local tracking
+        self.tracking_data = {
+            "indexed_files": {},
+            "last_sync": None,
+            "total_documents": 0
+        }
+        self._save_tracking_data()
+        print("✅ Reset local tracking data")
+        
+        # Reinitialize
+        if self.initialize_knowledge_base():
+            print("✅ Knowledge base reset complete")
+        else:
+            print("❌ Failed to reinitialize knowledge base")
+
+def main():
+    parser = argparse.ArgumentParser(description="Manage AEC Compliance Knowledge Base")
+    parser.add_argument("command", choices=["sync", "query", "status", "reset"], 
+                       help="Command to execute")
+    parser.add_argument("query_text", nargs="?", help="Query text (for query command)")
+    parser.add_argument("--max-results", type=int, default=5, 
+                       help="Maximum results for query (default: 5)")
+    
+    args = parser.parse_args()
+    
+    manager = KnowledgeBaseManager()
+    
+    if args.command == "sync":
+        success = manager.sync_documents()
+        sys.exit(0 if success else 1)
+        
+    elif args.command == "query":
+        if not args.query_text:
+            print("❌ Error: Query text required for query command")
+            print("Usage: python3 manage_knowledge_base.py query 'your question here'")
+            sys.exit(1)
+        
+        result = manager.query_knowledge_base(args.query_text, args.max_results)
+        
+        if result["status"] == "success":
+            print(f"\n💡 Answer:")
+            print(result["answer"])
+            
+            # Display citations if available
+            if result.get("citations") and len(result["citations"]) > 0:
+                print(f"\n📚 Sources ({len(result['citations'])} citations found):")
+                for i, citation in enumerate(result["citations"], 1):
+                    source = citation.get("source", "Unknown")
+                    cited_text = citation.get("cited_text", "")
+                    
+                    # Clean up source name for display
+                    if "/" in source:
+                        display_source = source.split("/")[-1]
+                    else:
+                        display_source = source
+                    
+                    print(f"   [{i}] {display_source}")
+                    if cited_text and len(cited_text) > 0:
+                        # Show first 100 chars of cited text
+                        preview = cited_text[:100] + "..." if len(cited_text) > 100 else cited_text
+                        print(f"       \"{preview}\"")
+            else:
+                print(f"\n📚 Sources: No specific citations available")
+                
+            print(f"\n📊 Searched {result['documents_searched']} documents")
+        else:
+            print(f"❌ Query failed: {result['message']}")
+            sys.exit(1)
+    
+    elif args.command == "status":
+        manager.show_status()
+    
+    elif args.command == "reset":
+        confirm = input("⚠️  Are you sure you want to reset the entire knowledge base? (yes/no): ")
+        if confirm.lower() == "yes":
+            manager.reset_knowledge_base()
+        else:
+            print("❌ Reset cancelled")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,25 @@
+#!/bin/bash
+# Knowledge Base Management Convenience Script
+# 
+# This script provides easy access to the knowledge base management functionality
+# from the project root directory.
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KB_SCRIPT="$SCRIPT_DIR/bin/kb-manager"
+
+# Check if the knowledge base script exists
+if [ ! -f "$KB_SCRIPT" ]; then
+    echo "❌ Error: Knowledge base script not found at $KB_SCRIPT"
+    exit 1
+fi
+
+# Check if Python is available
+if ! command -v python3 &> /dev/null; then
+    echo "❌ Error: python3 not found. Please install Python 3."
+    exit 1
+fi
+
+# Execute the knowledge base script
+"$KB_SCRIPT" "$@"
