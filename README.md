@@ -1,87 +1,120 @@
 # AEC Compliance Agent 🏗️
 
-**Building Code Compliance Verification System** with Streamlit deployment and LangSmith integration.
+**Building Code Compliance Verification System** with Document Retrieval and AI-powered Analysis.
 
 ## 🚀 Quick Start
 
 ### 1. Setup Environment
 ```bash
-# Clone and install
+# Install dependencies
 pip install -r requirements.txt
 
-# Configure API keys
-cp .env.example .env
-# Edit .env with your API keys
+# Set your Gemini API key
+export GEMINI_API_KEY="your-gemini-api-key"
 ```
 
-### 2. Run Streamlit App
+### 2. Add Documents & Sync Knowledge Base
 ```bash
-streamlit run streamlit_app.py
+# Add your compliance documents to data/doc/
+cp your-building-codes.pdf data/doc/
+
+# Sync documents to knowledge base
+./kb sync
+# or: python3 scripts/manage_knowledge_base.py sync
 ```
 
-### 3. Use CLI (Optional)
+### 3. Query Compliance Information
 ```bash
-python -m src.main status
-python -m src.main analyze data/sample.json
+# Query from command line
+./kb query "minimum door width for accessibility"
+
+# Check status
+./kb status
+```
+
+### 4. Use in Your Agent
+```python
+from aec_agent.tools import search_compliance_docs
+
+result = search_compliance_docs("fire safety door requirements")
+print(result["answer"])
 ```
 
 ## 🔑 API Keys Required
 
 | Service | Purpose | Required |
 |---------|---------|----------|
-| **OpenAI** | LLM for compliance analysis | ✅ Yes |
-| **LangSmith** | Tracing & monitoring | ✅ Recommended |
+| **Google Gemini** | Document search & AI analysis | ✅ Yes |
+| **OpenAI** | Alternative LLM (optional) | 🔄 Optional |
 
 ## 🎯 Features
 
-### 🌐 Streamlit Deployment
-- **Web Interface**: User-friendly building analysis
-- **File Upload**: JSON building data support
-- **Real-time Analysis**: Instant compliance checking
-- **Results Export**: Download analysis reports
+### 📚 Document Retrieval System
+- **Gemini File Search**: Semantic search across compliance documents
+- **Multi-format Support**: PDF, TXT, DOCX, JSON, MD files
+- **Automatic Indexing**: Smart duplicate detection and incremental updates
+- **Citation Support**: Track sources for compliance answers
 
-### 📊 LangSmith Integration
-- **Tracing**: Track all agent operations
-- **Monitoring**: Performance metrics
-- **Debugging**: Step-by-step analysis
-- **LangChain Studio**: Visual workflow analysis
+### 🤖 AI-Powered Analysis
+- **Building Data Tools**: IFC file processing and element extraction
+- **Compliance Validation**: Rule-based compliance checking
+- **Spatial Analysis**: Geometric calculations and relationships
+- **Natural Language Queries**: Ask questions in plain language
 
 ### 🏗️ Professional Architecture
-- **Modular Design**: Scalable agent system
-- **Clean Separation**: Core/Agents/Tools/Services
-- **Extensible**: Easy to add new compliance checks
+- **Modular Design**: Separate tools for different functions
+- **Comprehensive Testing**: Unit and integration tests
+- **Clean APIs**: Easy integration with agents
+- **Extensible**: Add new compliance domains easily
+
+## 📖 **Complete Documentation**
+
+📚 **[View Full Documentation →](docs/README.md)**
+
+| Guide | Purpose |
+|-------|---------|
+| **[Getting Started](docs/GETTING_STARTED.md)** | Complete setup and tutorial |
+| **[System Overview](docs/SYSTEM_OVERVIEW.md)** | Architecture and components |
+| **[API Reference](docs/API_REFERENCE.md)** | Function documentation |
+| **[Script Reference](docs/SCRIPT_REFERENCE.md)** | All scripts explained |
+| **[Citation Features](docs/CITATION_FEATURES.md)** | Source tracking system |
 
 ## 📁 Architecture
 
 ```
-src/
-├── streamlit_app.py          # 🌐 Streamlit deployment
-├── main.py                   # 🖥️ CLI interface
-├── core/                     # ⚙️ Framework
-│   ├── config.py             # Configuration + LangSmith
-│   ├── logger.py             # Logging system
-│   └── registry.py           # Agent registry
-├── agents/                   # 🤖 Agent implementations
-│   └── compliance_agent/     # AEC compliance agent
-├── memory/                   # 🧠 Memory systems
-├── tools/                    # 🔧 Analysis tools
-├── services/                 # 🌍 External integrations
-└── utils/                    # 🛠️ Utilities
+aec-compliance-agent/
+├── aec_agent/                            # 📦 Main Package
+│   ├── tools/                            # 🔧 Agent tools
+│   │   ├── building_data_toolkit.py     # IFC & building analysis
+│   │   ├── document_retrieval_toolkit.py # Gemini File Search
+│   │   └── compliance_search.py          # Agent-friendly search
+│   ├── agents/                           # 🤖 Agent implementations
+│   ├── core/                             # ⚙️ Framework
+│   └── utils/                            # 🛠️ Utilities
+├── bin/                                  # 🎯 Executable scripts
+│   └── kb-manager                        # Knowledge base management
+├── examples/                             # 📚 Usage examples
+├── tests/                                # 🧪 Test suite
+├── docs/                                 # 📖 Documentation
+├── data/                                 # 📄 Documents & data
+│   ├── doc/                              # Your compliance docs
+│   └── out/                              # Processed outputs
+└── kb                                    # 🎯 Convenience script
 ```
 
 ## 🛠️ Development
 
 ### Add New Tools
 ```python
-# src/tools/compliance_toolkit.py
-def _your_new_tool(self, input_params: str) -> str:
+# aec_agent/tools/your_new_tool.py
+def your_compliance_function(input_params: str) -> str:
     # Your compliance logic here
     return "Analysis result"
 ```
 
 ### Add New Agents
 ```bash
-mkdir src/agents/your_agent
+mkdir aec_agent/agents/your_agent
 # Implement agent.py, config.py, prompts.py
 ```
 

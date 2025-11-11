@@ -1,0 +1,332 @@
+#!/usr/bin/env python3
+"""
+Stateless Knowledge Base Manager for AEC Compliance Agent
+
+This script manages the document knowledge base without local tracking files:
+- Scans data/doc folder for documents
+- Queries Gemini API to check what's already uploaded
+- Only uploads new documents (avoids duplicates)
+- Provides query interface for the agent
+
+Usage:
+    ./kb-manager-stateless sync        # Sync new documents
+    ./kb-manager-stateless query "question"  # Query the knowledge base
+    ./kb-manager-stateless status     # Show knowledge base status
+    ./kb-manager-stateless reset      # Clear and rebuild knowledge base
+"""
+
+import os
+import sys
+import argparse
+from pathlib import Path
+from typing import List, Set, Dict, Any
+
+# Add aec_agent to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from aec_agent.tools.document_retrieval_toolkit import (
+    initialize_gemini_client,
+    create_document_store,
+    upload_documents, 
+    get_store_info,
+    delete_document_store,
+    list_uploaded_documents
+)
+from aec_agent.tools.compliance_search import search_compliance_docs
+
+# Configuration (paths relative to project root)
+PROJECT_ROOT = Path(__file__).parent.parent
+DOC_FOLDER = PROJECT_ROOT / "data" / "doc"
+STORE_NAME = "compliance_knowledge_base"
+STORE_DESCRIPTION = "AEC compliance documents knowledge base"
+SUPPORTED_EXTENSIONS = {'.pdf', '.txt', '.docx', '.json', '.md'}
+
+
+class StatelessKnowledgeBaseManager:
+    """Stateless knowledge base manager that uses Gemini API for duplicate detection."""
+    
+    def __init__(self):
+        self.doc_folder = Path(DOC_FOLDER)
+
+    def _get_local_documents(self) -> List[Path]:
+        """Get all supported documents from the local folder."""
+        if not self.doc_folder.exists():
+            print(f"Document folder does not exist: {self.doc_folder}")
+            return []
+        
+        documents = []
+        for ext in SUPPORTED_EXTENSIONS:
+            documents.extend(self.doc_folder.glob(f"*{ext}"))
+        
+        return sorted(documents)
+
+    def _get_uploaded_documents(self) -> Set[str]:
+        """Get set of already uploaded document names from Gemini API."""
+        result = list_uploaded_documents(STORE_NAME)
+        
+        if result["status"] == "success":
+            uploaded_names = set()
+            for doc in result["data"]["documents"]:
+                # Use display_name for comparison
+                display_name = doc.get("display_name", "")
+                if display_name:
+                    uploaded_names.add(display_name)
+            return uploaded_names
+        elif result["status"] == "error":
+            if "not found" in " ".join(result["logs"]):
+                print("Knowledge base not initialized yet.")
+                return set()
+            else:
+                print(f"Error getting uploaded documents: {result['logs']}")
+                return set()
+        return set()
+
+    def sync_documents(self):
+        """Sync local documents to the knowledge base (stateless approach)."""
+        print("🔄 Starting stateless document sync...")
+        
+        # Initialize client and create store if needed
+        print("🔧 Initializing Gemini client...")
+        init_result = initialize_gemini_client()
+        if init_result["status"] != "success":
+            print(f"❌ Failed to initialize client: {init_result['logs']}")
+            return False
+
+        print(f"🏗️ Creating/checking document store: {STORE_NAME}")
+        store_result = create_document_store(STORE_NAME, STORE_DESCRIPTION)
+        if store_result["status"] != "success":
+            print(f"❌ Failed to create store: {store_result['logs']}")
+            return False
+
+        # Get local documents
+        local_documents = self._get_local_documents()
+        print(f"📁 Found {len(local_documents)} local documents")
+
+        if not local_documents:
+            print("ℹ️ No documents found in data/doc folder")
+            return True
+
+        # Get already uploaded documents from Gemini API
+        print("🔍 Checking what's already uploaded...")
+        uploaded_names = self._get_uploaded_documents()
+        print(f"☁️ Found {len(uploaded_names)} already uploaded documents")
+
+        # Find documents that need uploading
+        documents_to_upload = []
+        for doc_path in local_documents:
+            if doc_path.name not in uploaded_names:
+                documents_to_upload.append(str(doc_path))
+                print(f"📄 Will upload: {doc_path.name}")
+            else:
+                print(f"⏭️ Skipping (already uploaded): {doc_path.name}")
+
+        if not documents_to_upload:
+            print("✅ All documents are already uploaded")
+            return True
+
+        # Upload new documents
+        print(f"⬆️ Uploading {len(documents_to_upload)} new documents...")
+        print("📋 Upload progress:")
+        
+        # Upload documents one by one to show progress
+        all_upload_results = []
+        successful_count = 0
+        
+        for i, doc_path in enumerate(documents_to_upload, 1):
+            file_name = Path(doc_path).name
+            file_size = Path(doc_path).stat().st_size / (1024*1024)  # Size in MB
+            
+            print(f"  [{i}/{len(documents_to_upload)}] 📄 {file_name} ({file_size:.1f} MB) - Starting...")
+            
+            # Upload single document
+            single_result = upload_documents(STORE_NAME, [doc_path])
+            all_upload_results.append(single_result)
+            
+            if single_result["status"] == "success":
+                print(f"  [{i}/{len(documents_to_upload)}] ✅ {file_name} - Uploaded successfully!")
+                successful_count += 1
+            else:
+                print(f"  [{i}/{len(documents_to_upload)}] ❌ {file_name} - Failed: {single_result.get('logs', ['Unknown error'])[0]}")
+        
+        # Create consolidated result
+        upload_result = {
+            "status": "success" if successful_count > 0 else "error",
+            "data": {
+                "successful_uploads": successful_count,
+                "upload_results": []
+            },
+            "logs": [f"Batch upload: {successful_count}/{len(documents_to_upload)} successful"]
+        }
+        
+        # Aggregate all individual results
+        for result in all_upload_results:
+            if result.get("data", {}).get("upload_results"):
+                upload_result["data"]["upload_results"].extend(result["data"]["upload_results"])
+        
+        if upload_result["status"] == "success":
+            print(f"✅ Successfully uploaded {upload_result['data']['successful_uploads']} documents")
+            
+            # Show any errors
+            upload_results = upload_result["data"].get("upload_results", [])
+            failed_uploads = sum(1 for r in upload_results if r.get("status") == "error")
+            if failed_uploads > 0:
+                print(f"⚠️ {failed_uploads} uploads failed")
+                for r in upload_results:
+                    if r.get("status") == "error":
+                        print(f"  • {Path(r.get('file_path', '')).name}: {r.get('message', 'Unknown error')}")
+        else:
+            print(f"❌ Upload failed: {upload_result['logs']}")
+            return False
+
+        print("🎉 Sync completed!")
+        return True
+
+    def query_documents(self, query: str, max_results: int = 5):
+        """Query the knowledge base."""
+        print(f"🔍 Querying: '{query}'")
+        
+        # Initialize client
+        init_result = initialize_gemini_client()
+        if init_result["status"] != "success":
+            print(f"❌ Failed to initialize client: {init_result['logs']}")
+            return
+
+        # Ensure the document store exists in the current process context
+        store_result = create_document_store(STORE_NAME, STORE_DESCRIPTION)
+        if store_result["status"] != "success":
+            print(f"❌ Failed to create or load store: {store_result['logs']}")
+            return
+
+        # Search documents using compliance_search for proper formatting
+        search_result = search_compliance_docs(query, max_results)
+        
+        if search_result["status"] == "success":
+            print(f"\n📋 Answer:\n{search_result['answer']}\n")
+            
+            # Show citations
+            if search_result.get("formatted_citations"):
+                print("📚 Sources:")
+                for citation in search_result["formatted_citations"]:
+                    display_name = citation.get('display_name', 'Unknown')
+                    cited_text = citation.get('cited_text', '')
+                    print(f"• {display_name}")
+                    if cited_text:
+                        preview = cited_text[:100] + "..." if len(cited_text) > 100 else cited_text
+                        print(f"  \"{preview}\"")
+                    print()
+            elif search_result.get("citations"):
+                print("📚 Sources:")
+                for i, citation in enumerate(search_result["citations"], 1):
+                    source = citation.get('source', 'Unknown')
+                    print(f"  [{i}] {source}")
+            else:
+                print("ℹ️ No citations available")
+                
+            print(f"\n📊 Searched {search_result.get('documents_searched', 0)} documents")
+                
+        elif search_result["status"] == "no_documents":
+            print(f"⚠️ {search_result.get('answer', 'No documents available')}")
+        else:
+            error_msg = search_result.get('logs', ['Search failed'])
+            print(f"❌ Search failed: {error_msg[0] if error_msg else 'Unknown error'}")
+
+    def get_status(self):
+        """Get current knowledge base status."""
+        print("📊 Knowledge Base Status")
+        print("=" * 40)
+        
+        # Initialize client
+        init_result = initialize_gemini_client()
+        if init_result["status"] != "success":
+            print(f"❌ Gemini client not initialized: {init_result['logs']}")
+            return
+
+        # Get store info using the stateless approach
+        uploaded_docs = self._get_uploaded_documents()
+        local_docs = self._get_local_documents()
+        
+        print(f"📁 Local documents: {len(local_docs)}")
+        print(f"☁️ Uploaded documents: {len(uploaded_docs)}")
+        
+        if local_docs:
+            print("\n📋 Local files:")
+            for doc in local_docs[:10]:  # Show first 10
+                status = "✅ Uploaded" if doc.name in uploaded_docs else "⏳ Pending"
+                print(f"  • {doc.name} - {status}")
+            
+            if len(local_docs) > 10:
+                print(f"  ... and {len(local_docs) - 10} more")
+
+        print(f"\n🎯 Ready for queries: {'✅ Yes' if uploaded_docs else '❌ No documents uploaded'}")
+
+    def reset_knowledge_base(self):
+        """Reset the knowledge base by deleting and recreating it."""
+        print("🗑️ Resetting knowledge base...")
+        
+        # Initialize client
+        init_result = initialize_gemini_client()
+        if init_result["status"] != "success":
+            print(f"❌ Failed to initialize client: {init_result['logs']}")
+            return
+
+        # Delete existing store
+        delete_result = delete_document_store(STORE_NAME)
+        if delete_result["status"] == "success":
+            print(f"✅ Deleted existing store")
+        else:
+            print(f"⚠️ Could not delete store (may not exist): {delete_result['logs']}")
+
+        # Create new store
+        store_result = create_document_store(STORE_NAME, STORE_DESCRIPTION)
+        if store_result["status"] == "success":
+            print(f"✅ Created new store: {STORE_NAME}")
+        else:
+            print(f"❌ Failed to create store: {store_result['logs']}")
+            return
+
+        print("🎉 Knowledge base reset complete!")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Stateless Knowledge Base Manager")
+    parser.add_argument(
+        "action",
+        choices=["sync", "query", "status", "reset"],
+        help="Action to perform"
+    )
+    parser.add_argument(
+        "query_text",
+        nargs="?",
+        help="Query text (required for 'query' action)"
+    )
+    parser.add_argument(
+        "--max-results",
+        type=int,
+        default=5,
+        help="Maximum number of search results"
+    )
+
+    args = parser.parse_args()
+
+    manager = StatelessKnowledgeBaseManager()
+
+    if args.action == "sync":
+        manager.sync_documents()
+    elif args.action == "query":
+        if not args.query_text:
+            print("❌ Query text required for 'query' action")
+            parser.print_help()
+            sys.exit(1)
+        manager.query_documents(args.query_text, args.max_results)
+    elif args.action == "status":
+        manager.get_status()
+    elif args.action == "reset":
+        confirm = input("⚠️ This will delete all uploaded documents. Continue? (y/N): ")
+        if confirm.lower() == 'y':
+            manager.reset_knowledge_base()
+        else:
+            print("Reset cancelled")
+
+
+if __name__ == "__main__":
+    main()
