@@ -7,6 +7,16 @@ The design philosophy is: "5 generic functions instead of 50 specific ones"
 Each function is designed to be reusable across multiple compliance scenarios.
 
 These functions are designed to be called directly by AI agents.
+
+AGENT USAGE FLOW:
+1. load_building_data() - Load IFC data first
+2. get_all_elements() - Get element IDs by type  
+3. get_all_properties() - Discover available property names
+4. Use advanced tools with discovered IDs/properties:
+   - query_elements() - Advanced filtering
+   - calculate() - Mathematical operations  
+   - find_related() - Spatial relationships
+   - validate_rule() - Compliance checking
 """
 
 import logging
@@ -19,23 +29,62 @@ _building_data: Optional[Dict] = None
 _logger = logging.getLogger(__name__)
 
 
-def load_building_data(data_path: str) -> None:
-    """Load building data from JSON file into global variable."""
+def load_building_data(data_path: str) -> Dict:
+    """
+    Load building data from JSON file into global variable.
+    
+    Args:
+        data_path: Path to the building data JSON file
+        
+    Returns:
+        Dict with status, data (loaded building data), and logs
+        
+    Examples:
+        result = load_building_data("building.json")
+        if result["status"] == "success":
+            print("Data loaded with", result["data"]["file_info"]["total_elements"], "elements")
+    """
     global _building_data
+    logs = []
+    
     try:
         with open(data_path, 'r', encoding='utf-8') as f:
             _building_data = json.load(f)
-        _logger.info(f"Loaded building data from {data_path}")
-        _logger.info(f"Total elements: {_building_data.get('file_info', {}).get('total_elements', 'unknown')}")
+        
+        total_elements = _building_data.get('file_info', {}).get('total_elements', 'unknown')
+        logs.append(f"Loaded building data from {data_path}")
+        logs.append(f"Total elements: {total_elements}")
+        
+        return {
+            "status": "success",
+            "data": _building_data,
+            "logs": logs
+        }
+        
     except FileNotFoundError:
-        _logger.error(f"Building data file not found: {data_path}")
-        raise
+        error_msg = f"Building data file not found: {data_path}"
+        logs.append(error_msg)
+        return {
+            "status": "error",
+            "data": None,
+            "logs": logs
+        }
     except json.JSONDecodeError as e:
-        _logger.error(f"Invalid JSON in building data file: {e}")
-        raise
+        error_msg = f"Invalid JSON in building data file: {e}"
+        logs.append(error_msg)
+        return {
+            "status": "error",
+            "data": None,
+            "logs": logs
+        }
     except Exception as e:
-        _logger.error(f"Error loading building data: {e}")
-        raise
+        error_msg = f"Error loading building data: {e}"
+        logs.append(error_msg)
+        return {
+            "status": "error",
+            "data": None,
+            "logs": logs
+        }
 
 
 # ===== CONVENIENCE TOOL: GET ALL PROPERTIES =====
@@ -43,23 +92,29 @@ def get_all_properties(element_id: str) -> Dict:
     """
     Get all properties and quantities for an element.
     
+    PRE-CONDITION: Use get_all_elements() or query_elements() first to obtain element_id
+    
     Returns the complete property structure so agents can see
     all available data and choose appropriate properties based
     on their language knowledge.
     
     Args:
-        element_id: Unique identifier of the element
+        element_id: Unique identifier of the element (obtained from get_all_elements/query_elements)
         
     Returns:
         Dict with status, data (all element properties), and logs
         
     Examples:
-        # Get all properties for analysis
-        result = get_all_properties("door_123")
+        # Step 1: Get element IDs first
+        doors = get_all_elements("doors")
+        door_id = doors["data"][0]["id"]
+        
+        # Step 2: Get all properties for analysis
+        result = get_all_properties(door_id)
         if result["status"] == "success":
             properties = result["data"]["properties"]  
             quantities = result["data"]["quantities"]
-            # Agent can now see all available fields
+            # Agent can now see all available fields and choose appropriate property paths
     """
     logs = []
     
@@ -164,10 +219,12 @@ def get_all_elements(element_type: str) -> Dict:
     }
 
 
-# ===== TOOL 1: GENERIC QUERY =====
+# ===== TOOL 2: GENERIC QUERY =====
 def query_elements(element_type: str, filters: Optional[Dict] = None) -> Dict:
     """
     Query and filter building elements of any type.
+    
+    PRE-CONDITION: Use get_all_properties() on a sample element first to discover available property names
     
     This is the primary data access tool. It can find any elements
     with any combination of filters.
@@ -190,22 +247,17 @@ def query_elements(element_type: str, filters: Optional[Dict] = None) -> Dict:
         List of matching elements with full data
         
     Examples:
-        # Get all spaces
-        query_elements("spaces")
+        # Step 1: Discover available properties first
+        sample_elements = get_all_elements("doors")  
+        sample_id = sample_elements["data"][0]["id"]
+        properties_info = get_all_properties(sample_id)
+        # Now you know available property names
         
-        # Get spaces on level 1
+        # Step 2: Use discovered property names in filters
         query_elements("spaces", {"properties.Ebene": "E01_OKRD"})
-        
-        # Get fire-rated doors
-        query_elements("doors", {"properties.fire_rated": True})
-        
-        # Get large rooms (area > 50 sqm)
+        query_elements("doors", {"quantities.Width__gt": 1.0})
         query_elements("spaces", {"quantities.NetFloorArea__gt": 50})
-        
-        # Get external doors
         query_elements("doors", {"properties.IsExternal": True})
-        
-        # Get specific elements by ID list
         query_elements("spaces", {"id__in": ["room1", "room2"]})
     """
     logs = []
@@ -283,43 +335,16 @@ def query_elements(element_type: str, filters: Optional[Dict] = None) -> Dict:
     }
 
 
-# ===== TOOL 2: GENERIC PROPERTY GETTER =====
+# ===== INTERNAL HELPER: PROPERTY GETTER =====
 def get_property(element_id: str, property_path: str) -> Dict:
     """
-    Extract any property from any building element.
+    INTERNAL HELPER: Extract any property from any building element.
+    
+    NOTE FOR AGENTS: Use get_all_properties() instead for agent workflows.
+    This function is used internally by other toolkit functions.
     
     Uses dot notation to access nested properties safely.
     Handles missing properties gracefully.
-    
-    Args:
-        element_id: Unique identifier of the element
-        property_path: Dot-separated path to the property
-            - "name" - Direct property
-            - "properties.Fläche" - Nested in properties
-            - "quantities.NetFloorArea" - Nested in quantities  
-            - "geometry.bbox.min.0" - Deep nested with array index
-            
-    Returns:
-        Property value, or None if not found
-        
-    Examples:
-        # Get room name
-        get_property("space_123", "name")
-        
-        # Get door width
-        get_property("door_456", "quantities.Width")
-        
-        # Get room area
-        get_property("space_123", "quantities.NetFloorArea")
-        
-        # Get geometry bounding box
-        get_property("wall_789", "geometry.bbox.min")
-        
-        # Get custom property
-        get_property("door_456", "properties.IsExternal")
-        
-        # Get specific coordinate
-        get_property("space_123", "geometry.bbox.min.0")
     """
     logs = []
     
@@ -364,13 +389,23 @@ def get_property(element_id: str, property_path: str) -> Dict:
                 if isinstance(current, list) and 0 <= idx < len(current):
                     current = current[idx]
                 else:
-                    return None
+                    error_msg = f"Array index '{idx}' out of range for property path '{property_path}' in element '{element_id}'"
+                    return {
+                        "status": "not_found",
+                        "data": None,
+                        "logs": [error_msg]
+                    }
             else:
                 # Handle dictionary keys
                 if isinstance(current, dict) and part in current:
                     current = current[part]
                 else:
-                    return None
+                    error_msg = f"Property '{part}' not found in path '{property_path}' for element '{element_id}'"
+                    return {
+                        "status": "not_found",
+                        "data": None,
+                        "logs": [error_msg]
+                    }
         
         success_msg = f"Retrieved property '{property_path}' for element '{element_id}'"
         _logger.debug(success_msg)
@@ -396,6 +431,8 @@ def get_property(element_id: str, property_path: str) -> Dict:
 def calculate(operation: str, **kwargs) -> Dict:
     """
     Perform any calculation operation on building data.
+    
+    PRE-CONDITION: Use get_all_elements() to obtain element_ids, get_all_properties() to discover property paths
     
     Single calculation tool that handles all mathematical operations
     through operation type and flexible parameters.
@@ -486,6 +523,149 @@ def calculate(operation: str, **kwargs) -> Dict:
             result = math.sqrt((point2[0] - point1[0])**2 + (point2[1] - point1[1])**2)
             return {"status": "success", "data": result, "logs": [f"Calculated 2D distance: {result}"]}
         
+        elif operation == "distance_3d":
+            point1 = kwargs.get("point1")
+            point2 = kwargs.get("point2")
+            if not point1 or not point2:
+                return {"status": "error", "data": None, "logs": ["distance_3d requires point1 and point2"]}
+            result = math.sqrt((point2[0] - point1[0])**2 + (point2[1] - point1[1])**2 + (point2[2] - point1[2])**2)
+            return {"status": "success", "data": result, "logs": [f"Calculated 3D distance: {result}"]}
+        
+        elif operation == "distance_between_elements":
+            element1_id = kwargs.get("element1_id")
+            element2_id = kwargs.get("element2_id")
+            if not element1_id or not element2_id:
+                return {"status": "error", "data": None, "logs": ["distance_between_elements requires element1_id and element2_id"]}
+            
+            # Get center points from bounding boxes
+            bbox1_result = get_property(element1_id, "geometry.bbox")
+            bbox2_result = get_property(element2_id, "geometry.bbox")
+            
+            if bbox1_result["status"] != "success" or bbox2_result["status"] != "success":
+                return {"status": "error", "data": None, "logs": ["Elements must have geometry.bbox data"]}
+            
+            bbox1, bbox2 = bbox1_result["data"], bbox2_result["data"]
+            
+            # Calculate center points
+            center1 = [
+                (bbox1["min"][0] + bbox1["max"][0]) / 2,
+                (bbox1["min"][1] + bbox1["max"][1]) / 2,
+                (bbox1["min"][2] + bbox1["max"][2]) / 2
+            ]
+            center2 = [
+                (bbox2["min"][0] + bbox2["max"][0]) / 2,
+                (bbox2["min"][1] + bbox2["max"][1]) / 2,
+                (bbox2["min"][2] + bbox2["max"][2]) / 2
+            ]
+            
+            distance_result = calculate("distance_3d", point1=center1, point2=center2)
+            if distance_result["status"] == "success":
+                logs.extend(distance_result["logs"])
+                logs.append(f"Distance between elements {element1_id} and {element2_id}: {distance_result['data']}")
+                return {"status": "success", "data": distance_result["data"], "logs": logs}
+            else:
+                return distance_result
+        
+        elif operation == "area_sum":
+            element_ids = kwargs.get("element_ids", [])
+            area_property = kwargs.get("area_property", "quantities.NetFloorArea")
+            total_area = 0.0
+            processed_count = 0
+            
+            for element_id in element_ids:
+                area_result = get_property(element_id, area_property)
+                if area_result["status"] == "success" and area_result["data"]:
+                    total_area += float(area_result["data"])
+                    processed_count += 1
+            
+            logs.append(f"Summed areas from {processed_count}/{len(element_ids)} elements")
+            return {"status": "success", "data": total_area, "logs": logs}
+        
+        elif operation == "volume_sum":
+            element_ids = kwargs.get("element_ids", [])
+            volume_property = kwargs.get("volume_property", "quantities.GrossVolume")
+            total_volume = 0.0
+            processed_count = 0
+            
+            for element_id in element_ids:
+                volume_result = get_property(element_id, volume_property)
+                if volume_result["status"] == "success" and volume_result["data"]:
+                    total_volume += float(volume_result["data"])
+                    processed_count += 1
+            
+            logs.append(f"Summed volumes from {processed_count}/{len(element_ids)} elements")
+            return {"status": "success", "data": total_volume, "logs": logs}
+        
+        elif operation == "total_floor_area":
+            level = kwargs.get("level")
+            area_property = kwargs.get("area_property", "quantities.NetFloorArea")
+            if not level:
+                return {"status": "error", "data": None, "logs": ["total_floor_area requires level"]}
+            
+            spaces_result = query_elements("spaces", {"properties.Ebene": level})
+            if spaces_result["status"] != "success":
+                return spaces_result
+            
+            space_ids = [s["id"] for s in spaces_result["data"]]
+            return calculate("area_sum", element_ids=space_ids, area_property=area_property)
+        
+        elif operation == "total_occupancy":
+            element_ids = kwargs.get("element_ids", [])
+            occupancy_property = kwargs.get("occupancy_property", "properties.Personenzahl")
+            total_occupancy = 0.0
+            processed_count = 0
+            
+            for element_id in element_ids:
+                occupancy_result = get_property(element_id, occupancy_property)
+                if occupancy_result["status"] == "success" and occupancy_result["data"]:
+                    total_occupancy += float(occupancy_result["data"])
+                    processed_count += 1
+            
+            logs.append(f"Summed occupancy from {processed_count}/{len(element_ids)} elements")
+            return {"status": "success", "data": total_occupancy, "logs": logs}
+        
+        elif operation == "occupancy_density":
+            space_id = kwargs.get("space_id")
+            occupancy_property = kwargs.get("occupancy_property", "properties.Personenzahl")
+            area_property = kwargs.get("area_property", "quantities.NetFloorArea")
+            
+            if not space_id:
+                return {"status": "error", "data": None, "logs": ["occupancy_density requires space_id"]}
+            
+            occupancy_result = get_property(space_id, occupancy_property)
+            area_result = get_property(space_id, area_property)
+            
+            if occupancy_result["status"] != "success" or area_result["status"] != "success":
+                return {"status": "error", "data": None, "logs": ["Could not get occupancy or area data"]}
+            
+            occupancy = float(occupancy_result["data"]) if occupancy_result["data"] else 0.0
+            area = float(area_result["data"]) if area_result["data"] else 0.0
+            
+            if area == 0:
+                return {"status": "error", "data": None, "logs": ["Cannot calculate density with zero area"]}
+            
+            density = occupancy / area
+            logs.append(f"Calculated occupancy density: {density} persons/m²")
+            return {"status": "success", "data": density, "logs": logs}
+        
+        elif operation == "path_length":
+            waypoints = kwargs.get("waypoints", [])
+            if len(waypoints) < 2:
+                return {"status": "success", "data": 0.0, "logs": ["Path needs at least 2 waypoints"]}
+            
+            total_length = 0.0
+            for i in range(1, len(waypoints)):
+                if len(waypoints[i]) == 2 and len(waypoints[i-1]) == 2:
+                    distance_result = calculate("distance_2d", point1=waypoints[i-1], point2=waypoints[i])
+                else:
+                    distance_result = calculate("distance_3d", point1=waypoints[i-1], point2=waypoints[i])
+                
+                if distance_result["status"] == "success":
+                    total_length += distance_result["data"]
+            
+            logs.append(f"Calculated path length: {total_length}m for {len(waypoints)} waypoints")
+            return {"status": "success", "data": total_length, "logs": logs}
+        
         elif operation == "statistics":
             values = kwargs.get("values", [])
             if not values:
@@ -524,6 +704,8 @@ def calculate(operation: str, **kwargs) -> Dict:
 def find_related(element_id: str, relationship_type: str, **kwargs) -> Dict:
     """
     Find elements related to a given element through spatial or logical relationships.
+    
+    PRE-CONDITION: Use get_all_elements() to obtain element_id
     
     Discovers connections and relationships between building elements
     using geometric analysis and property relationships.
@@ -692,6 +874,130 @@ def find_related(element_id: str, relationship_type: str, **kwargs) -> Dict:
                 "logs": logs
             }
         
+        elif relationship_type == "within_distance":
+            max_distance = kwargs.get("max_distance")
+            element_types = kwargs.get("element_types", ["spaces", "doors", "walls", "slabs", "stairs"])
+            
+            if max_distance is None:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": ["within_distance requires max_distance parameter"]
+                }
+            
+            related_elements = []
+            
+            for element_type in element_types:
+                elements_result = get_all_elements(element_type)
+                if elements_result["status"] == "success":
+                    for elem in elements_result["data"]:
+                        if elem.get("id") != element_id:
+                            # Calculate distance between elements
+                            distance_result = calculate("distance_between_elements", 
+                                                      element1_id=element_id, 
+                                                      element2_id=elem["id"])
+                            if distance_result["status"] == "success":
+                                if distance_result["data"] <= max_distance:
+                                    related_elements.append(elem)
+            
+            logs.append(f"Found {len(related_elements)} elements within {max_distance}m")
+            return {
+                "status": "success",
+                "data": related_elements,
+                "logs": logs
+            }
+        
+        elif relationship_type == "connected_doors":
+            # Find doors that connect to a given space
+            space_result = get_property(element_id, "id")
+            if space_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Space {element_id} not found"]
+                }
+            
+            doors_result = get_all_elements("doors")
+            if doors_result["status"] != "success":
+                return doors_result
+            
+            connected_doors = []
+            for door in doors_result["data"]:
+                connected_spaces = door.get("connected_spaces", [])
+                # Check if this space is in the door's connected_spaces
+                for connected_space in connected_spaces:
+                    if connected_space.get("id") == element_id:
+                        connected_doors.append(door)
+                        break
+            
+            logs.append(f"Found {len(connected_doors)} doors connected to space {element_id}")
+            return {
+                "status": "success",
+                "data": connected_doors,
+                "logs": logs
+            }
+        
+        elif relationship_type == "adjacent_spaces":
+            tolerance = kwargs.get("tolerance", 0.1)  # Default 10cm tolerance
+            
+            # Get the source space's bounding box
+            source_bbox_result = get_property(element_id, "geometry.bbox")
+            if source_bbox_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Could not get geometry for element {element_id}"]
+                }
+            
+            source_bbox = source_bbox_result["data"]
+            
+            # Get all other spaces
+            spaces_result = get_all_elements("spaces")
+            if spaces_result["status"] != "success":
+                return spaces_result
+            
+            adjacent_spaces = []
+            for space in spaces_result["data"]:
+                if space.get("id") != element_id:
+                    space_bbox_result = get_property(space["id"], "geometry.bbox")
+                    if space_bbox_result["status"] == "success":
+                        space_bbox = space_bbox_result["data"]
+                        
+                        # Check if bounding boxes are adjacent (within tolerance)
+                        # Simplified adjacency check - spaces are adjacent if their bounding boxes are very close
+                        min_distance = float('inf')
+                        
+                        # Check distance between all corners of the bounding boxes
+                        for i in range(2):  # min/max
+                            for j in range(2):  # min/max
+                                for k in range(2):  # min/max
+                                    corner1 = [
+                                        source_bbox["min"][0] if i == 0 else source_bbox["max"][0],
+                                        source_bbox["min"][1] if j == 0 else source_bbox["max"][1],
+                                        source_bbox["min"][2] if k == 0 else source_bbox["max"][2]
+                                    ]
+                                    for ii in range(2):
+                                        for jj in range(2):
+                                            for kk in range(2):
+                                                corner2 = [
+                                                    space_bbox["min"][0] if ii == 0 else space_bbox["max"][0],
+                                                    space_bbox["min"][1] if jj == 0 else space_bbox["max"][1],
+                                                    space_bbox["min"][2] if kk == 0 else space_bbox["max"][2]
+                                                ]
+                                                distance_result = calculate("distance_3d", point1=corner1, point2=corner2)
+                                                if distance_result["status"] == "success":
+                                                    min_distance = min(min_distance, distance_result["data"])
+                        
+                        if min_distance <= tolerance:
+                            adjacent_spaces.append(space)
+            
+            logs.append(f"Found {len(adjacent_spaces)} spaces adjacent to {element_id} (tolerance: {tolerance}m)")
+            return {
+                "status": "success",
+                "data": adjacent_spaces,
+                "logs": logs
+            }
+        
         else:
             return {
                 "status": "error",
@@ -711,6 +1017,8 @@ def find_related(element_id: str, relationship_type: str, **kwargs) -> Dict:
 def validate_rule(rule_type: str, element_id: str, criteria: Dict) -> Dict:
     """
     Validate compliance rules against building elements.
+    
+    PRE-CONDITION: Use get_all_elements() to obtain element_id, get_all_properties() to discover property paths for criteria
     
     Generic validation tool that can check any compliance requirement
     against any element type through configurable rule types.
@@ -949,6 +1257,413 @@ def validate_rule(rule_type: str, element_id: str, criteria: Dict) -> Dict:
                     "actual_value": actual_value,
                     "message": message,
                     "details": {}
+                },
+                "logs": logs
+            }
+        
+        elif rule_type == "max_width":
+            max_value = criteria.get("max_value")
+            if max_value is None:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": ["max_width rule requires max_value in criteria"]
+                }
+            
+            # Get width from criteria (agent should specify the exact property path)
+            width_property = criteria.get("width_property", "quantities.Width")
+            width_result = get_property(element_id, width_property)
+            
+            if width_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Width property '{width_property}' not found for element {element_id}. Use get_all_properties() to see available properties."]
+                }
+            
+            actual_width = float(width_result["data"])
+            is_valid = actual_width <= max_value
+            
+            message = f"Width {actual_width}m {'meets' if is_valid else 'exceeds'} maximum requirement of {max_value}m"
+            logs.append(message)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_valid": is_valid,
+                    "rule_type": rule_type,
+                    "element_id": element_id,
+                    "criteria": criteria,
+                    "actual_value": actual_width,
+                    "message": message,
+                    "details": {"width_property_used": width_property}
+                },
+                "logs": logs
+            }
+        
+        elif rule_type == "min_height":
+            min_value = criteria.get("min_value")
+            if min_value is None:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": ["min_height rule requires min_value in criteria"]
+                }
+            
+            # Get height from criteria (agent should specify the exact property path)
+            height_property = criteria.get("height_property", "quantities.Height")
+            height_result = get_property(element_id, height_property)
+            
+            if height_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Height property '{height_property}' not found for element {element_id}. Use get_all_properties() to see available properties."]
+                }
+            
+            actual_height = float(height_result["data"])
+            is_valid = actual_height >= min_value
+            
+            message = f"Height {actual_height}m {'meets' if is_valid else 'fails'} minimum requirement of {min_value}m"
+            logs.append(message)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_valid": is_valid,
+                    "rule_type": rule_type,
+                    "element_id": element_id,
+                    "criteria": criteria,
+                    "actual_value": actual_height,
+                    "message": message,
+                    "details": {"height_property_used": height_property}
+                },
+                "logs": logs
+            }
+        
+        elif rule_type == "accessibility_width":
+            min_width = criteria.get("min_width")
+            door_type = criteria.get("door_type", "general")
+            
+            if min_width is None:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": ["accessibility_width rule requires min_width in criteria"]
+                }
+            
+            # Get width from criteria (agent should specify the exact property path)
+            width_property = criteria.get("width_property", "quantities.Width")
+            width_result = get_property(element_id, width_property)
+            
+            if width_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Width property '{width_property}' not found for element {element_id}. Use get_all_properties() to see available properties."]
+                }
+            
+            actual_width = float(width_result["data"])
+            is_valid = actual_width >= min_width
+            
+            message = f"Width {actual_width}m {'meets' if is_valid else 'fails'} accessibility requirement of {min_width}m for {door_type} door"
+            logs.append(message)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_valid": is_valid,
+                    "rule_type": rule_type,
+                    "element_id": element_id,
+                    "criteria": criteria,
+                    "actual_value": actual_width,
+                    "message": message,
+                    "details": {"door_type": door_type, "width_property_used": width_property}
+                },
+                "logs": logs
+            }
+        
+        elif rule_type == "fire_rating":
+            required_rating = criteria.get("required_rating")
+            if not required_rating:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": ["fire_rating rule requires required_rating in criteria"]
+                }
+            
+            # Get fire rating from criteria (agent should specify the exact property path)
+            rating_property = criteria.get("rating_property", "properties.FireRating")
+            rating_result = get_property(element_id, rating_property)
+            
+            if rating_result["status"] != "success":
+                # Check alternative fire rating properties
+                alternative_properties = ["properties.fire_rating", "properties.FireResistance", "properties.IsFireRated"]
+                actual_rating = None
+                
+                for prop in alternative_properties:
+                    alt_result = get_property(element_id, prop)
+                    if alt_result["status"] == "success":
+                        actual_rating = alt_result["data"]
+                        rating_property = prop
+                        break
+                
+                if actual_rating is None:
+                    return {
+                        "status": "error",
+                        "data": None,
+                        "logs": [f"Fire rating property '{rating_property}' not found for element {element_id}. Use get_all_properties() to see available properties."]
+                    }
+            else:
+                actual_rating = rating_result["data"]
+            
+            # Handle boolean fire rating properties
+            if isinstance(actual_rating, bool):
+                if actual_rating:
+                    # If it's just a boolean True, we assume it has some fire rating
+                    is_valid = required_rating.lower() in ["true", "any", "yes"]
+                    message = f"Element has fire rating: {actual_rating}, required: {required_rating}"
+                else:
+                    is_valid = required_rating.lower() in ["false", "none", "no"]
+                    message = f"Element has no fire rating, required: {required_rating}"
+            else:
+                # String comparison for specific ratings like "EI30", "EI60", etc.
+                is_valid = str(actual_rating).strip().upper() == str(required_rating).strip().upper()
+                message = f"Fire rating '{actual_rating}' {'matches' if is_valid else 'does not match'} required rating '{required_rating}'"
+            
+            logs.append(message)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_valid": is_valid,
+                    "rule_type": rule_type,
+                    "element_id": element_id,
+                    "criteria": criteria,
+                    "actual_value": actual_rating,
+                    "message": message,
+                    "details": {"rating_property_used": rating_property}
+                },
+                "logs": logs
+            }
+        
+        elif rule_type == "exit_capacity":
+            max_occupancy = criteria.get("max_occupancy")
+            min_exit_width = criteria.get("min_exit_width")
+            
+            if max_occupancy is None or min_exit_width is None:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": ["exit_capacity rule requires max_occupancy and min_exit_width in criteria"]
+                }
+            
+            # Get current occupancy
+            occupancy_property = criteria.get("occupancy_property", "properties.OccupancyLoad")
+            occupancy_result = get_property(element_id, occupancy_property)
+            
+            if occupancy_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Occupancy property '{occupancy_property}' not found for element {element_id}. Use get_all_properties() to see available properties."]
+                }
+            
+            actual_occupancy = float(occupancy_result["data"])
+            
+            # Find connected doors to calculate total exit width
+            doors_result = find_related(element_id, "connected_doors")
+            if doors_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Could not find connected doors for element {element_id}"]
+                }
+            
+            total_exit_width = 0.0
+            for door in doors_result["data"]:
+                door_width_result = get_property(door["id"], "quantities.Width")
+                if door_width_result["status"] == "success":
+                    total_exit_width += float(door_width_result["data"])
+            
+            occupancy_valid = actual_occupancy <= max_occupancy
+            exit_width_valid = total_exit_width >= min_exit_width
+            is_valid = occupancy_valid and exit_width_valid
+            
+            message = f"Occupancy {actual_occupancy} ({'OK' if occupancy_valid else 'EXCEEDS'} max {max_occupancy}), Exit width {total_exit_width}m ({'OK' if exit_width_valid else 'INSUFFICIENT'}, min {min_exit_width}m)"
+            logs.append(message)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_valid": is_valid,
+                    "rule_type": rule_type,
+                    "element_id": element_id,
+                    "criteria": criteria,
+                    "actual_value": {"occupancy": actual_occupancy, "exit_width": total_exit_width},
+                    "message": message,
+                    "details": {"connected_doors": len(doors_result["data"])}
+                },
+                "logs": logs
+            }
+        
+        elif rule_type == "max_occupancy":
+            max_persons = criteria.get("max_persons")
+            if max_persons is None:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": ["max_occupancy rule requires max_persons in criteria"]
+                }
+            
+            # Get current occupancy
+            occupancy_property = criteria.get("occupancy_property", "properties.OccupancyLoad")
+            occupancy_result = get_property(element_id, occupancy_property)
+            
+            if occupancy_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Occupancy property '{occupancy_property}' not found for element {element_id}. Use get_all_properties() to see available properties."]
+                }
+            
+            actual_occupancy = float(occupancy_result["data"])
+            is_valid = actual_occupancy <= max_persons
+            
+            message = f"Occupancy {actual_occupancy} persons {'meets' if is_valid else 'exceeds'} maximum of {max_persons} persons"
+            logs.append(message)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_valid": is_valid,
+                    "rule_type": rule_type,
+                    "element_id": element_id,
+                    "criteria": criteria,
+                    "actual_value": actual_occupancy,
+                    "message": message,
+                    "details": {}
+                },
+                "logs": logs
+            }
+        
+        elif rule_type == "occupancy_density":
+            max_density = criteria.get("max_density")
+            if max_density is None:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": ["occupancy_density rule requires max_density in criteria"]
+                }
+            
+            # Get current occupancy and area
+            occupancy_property = criteria.get("occupancy_property", "properties.OccupancyLoad")
+            area_property = criteria.get("area_property", "quantities.NetFloorArea")
+            
+            occupancy_result = get_property(element_id, occupancy_property)
+            area_result = get_property(element_id, area_property)
+            
+            if occupancy_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Occupancy property '{occupancy_property}' not found for element {element_id}. Use get_all_properties() to see available properties."]
+                }
+            
+            if area_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Area property '{area_property}' not found for element {element_id}. Use get_all_properties() to see available properties."]
+                }
+            
+            actual_occupancy = float(occupancy_result["data"])
+            actual_area = float(area_result["data"])
+            
+            if actual_area == 0:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Area is zero for element {element_id}, cannot calculate density"]
+                }
+            
+            actual_density = actual_occupancy / actual_area
+            is_valid = actual_density <= max_density
+            
+            message = f"Occupancy density {actual_density:.2f} persons/m² {'meets' if is_valid else 'exceeds'} maximum of {max_density} persons/m²"
+            logs.append(message)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_valid": is_valid,
+                    "rule_type": rule_type,
+                    "element_id": element_id,
+                    "criteria": criteria,
+                    "actual_value": actual_density,
+                    "message": message,
+                    "details": {"occupancy": actual_occupancy, "area": actual_area}
+                },
+                "logs": logs
+            }
+        
+        elif rule_type == "property_range":
+            property_path = criteria.get("property_path")
+            min_value = criteria.get("min_value")
+            max_value = criteria.get("max_value")
+            
+            if not property_path or (min_value is None and max_value is None):
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": ["property_range rule requires property_path and at least one of min_value or max_value in criteria"]
+                }
+            
+            prop_result = get_property(element_id, property_path)
+            
+            if prop_result["status"] != "success":
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Property '{property_path}' not found for element {element_id}. Use get_all_properties() to see available properties."]
+                }
+            
+            try:
+                actual_value = float(prop_result["data"])
+            except (ValueError, TypeError):
+                return {
+                    "status": "error",
+                    "data": None,
+                    "logs": [f"Property '{property_path}' value '{prop_result['data']}' is not numeric"]
+                }
+            
+            is_valid = True
+            validation_details = []
+            
+            if min_value is not None:
+                min_valid = actual_value >= min_value
+                is_valid = is_valid and min_valid
+                validation_details.append(f"min: {actual_value} >= {min_value} = {min_valid}")
+            
+            if max_value is not None:
+                max_valid = actual_value <= max_value
+                is_valid = is_valid and max_valid
+                validation_details.append(f"max: {actual_value} <= {max_value} = {max_valid}")
+            
+            message = f"Property {property_path} = {actual_value} {'within' if is_valid else 'outside'} range [{min_value}, {max_value}]"
+            logs.append(message)
+            logs.extend(validation_details)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_valid": is_valid,
+                    "rule_type": rule_type,
+                    "element_id": element_id,
+                    "criteria": criteria,
+                    "actual_value": actual_value,
+                    "message": message,
+                    "details": {"validation_details": validation_details}
                 },
                 "logs": logs
             }
