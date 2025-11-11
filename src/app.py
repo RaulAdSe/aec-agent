@@ -9,9 +9,9 @@ import io
 from typing import Dict, Any, Optional
 from pathlib import Path
 
-from .core.config import config
-from .core.logger import get_logger
-from .agents.compliance_agent import ComplianceAgent, ComplianceAgentConfig
+from src.core.config import config
+from src.core.logger import get_logger
+from src.agents.compliance_agent import ComplianceAgent, ComplianceAgentConfig
 
 # Configure page
 st.set_page_config(
