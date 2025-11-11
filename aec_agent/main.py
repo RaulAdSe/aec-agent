@@ -8,13 +8,15 @@ import sys
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional
+from dotenv import load_dotenv
 
 import click
 
+# Load environment variables
+load_dotenv()
+
 from .core.config import config
 from .core.logger import get_logger
-from .core.registry import registry
-from .agents.compliance_agent import ComplianceAgent, ComplianceAgentConfig
 
 
 # Initialize logging
@@ -42,36 +44,57 @@ def cli(verbose: bool, config_file: Optional[str]):
               type=click.Choice(['general', 'fire_safety', 'accessibility']),
               default='general',
               help='Type of compliance analysis to perform')
-@click.option('--use-toon/--no-toon', default=True, help='Use TOON format for data processing')
-def analyze(building_data_file: str, output: Optional[str], analysis_type: str, use_toon: bool):
-    """Analyze building data for compliance."""
+def analyze(building_data_file: str, output: Optional[str], analysis_type: str):
+    """Analyze building data for compliance using LangChain agent."""
+    
+    if not config.openai_api_key:
+        click.echo("❌ OpenAI API key required. Set OPENAI_API_KEY environment variable.")
+        return
     
     logger.info(f"Starting {analysis_type} analysis of {building_data_file}")
     
     try:
-        # Load building data
-        building_data = load_building_data(building_data_file)
+        from .agent import create_agent
         
-        # Create and configure agent
-        agent_config = ComplianceAgentConfig(
-            use_toon=use_toon,
-            verbose=config.log_level == "DEBUG"
-        )
-        agent = ComplianceAgent(agent_config)
+        # Create LangChain agent
+        agent = create_agent(verbose=config.log_level == "DEBUG", temperature=0.1)
+        
+        # Prepare query based on analysis type and file
+        if analysis_type == 'fire_safety':
+            query = f"Load building data from {building_data_file} and perform a comprehensive fire safety compliance analysis"
+        elif analysis_type == 'accessibility':
+            query = f"Load building data from {building_data_file} and analyze accessibility compliance requirements"
+        else:
+            query = f"Load building data from {building_data_file} and perform a general compliance analysis"
         
         # Perform analysis
-        if analysis_type == 'general':
-            results = agent.process(building_data)
+        result = agent.process({"query": query})
+        
+        if result['status'] == 'success':
+            # Prepare results for output
+            results = {
+                "analysis_type": analysis_type,
+                "building_data_file": building_data_file,
+                "status": "success",
+                "analysis": result['response'],
+                "tools_used": [],
+                "timestamp": "2024-01-01T00:00:00"  # TODO: Use actual timestamp
+            }
+            
+            # Output results
+            output_results(results, output)
+            logger.info("Analysis completed successfully")
         else:
-            results = agent.analyze_specific_compliance(building_data, analysis_type)
+            click.echo(f"❌ Analysis failed: {result.get('message', 'Unknown error')}")
+            sys.exit(1)
         
-        # Output results
-        output_results(results, output)
-        
-        logger.info("Analysis completed successfully")
-        
+    except ImportError as e:
+        click.echo(f"❌ Missing LangChain dependencies: {e}")
+        click.echo("Install with: pip install langchain langchain-openai")
+        sys.exit(1)
     except Exception as e:
         logger.error(f"Analysis failed: {e}")
+        click.echo(f"❌ Analysis failed: {e}")
         sys.exit(1)
 
 
@@ -90,6 +113,149 @@ def status():
     # Check API key availability
     openai_status = "✓ Available" if config.openai_api_key else "✗ Not configured"
     click.echo(f"OpenAI API Key: {openai_status}")
+
+
+@cli.command()
+@click.option('--host', default="127.0.0.1", help='Host to bind the server')
+@click.option('--port', default=8000, help='Port to bind the server')
+@click.option('--reload', is_flag=True, help='Enable auto-reload')
+def serve(host: str, port: int, reload: bool):
+    """Start the LangChain agent API server."""
+    
+    click.echo(f"🚀 Starting AEC Compliance Agent API server on {host}:{port}")
+    click.echo(f"📖 API docs: http://{host}:{port}/docs")
+    click.echo(f"🔧 Agent endpoint: http://{host}:{port}/compliance")
+    
+    try:
+        import uvicorn
+        from .services.langchain_service import create_app
+        
+        app = create_app()
+        
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            reload=reload
+        )
+    except ImportError as e:
+        click.echo(f"❌ Missing dependencies for API server: {e}")
+        click.echo("Install with: pip install uvicorn fastapi langserve")
+    except Exception as e:
+        click.echo(f"❌ Failed to start server: {e}")
+
+
+@cli.command()
+@click.argument('query')
+@click.option('--building-data', help='Path to building data JSON file')
+@click.option('--verbose', is_flag=True, help='Show detailed output')
+def query(query: str, building_data: Optional[str], verbose: bool):
+    """Run a natural language query against the LangChain agent."""
+    
+    if not config.openai_api_key:
+        click.echo("❌ OpenAI API key required. Set OPENAI_API_KEY environment variable.")
+        return
+    
+    try:
+        from .agent import create_agent
+        
+        if verbose:
+            click.echo("🔧 Creating LangChain agent...")
+        
+        agent = create_agent(verbose=verbose, temperature=0.1)
+        
+        # Prepare query with optional building data
+        query_text = query
+        if building_data:
+            query_text = f"First load building data from {building_data}, then: {query}"
+        
+        # Execute query
+        click.echo(f"🔍 Query: {query}")
+        if building_data:
+            click.echo(f"📊 Building data: {building_data}")
+        
+        result = agent.process(query_text)
+        
+        if result['status'] == 'success':
+            click.echo(f"\n✅ Result:")
+            click.echo(result['response'])
+            
+            # Note: tools_used not available in simplified version
+        else:
+            click.echo(f"\n❌ Error: {result.get('message', 'Unknown error')}")
+            
+    except ImportError as e:
+        click.echo(f"❌ Missing LangChain dependencies: {e}")
+        click.echo("Install with: pip install langchain langchain-openai")
+    except Exception as e:
+        click.echo(f"❌ Query failed: {e}")
+
+
+@cli.command()
+def chat():
+    """Start an interactive chat session with the LangChain agent."""
+    
+    if not config.openai_api_key:
+        click.echo("❌ OpenAI API key required. Set OPENAI_API_KEY environment variable.")
+        return
+        
+    try:
+        from .agent import create_agent
+        
+        click.echo("🏗️ AEC Compliance Agent - Interactive Chat")
+        click.echo("Enter natural language queries about building compliance")
+        click.echo("Type 'exit' to quit")
+        
+        agent = create_agent(verbose=False, temperature=0.1)
+        click.echo(f"✅ Agent ready: {agent.get_status()['name']}")
+        
+        while True:
+            try:
+                user_input = click.prompt("\n🔍 Query", type=str).strip()
+                
+                if user_input.lower() in ['exit', 'quit']:
+                    break
+                elif user_input.lower() == 'help':
+                    click.echo("""
+Available commands:
+- Ask natural language questions about building compliance
+- 'status' - Show agent status  
+- 'exit' - Quit
+
+Example queries:
+- "What is the status of the compliance knowledge base?"
+- "Load building data from data/out/FM-ARC_v2.json and analyze it"
+- "What are the fire safety requirements for emergency exits?"
+                    """)
+                elif user_input.lower() == 'status':
+                    status = agent.get_status()
+                    click.echo(f"Status: {status['status']}")
+                    click.echo(f"Tools: {len(status['available_tools'])}")
+                    for tool in status['available_tools']:
+                        click.echo(f"  - {tool}")
+                else:
+                    # Process with LangChain agent
+                    click.echo("🔄 Processing...")
+                    result = agent.process(user_input)
+                    
+                    if result['status'] == 'success':
+                        click.echo(f"\n💬 Response:")
+                        click.echo(result['response'])
+                        # Note: tools_used not available in simplified version
+                    else:
+                        click.echo(f"❌ Error: {result.get('message', 'Unknown error')}")
+                        
+            except click.Abort:
+                click.echo("\nGoodbye! 👋")
+                break
+            except Exception as e:
+                click.echo(f"❌ Error: {e}")
+                
+    except ImportError as e:
+        click.echo(f"❌ Missing LangChain dependencies: {e}")
+        click.echo("Install with: pip install langchain langchain-openai")
+    except Exception as e:
+        click.echo(f"❌ Failed to create agent: {e}")
 
 
 @cli.command()

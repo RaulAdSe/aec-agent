@@ -9,9 +9,8 @@ import io
 from typing import Dict, Any, Optional
 from pathlib import Path
 
-from src.core.config import config
-from src.core.logger import get_logger
-from src.agents.compliance_agent import ComplianceAgent, ComplianceAgentConfig
+from .core.config import config
+from .core.logger import get_logger
 
 # Configure page
 st.set_page_config(
@@ -25,16 +24,19 @@ st.set_page_config(
 logger = get_logger(__name__)
 
 @st.cache_resource
-def initialize_agent() -> ComplianceAgent:
+def initialize_agent():
     """Initialize the compliance agent (cached)."""
     try:
-        agent_config = ComplianceAgentConfig(
-            use_toon=config.use_toon,
-            verbose=config.debug
-        )
-        agent = ComplianceAgent(agent_config)
-        logger.info("Streamlit agent initialized successfully")
-        return agent
+        # Try to use LangChain agent if available
+        try:
+            from .agent import create_langchain_compliance_agent
+            agent = create_langchain_compliance_agent(verbose=config.debug, temperature=0.1)
+            logger.info("LangChain agent initialized for Streamlit")
+            return agent
+        except ImportError:
+            # Fallback to original agent (if dependencies are missing)
+            st.warning("LangChain dependencies not available. Some features may be limited.")
+            return None
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}")
         st.error(f"Failed to initialize agent: {e}")
