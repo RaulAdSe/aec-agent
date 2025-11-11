@@ -1,115 +1,143 @@
-# 🏗️ AEC Compliance Agent
+# AEC Compliance Agent 🏗️
 
-## Agentic AI for Building Code Compliance Verification
-
-An autonomous AI agent that verifies building code compliance by extracting data from architectural drawings (DWG/DXF/IFC), performing geometric calculations, and querying Spanish building codes using RAG technology.
-
-## 🎯 Project Overview
-
-**Presentation**: October 29, 2025 at UPC-EPSEB  
-**Course**: Intel·ligència Artificial Aplicada a la Construcció  
-**Type**: Proof of Concept (POC)
-
-### Key Features
-
-- **📦 Data Extraction**: Parse DWG/DXF and IFC files
-- **📐 Geometric Analysis**: Calculate areas, distances, and evacuation routes
-- **📚 RAG System**: Query Spanish building codes (CTE DB-SI, CTE DB-SUA)
-- **🤖 ReAct Agent**: Autonomous compliance verification with LangGraph
+**Building Code Compliance Verification System** with Streamlit deployment and LangSmith integration.
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- Python 3.10+
-- Google API key (for Gemini LLM)
-- 4GB RAM (for embeddings)
-
-### Installation
-
+### 1. Setup Environment
 ```bash
-# Clone repository
-git clone https://github.com/RaulAdSe/aec-agent.git
-cd aec-agent
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+# Clone and install
 pip install -r requirements.txt
 
-# Configure environment
+# Configure API keys
 cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY
+# Edit .env with your API keys
 ```
 
-### Run Example
+### 2. Run Streamlit App
+```bash
+streamlit run streamlit_app.py
+```
+
+### 3. Use CLI (Optional)
+```bash
+python -m src.main status
+python -m src.main analyze data/sample.json
+```
+
+## 🔑 API Keys Required
+
+| Service | Purpose | Required |
+|---------|---------|----------|
+| **OpenAI** | LLM for compliance analysis | ✅ Yes |
+| **LangSmith** | Tracing & monitoring | ✅ Recommended |
+
+## 🎯 Features
+
+### 🌐 Streamlit Deployment
+- **Web Interface**: User-friendly building analysis
+- **File Upload**: JSON building data support
+- **Real-time Analysis**: Instant compliance checking
+- **Results Export**: Download analysis reports
+
+### 📊 LangSmith Integration
+- **Tracing**: Track all agent operations
+- **Monitoring**: Performance metrics
+- **Debugging**: Step-by-step analysis
+- **LangChain Studio**: Visual workflow analysis
+
+### 🏗️ Professional Architecture
+- **Modular Design**: Scalable agent system
+- **Clean Separation**: Core/Agents/Tools/Services
+- **Extensible**: Easy to add new compliance checks
+
+## 📁 Architecture
+
+```
+src/
+├── streamlit_app.py          # 🌐 Streamlit deployment
+├── main.py                   # 🖥️ CLI interface
+├── core/                     # ⚙️ Framework
+│   ├── config.py             # Configuration + LangSmith
+│   ├── logger.py             # Logging system
+│   └── registry.py           # Agent registry
+├── agents/                   # 🤖 Agent implementations
+│   └── compliance_agent/     # AEC compliance agent
+├── memory/                   # 🧠 Memory systems
+├── tools/                    # 🔧 Analysis tools
+├── services/                 # 🌍 External integrations
+└── utils/                    # 🛠️ Utilities
+```
+
+## 🛠️ Development
+
+### Add New Tools
+```python
+# src/tools/compliance_toolkit.py
+def _your_new_tool(self, input_params: str) -> str:
+    # Your compliance logic here
+    return "Analysis result"
+```
+
+### Add New Agents
+```bash
+mkdir src/agents/your_agent
+# Implement agent.py, config.py, prompts.py
+```
+
+### LangSmith Monitoring
+- View traces in [LangSmith dashboard](https://smith.langchain.com/)
+- Use LangChain Studio for visual debugging
+- All agent operations automatically tracked
+
+## 🔧 Configuration
 
 ```bash
-# Extract data from CAD files (DWG/DXF)
-python scripts/extract_cad_files.py
-
-# Extract data from IFC files
-python scripts/extract_ifc_files.py -f building.ifc
-
-# Run compliance verification
-python scripts/run_full_pipeline.py
+# .env file
+GOOGLE_API_KEY=your_key
+LANGCHAIN_API_KEY=your_langsmith_key
+LANGCHAIN_PROJECT=aec-compliance-agent
 ```
 
-### Tutorial Notebooks
+## 📋 Usage Examples
 
-Open Jupyter and explore the tutorial notebooks:
+### Streamlit Web App
+1. Open `http://localhost:8501`
+2. Upload JSON building data or use sample
+3. Select analysis type (general/fire_safety/accessibility)
+4. Get compliance report with downloadable results
 
+### CLI Analysis
 ```bash
-jupyter notebook
+# Analyze building file
+python -m src.main analyze data/building.json --analysis-type fire_safety
 
-# Navigate to notebooks/
-# Start with 01_data_extraction_simple.ipynb
-# Or 05_ifc_extraction_tutorial.ipynb for IFC files
+# Initialize new project
+python -m src.main init-project my-building
+
+# Check status
+python -m src.main status
 ```
 
-## 📁 Project Structure
+## 🎯 Spanish Building Codes Supported
 
-```
-aec-agent/
-├── src/                    # Source code
-│   ├── extraction/         # DWG/DXF/IFC extraction
-│   ├── calculations/       # Geometry and graph analysis
-│   ├── rag/               # RAG system for normativa
-│   └── agent/             # ReAct agent implementation
-├── data/                  # Data files
-│   ├── blueprints/        # Original CAD files
-│   ├── extracted/         # JSON extracted data
-│   └── normativa/         # PDF building codes
-├── notebooks/             # Tutorial notebooks
-├── tests/                 # Test suite
-└── scripts/               # Utility scripts
+- **CTE DB-SI**: Fire Safety (Seguridad en caso de incendio)
+- **CTE DB-SUA**: Accessibility (Seguridad de utilización y accesibilidad)
+- **General Compliance**: Spatial and structural requirements
+
+## 🚀 Deployment
+
+### Streamlit Cloud
+```bash
+# Deploy to Streamlit Cloud
+# Point to: streamlit_app.py
+# Add secrets for API keys
 ```
 
-## 🛠️ Technology Stack
-
-- **LLM**: Google Gemini (gemini-2.0-flash-exp)
-- **Agent Framework**: LangChain + LangGraph
-- **Vector Database**: ChromaDB
-- **Embeddings**: HuggingFace Multilingual
-- **CAD Processing**: ezdxf (DWG/DXF), ifcopenshell (IFC)
-- **Geometry**: Shapely + NetworkX
-- **Validation**: Pydantic
-
-## 📚 Documentation
-
-- [Development Guide](docs/DEVELOPMENT_GUIDE.md)
-- [API Reference](docs/API_REFERENCE.md)
-- [RAG Explained](docs/RAG_EXPLAINED.md)
-- [ReAct Framework](docs/REACT_EXPLAINED.md)
-- [Testing Guide](docs/TESTING_GUIDE.md)
-
-## 🔬 Current Test Files
-
-- **CAD Files**:
-  - `I01.4 PCI - EXTINCIÓN AUTOMÁTICA.dwg` - Fire extinguishing systems
-  - `I01.6 PCI - SECTORIZACIÓN.dwg` - Fire compartmentation
+### Local Development
+```bash
+streamlit run streamlit_app.py --server.port 8501
+```
 
 ## 👥 Author
 
@@ -117,16 +145,4 @@ aec-agent/
 UPC-EPSEB Student  
 [GitHub](https://github.com/RaulAdSe)
 
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) file for details
-
-## 🙏 Acknowledgments
-
-- UPC-EPSEB for the opportunity
-- Course instructors for guidance
-- Open source community for amazing tools
-
----
-
-*Built with ❤️ for the AEC industry*
+Ready for building code compliance analysis! 🎉
