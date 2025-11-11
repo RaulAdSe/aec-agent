@@ -28,11 +28,11 @@ from aec_agent.tools.document_retrieval_toolkit import (
     initialize_gemini_client,
     create_document_store,
     upload_documents, 
-    search_documents,
     get_store_info,
     delete_document_store,
     list_uploaded_documents
 )
+from aec_agent.tools.compliance_search import search_compliance_docs
 
 # Configuration (paths relative to project root)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -197,28 +197,38 @@ class StatelessKnowledgeBaseManager:
             print(f"❌ Failed to create or load store: {store_result['logs']}")
             return
 
-        # Search documents
-        search_result = search_documents(STORE_NAME, query, max_results)
+        # Search documents using compliance_search for proper formatting
+        search_result = search_compliance_docs(query, max_results)
         
         if search_result["status"] == "success":
-            data = search_result["data"]
-            print(f"\n📋 Answer:\n{data['answer']}\n")
+            print(f"\n📋 Answer:\n{search_result['answer']}\n")
             
             # Show citations
-            if data.get("formatted_citations"):
+            if search_result.get("formatted_citations"):
                 print("📚 Sources:")
-                for citation in data["formatted_citations"]:
-                    print(f"• {citation['display_name']}")
-                    if citation.get('quote'):
-                        print(f"  \"{citation['quote'][:100]}...\"")
+                for citation in search_result["formatted_citations"]:
+                    display_name = citation.get('display_name', 'Unknown')
+                    cited_text = citation.get('cited_text', '')
+                    print(f"• {display_name}")
+                    if cited_text:
+                        preview = cited_text[:100] + "..." if len(cited_text) > 100 else cited_text
+                        print(f"  \"{preview}\"")
                     print()
+            elif search_result.get("citations"):
+                print("📚 Sources:")
+                for i, citation in enumerate(search_result["citations"], 1):
+                    source = citation.get('source', 'Unknown')
+                    print(f"  [{i}] {source}")
             else:
                 print("ℹ️ No citations available")
                 
-        elif search_result["status"] == "warning":
-            print(f"⚠️ {search_result['logs'][0]}")
+            print(f"\n📊 Searched {search_result.get('documents_searched', 0)} documents")
+                
+        elif search_result["status"] == "no_documents":
+            print(f"⚠️ {search_result.get('answer', 'No documents available')}")
         else:
-            print(f"❌ Search failed: {search_result['logs']}")
+            error_msg = search_result.get('logs', ['Search failed'])
+            print(f"❌ Search failed: {error_msg[0] if error_msg else 'Unknown error'}")
 
     def get_status(self):
         """Get current knowledge base status."""

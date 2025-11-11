@@ -452,14 +452,66 @@ def search_documents(store_name: str, query: str, max_results: int = 5) -> Dict:
         # Extract detailed citations with source information
         citations = []
         source_documents = []
+        formatted_citations = []
         
         if hasattr(response, 'candidates') and response.candidates:
             candidate = response.candidates[0]
             
-            # Extract citation metadata from Gemini response
+            # PRIMARY SOURCE: Extract from grounding metadata (this is where File Search citations are!)
+            if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                grounding = candidate.grounding_metadata
+                
+                # Extract grounding chunks (source documents)
+                if hasattr(grounding, 'grounding_chunks') and grounding.grounding_chunks:
+                    for i, chunk in enumerate(grounding.grounding_chunks):
+                        if hasattr(chunk, 'retrieved_context') and chunk.retrieved_context:
+                            context = chunk.retrieved_context
+                            source_info = {
+                                "chunk_id": i,
+                                "source": getattr(context, 'title', f'Document {i+1}'),
+                                "title": getattr(context, 'title', f'Document {i+1}'),
+                                "text": getattr(context, 'text', None),
+                                "uri": getattr(context, 'uri', None)
+                            }
+                            source_documents.append(source_info)
+                
+                # Extract grounding supports (cited segments with source mapping)
+                if hasattr(grounding, 'grounding_supports') and grounding.grounding_supports:
+                    for i, support in enumerate(grounding.grounding_supports):
+                        if hasattr(support, 'segment') and support.segment:
+                            segment = support.segment
+                            
+                            # Map to source documents
+                            source_names = []
+                            if hasattr(support, 'grounding_chunk_indices') and support.grounding_chunk_indices:
+                                for chunk_idx in support.grounding_chunk_indices:
+                                    if chunk_idx < len(source_documents):
+                                        source_names.append(source_documents[chunk_idx]["source"])
+                            
+                            citation_info = {
+                                "citation_id": i + 1,
+                                "start_index": getattr(segment, 'start_index', None),
+                                "end_index": getattr(segment, 'end_index', None),
+                                "cited_text": getattr(segment, 'text', None),
+                                "sources": source_names,
+                                "source": ", ".join(source_names) if source_names else f"Document {i+1}",
+                                "confidence": 1.0  # Grounding metadata is high confidence
+                            }
+                            citations.append(citation_info)
+                            
+                            # Create formatted citation
+                            formatted_citation = {
+                                "id": i + 1,
+                                "display_name": ", ".join(source_names) if source_names else f"Document {i+1}",
+                                "cited_text": getattr(segment, 'text', None),
+                                "source": ", ".join(source_names) if source_names else f"Document {i+1}",
+                                "confidence": 1.0
+                            }
+                            formatted_citations.append(formatted_citation)
+            
+            # FALLBACK: Extract from legacy citation metadata (if available)
             if hasattr(candidate, 'citation_metadata') and candidate.citation_metadata:
                 for citation in candidate.citation_metadata.citations:
-                    # Extract basic citation info
                     citation_info = {
                         "start_index": getattr(citation, 'start_index', None),
                         "end_index": getattr(citation, 'end_index', None),
@@ -467,7 +519,6 @@ def search_documents(store_name: str, query: str, max_results: int = 5) -> Dict:
                         "confidence": getattr(citation, 'confidence', None)
                     }
                     
-                    # Try to extract more detailed source information
                     if hasattr(citation, 'uri') and citation.uri:
                         citation_info["uri"] = citation.uri
                     
@@ -484,26 +535,19 @@ def search_documents(store_name: str, query: str, max_results: int = 5) -> Dict:
                             citation_info["cited_text"] = None
                     
                     citations.append(citation_info)
-            
-            # Also check for grounding metadata (alternative citation source)
-            if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
-                for source in candidate.grounding_metadata.grounding_chunks:
-                    source_info = {
-                        "web_source": getattr(source, 'web', None),
-                        "retrieved_context": getattr(source, 'retrieved_context', None)
-                    }
-                    if source_info["web_source"] or source_info["retrieved_context"]:
-                        source_documents.append(source_info)
         
         # Format results with enhanced citation information
         search_results = {
             "query": query,
-            "content": content,
+            "answer": content,  # Changed from "content" to "answer" for consistency
+            "content": content,  # Keep both for compatibility
             "citations": citations,
+            "formatted_citations": formatted_citations,  # Add formatted citations
             "source_documents": source_documents,
             "total_results": 1,  # Gemini returns consolidated response
             "store_searched": store_name,
             "documents_in_store": store_info["document_count"],
+            "documents_searched": store_info["document_count"],  # Add for compatibility
             "citation_count": len(citations)
         }
         
@@ -543,7 +587,7 @@ def get_store_info(store_name: Optional[str] = None) -> Dict:
         # Get info for all stores
         get_store_info()
     """
-    global _document_stores
+    global _document_stores, _gemini_client
     logs = []
     
     if store_name is None:
@@ -557,6 +601,67 @@ def get_store_info(store_name: Optional[str] = None) -> Dict:
             },
             "logs": logs
         }
+    
+    # If store not in local dict, try to discover it from Gemini API
+    if store_name not in _document_stores:
+        if _gemini_client is None:
+            return {
+                "status": "not_found",
+                "data": None,
+                "logs": [f"Document store '{store_name}' not found and client not initialized"]
+            }
+        
+        # Try to find and register the store from Gemini API
+        expected_display_name = f'aec-compliance-{store_name}'
+        try:
+            all_stores = _gemini_client.file_search_stores.list()
+            for existing_store in all_stores:
+                if hasattr(existing_store, 'display_name') and existing_store.display_name == expected_display_name:
+                    # Found it, register locally
+                    store_info = {
+                        "name": store_name,
+                        "description": "",
+                        "gemini_store_name": existing_store.name,
+                        "gemini_store_id": existing_store.name.split('/')[-1],
+                        "created_at": str(existing_store.create_time) if hasattr(existing_store, 'create_time') else "unknown",
+                        "document_count": 0,
+                        "documents": []
+                    }
+                    _document_stores[store_name] = store_info
+                    break
+        except Exception as e:
+            return {
+                "status": "not_found",
+                "data": None,
+                "logs": [f"Document store '{store_name}' not found and could not discover from API: {e}"]
+            }
+        
+        # Still not found after discovery attempt
+        if store_name not in _document_stores:
+            return {
+                "status": "not_found",
+                "data": None,
+                "logs": [f"Document store '{store_name}' not found"]
+            }
+    
+    # Return specific store
+    store_info = _document_stores[store_name]
+    
+    # Try to get actual document count from API
+    try:
+        if _gemini_client and store_info.get("gemini_store_name"):
+            documents_response = _gemini_client.file_search_stores.documents.list(parent=store_info["gemini_store_name"])
+            document_list = list(documents_response)
+            store_info["document_count"] = len(document_list)
+    except Exception:
+        pass  # Use cached count if API call fails
+    
+    logs.append(f"Retrieved information for store '{store_name}' ({store_info['document_count']} documents)")
+    return {
+        "status": "success",
+        "data": store_info,
+        "logs": logs
+    }
 
 
 def list_uploaded_documents(store_name: str) -> Dict:
