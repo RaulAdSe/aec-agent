@@ -45,10 +45,19 @@ class ShortTermMemory:
         self.logger = logging.getLogger(__name__)
         
         # Initialize LLM for summarization
-        self.llm = ChatOpenAI(
-            model_name=self.config.model_name,
-            temperature=self.config.temperature
-        )
+        try:
+            self.llm = ChatOpenAI(
+                model_name=self.config.model_name,
+                temperature=self.config.temperature
+            )
+        except Exception as e:
+            error_msg = (
+                f"Failed to initialize LLM for conversation summarization: {e}. "
+                "Please ensure OPENAI_API_KEY is set in your environment. "
+                "Summary memory will be disabled, but buffer memory will still work."
+            )
+            self.logger.error(error_msg)
+            raise ValueError(error_msg) from e
         
         # Setup memory components
         self._setup_memory_components()
