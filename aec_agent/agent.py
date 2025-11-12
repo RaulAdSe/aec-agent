@@ -6,7 +6,8 @@ One agent that can handle building data analysis and compliance search.
 
 import logging
 import os
-from typing import Dict, Any
+from pathlib import Path
+from typing import Dict, Any, Optional
 
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.tools import Tool
@@ -16,6 +17,7 @@ from langsmith import traceable
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.tracers import LangChainTracer
 
+from .memory import MemoryManager, MemoryManagerConfig, TaskStatus
 from .tools.building_data_toolkit import (
     load_building_data,
     get_all_elements,
@@ -28,7 +30,6 @@ from .tools.building_data_toolkit import (
 from .tools.compliance_search import (
     search_compliance_docs
 )
-from .memory import ConversationHistory
 
 
 class ComplianceAgent:
@@ -36,15 +37,27 @@ class ComplianceAgent:
     Simple compliance agent with access to building data and compliance tools.
     """
     
-    def __init__(self, model_name: str = "gpt-4o-mini", temperature: float = 0.1, verbose: bool = True):
+    def __init__(
+        self, 
+        model_name: str = "gpt-4o-mini", 
+        temperature: float = 0.1, 
+        verbose: bool = True,
+        enable_memory: bool = True,
+        memory_config: Optional[MemoryManagerConfig] = None,
+        session_id: Optional[str] = None
+    ):
         """Initialize the compliance agent."""
         self.model_name = model_name
         self.temperature = temperature
         self.verbose = verbose
+        self.enable_memory = enable_memory
         self.logger = logging.getLogger(__name__)
         
-        # Initialize memory management
-        self.memory = ConversationHistory(max_entries=50)
+        # Setup memory system
+        if self.enable_memory:
+            self._setup_memory(memory_config, session_id)
+        else:
+            self.memory_manager = None
         
         # Setup LangSmith tracing
         self._setup_langsmith_tracing()
@@ -54,7 +67,24 @@ class ComplianceAgent:
         self._setup_tools()
         self._setup_agent()
         
-        self.logger.info("Compliance agent initialized with LangSmith tracing and sliding window memory")
+        memory_status = "enabled" if self.enable_memory else "disabled"
+        self.logger.info(f"Compliance agent initialized with LangSmith tracing and memory {memory_status}")
+    
+    def _setup_memory(self, memory_config: Optional[MemoryManagerConfig], session_id: Optional[str]):
+        """Setup the memory management system."""
+        # Create default memory config if not provided
+        if memory_config is None:
+            # Setup persistence path in a data directory
+            persistence_path = Path.cwd() / "data" / "sessions"
+            memory_config = MemoryManagerConfig(
+                session_persistence_path=persistence_path,
+                enable_persistence=True,
+                auto_save_interval=5  # Save every 5 operations
+            )
+        
+        # Initialize memory manager
+        self.memory_manager = MemoryManager(config=memory_config, session_id=session_id)
+        self.logger.info(f"Memory system initialized with session_id={self.memory_manager.get_session_id()}")
     
     def _setup_langsmith_tracing(self):
         """Setup LangSmith tracing for monitoring agent behavior."""
@@ -147,16 +177,61 @@ class ComplianceAgent:
         ]
     
     def _load_building_data_wrapper(self, path: str) -> Dict[str, Any]:
-        """Wrapper for load_building_data that returns only summary info."""
+        """
+        Wrapper for load_building_data that returns full JSON data + summary.
+        
+        Returns the complete building data to the agent, while storing only
+        the summary in memory to keep context window lean.
+        """
         result = load_building_data(path)
+        
+        # Track tool execution in memory
+        if self.memory_manager:
+            success = result.get("status") == "success"
+            
+            if success:
+                data = result.get("data", {})
+                file_info = data.get("file_info", {})
+                
+                # Extract summary for memory (not the full JSON)
+                summary_context = {
+                    "project_name": file_info.get("project_name", "Unknown"),
+                    "total_elements": file_info.get("total_elements", 0),
+                    "schema": file_info.get("schema", "Unknown"),
+                    "available_element_types": {
+                        "spaces": len(data.get("spaces", [])),
+                        "doors": len(data.get("doors", [])),
+                        "walls": len(data.get("walls", [])),
+                        "slabs": len(data.get("slabs", [])),
+                        "stairs": len(data.get("stairs", []))
+                    }
+                }
+                
+                # Store only summary in memory, not full JSON
+                self.memory_manager.set_building_data_context(path, summary_context)
+                self.memory_manager.track_active_file(path)
+                
+                result_summary = f"Loaded building data from {path} ({summary_context['total_elements']} elements)"
+            else:
+                result_summary = f"Failed to load {path}"
+            
+            self.memory_manager.record_tool_execution(
+                tool_name="load_building_data",
+                arguments={"path": path},
+                success=success,
+                result_summary=result_summary
+            )
+        
+        # Return full JSON data + summary to the agent
         if result.get("status") == "success":
             data = result.get("data", {})
             file_info = data.get("file_info", {})
             
-            # Return only summary information
-            summary = {
+            # Return full data with summary included
+            return {
                 "status": "success",
-                "data": {
+                "data": data,  # Full JSON data
+                "summary": {  # Brief summary for quick reference
                     "file_loaded": path,
                     "project_name": file_info.get("project_name", "Unknown"),
                     "total_elements": file_info.get("total_elements", 0),
@@ -169,9 +244,8 @@ class ComplianceAgent:
                         "stairs": len(data.get("stairs", []))
                     }
                 },
-                "logs": [f"Building data loaded successfully from {path}"]
+                "logs": result.get("logs", [])
             }
-            return summary
         else:
             return result
     
@@ -220,8 +294,44 @@ class ComplianceAgent:
     def _setup_agent(self):
         """Set up the LangChain ReAct agent."""
         
-        # Create ReAct prompt template
-        react_prompt = PromptTemplate.from_template("""
+        # Create ReAct prompt template with memory context
+        if self.enable_memory:
+            react_prompt = PromptTemplate.from_template("""
+You are an AEC compliance expert assistant. You have access to tools for building analysis and compliance checking.
+
+{full_memory_context}
+
+AVAILABLE TOOLS:
+{tools}
+
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+CRITICAL RULES:
+1. For simple conversational questions (greetings, capability questions, general chat), skip tools entirely
+2. When you don't need tools, go DIRECTLY to "Final Answer:" without any Action/Action Input
+3. Only use tools for: loading building data, analyzing elements, compliance searches
+4. If unsure whether to use tools, don't use them - just provide a direct answer
+5. Consider the session context and conversation history when responding
+6. Remember your current goals and active files from the session context
+
+EXAMPLES:
+- "Hello" → Thought: Simple greeting, no tools needed. Final Answer: Hello! I'm an AEC compliance expert...
+- "What tools do you have?" → Thought: General question, no tools needed. Final Answer: I have tools for...
+- "Load data from X.json" → Thought: Need to load data. Action: load_building_data...
+
+Question: {input}
+Thought: {agent_scratchpad}""")
+        else:
+            react_prompt = PromptTemplate.from_template("""
 You are an AEC compliance expert assistant. You have access to tools for building analysis and compliance checking.
 
 AVAILABLE TOOLS:
@@ -238,17 +348,16 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 
-IMPORTANT GUIDELINES:
-1. For simple greetings or general questions about capabilities, provide a direct answer without using tools
-2. For building analysis, load building data first using load_building_data with a valid file path
-3. Only use tools when you have specific building data to analyze or compliance questions to research
-4. If no building data is loaded and user asks about building elements, explain that data needs to be loaded first
+CRITICAL RULES:
+1. For simple conversational questions (greetings, capability questions, general chat), skip tools entirely
+2. When you don't need tools, go DIRECTLY to "Final Answer:" without any Action/Action Input
+3. Only use tools for: loading building data, analyzing elements, compliance searches
+4. If unsure whether to use tools, don't use them - just provide a direct answer
 
 EXAMPLES:
-- "Hello" → Direct answer about capabilities
-- "What can you do?" → Direct answer listing capabilities
-- "Load building data from X" → Use load_building_data tool
-- "How many spaces are there?" → Use get_all_elements if data is loaded
+- "Hello" → Thought: Simple greeting, no tools needed. Final Answer: Hello! I'm an AEC compliance expert...
+- "What tools do you have?" → Thought: General question, no tools needed. Final Answer: I have tools for...
+- "Load data from X.json" → Thought: Need to load data. Action: load_building_data...
 
 Question: {input}
 Thought: {agent_scratchpad}""")
@@ -287,66 +396,149 @@ Thought: {agent_scratchpad}""")
             Response with status, message, and result
         """
         try:
-            # Clear history if requested
-            if clear_history:
-                self.memory.clear()
+            # Clear memory if requested
+            if clear_history and self.memory_manager:
+                self.memory_manager.clear_conversation_memory()
+                self.logger.info("Conversation history cleared")
+            
+            # Prepare invoke arguments
+            invoke_kwargs = {"input": query}
+            
+            # Add memory context if enabled
+            if self.memory_manager:
+                memory_context = self.memory_manager.get_full_context_for_prompt()
+                invoke_kwargs["full_memory_context"] = memory_context
             
             # Process the query with metadata for LangSmith
             run_metadata = {
                 "model": self.model_name,
                 "temperature": self.temperature,
                 "clear_history": clear_history,
-                "memory_entries": len(self.memory.entries)
+                "memory_enabled": self.enable_memory
             }
             
-            invoke_kwargs = {"input": query}
             if self.callback_manager:
                 invoke_kwargs["config"] = {"metadata": run_metadata}
                 
             result = self.agent_executor.invoke(invoke_kwargs)
             response = result.get("output", "")
             
-            # Store the interaction in memory
-            self.memory.add_interaction(query, response)
+            # Store conversation turn in memory
+            if self.memory_manager and not clear_history:
+                self.memory_manager.add_conversation_turn(query, response)
             
-            return {
+            response_data = {
                 "status": "success",
                 "message": "Query processed successfully",
                 "response": response,
                 "raw_result": result
             }
             
+            # Add memory summary to response if enabled
+            if self.memory_manager:
+                response_data["session_summary"] = self.memory_manager.get_session_summary()
+            
+            return response_data
+            
         except Exception as e:
             self.logger.error(f"Error processing query: {e}")
-            # Still store the failed interaction
-            self.memory.add_interaction(query, f"Error: {str(e)}")
-            
-            return {
+            error_response = {
                 "status": "error", 
                 "message": f"Error: {str(e)}",
                 "response": ""
             }
-    
-    def clear_history(self):
-        """Clear the agent's conversation history."""
-        self.memory.clear()
-        self.logger.info("Agent conversation history cleared")
-    
-    def get_memory_summary(self) -> Dict[str, Any]:
-        """Get current memory summary."""
-        return self.memory.get_summary()
+            
+            # Still store failed conversation if memory is enabled
+            if self.memory_manager and not clear_history:
+                self.memory_manager.add_conversation_turn(query, f"Error: {str(e)}")
+            
+            return error_response
     
     def get_status(self) -> Dict[str, Any]:
         """Get agent status."""
-        return {
+        status = {
             "name": "AEC Compliance Agent",
             "status": "ready",
             "model": self.model_name,
             "tools": len(self.tools),
-            "tool_list": [tool.name for tool in self.tools]
+            "tool_list": [tool.name for tool in self.tools],
+            "memory_enabled": self.enable_memory
         }
+        
+        # Add memory-specific status if enabled
+        if self.memory_manager:
+            status["session_id"] = self.memory_manager.get_session_id()
+            status["memory_summary"] = self.memory_manager.get_session_summary()
+        
+        return status
+    
+    # Memory Management Methods
+    def set_session_goal(self, goal: str, context: str = "") -> None:
+        """Set the main goal for this session."""
+        if self.memory_manager:
+            self.memory_manager.set_session_goal(goal, context)
+            self.logger.info(f"Session goal set: {goal}")
+        else:
+            self.logger.warning("Memory not enabled - cannot set session goal")
+    
+    def add_subtask(self, name: str, dependencies: Optional[list] = None) -> Optional[str]:
+        """Add a subtask to track."""
+        if self.memory_manager:
+            return self.memory_manager.add_subtask(name, dependencies)
+        else:
+            self.logger.warning("Memory not enabled - cannot add subtask")
+            return None
+    
+    def update_subtask_status(self, subtask_id: str, status: TaskStatus, notes: Optional[str] = None) -> bool:
+        """Update subtask status."""
+        if self.memory_manager:
+            return self.memory_manager.update_subtask_status(subtask_id, status, notes)
+        else:
+            self.logger.warning("Memory not enabled - cannot update subtask")
+            return False
+    
+    def get_memory_summary(self) -> Optional[Dict[str, Any]]:
+        """Get a summary of the current memory state."""
+        if self.memory_manager:
+            return self.memory_manager.get_session_summary()
+        else:
+            return None
+    
+    def save_session(self) -> None:
+        """Save the current session to disk."""
+        if self.memory_manager:
+            self.memory_manager.save_session()
+            self.logger.info("Session saved")
+        else:
+            self.logger.warning("Memory not enabled - cannot save session")
+    
+    def clear_memory(self, conversation_only: bool = True) -> None:
+        """Clear memory - conversation only or all memory."""
+        if self.memory_manager:
+            if conversation_only:
+                self.memory_manager.clear_conversation_memory()
+                self.logger.info("Conversation memory cleared")
+            else:
+                self.memory_manager.clear_all_memory()
+                self.logger.info("All memory cleared")
+        else:
+            self.logger.warning("Memory not enabled - cannot clear memory")
 
 
-def create_agent(model_name: str = "gpt-4o-mini", temperature: float = 0.1, verbose: bool = True) -> ComplianceAgent:
-    """Create a compliance agent."""
-    return ComplianceAgent(model_name=model_name, temperature=temperature, verbose=verbose)
+def create_agent(
+    model_name: str = "gpt-4o-mini", 
+    temperature: float = 0.1, 
+    verbose: bool = True,
+    enable_memory: bool = True,
+    memory_config: Optional[MemoryManagerConfig] = None,
+    session_id: Optional[str] = None
+) -> ComplianceAgent:
+    """Create a compliance agent with optional memory capabilities."""
+    return ComplianceAgent(
+        model_name=model_name, 
+        temperature=temperature, 
+        verbose=verbose,
+        enable_memory=enable_memory,
+        memory_config=memory_config,
+        session_id=session_id
+    )
