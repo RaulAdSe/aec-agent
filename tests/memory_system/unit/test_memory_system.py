@@ -21,7 +21,7 @@ from aec_agent.memory import (
     SubTask,
     ToolExecution
 )
-from aec_agent.agent import ComplianceAgent, create_agent
+from aec_agent.reasoning_agent import ReasoningAgent, create_reasoning_agent
 
 
 class TestShortTermMemory:
@@ -367,7 +367,7 @@ class TestMemoryManager:
 class TestAgentIntegration:
     """Test memory integration with the compliance agent."""
     
-    @patch('aec_agent.agent.ChatOpenAI')
+    @patch('aec_agent.reasoning_agent.ChatOpenAI')
     def test_agent_with_memory_enabled(self, mock_llm):
         """Test agent initialization with memory enabled."""
         mock_llm.return_value = Mock()
@@ -378,7 +378,7 @@ class TestAgentIntegration:
                 enable_persistence=True
             )
             
-            agent = create_agent(
+            agent = create_reasoning_agent(
                 enable_memory=True,
                 memory_config=config,
                 verbose=False
@@ -388,22 +388,22 @@ class TestAgentIntegration:
             assert agent.memory_manager is not None
             assert agent.memory_manager.get_session_id() is not None
     
-    @patch('aec_agent.agent.ChatOpenAI')
+    @patch('aec_agent.reasoning_agent.ChatOpenAI')
     def test_agent_with_memory_disabled(self, mock_llm):
         """Test agent initialization with memory disabled."""
         mock_llm.return_value = Mock()
         
-        agent = create_agent(enable_memory=False, verbose=False)
+        agent = create_reasoning_agent(enable_memory=False, verbose=False)
         
         assert not agent.enable_memory
         assert agent.memory_manager is None
     
-    @patch('aec_agent.agent.ChatOpenAI')
+    @patch('aec_agent.reasoning_agent.ChatOpenAI')
     def test_memory_methods_on_agent(self, mock_llm):
         """Test memory-related methods on the agent."""
         mock_llm.return_value = Mock()
         
-        agent = create_agent(enable_memory=True, verbose=False)
+        agent = create_reasoning_agent(enable_memory=True, verbose=False)
         
         # Test goal setting
         agent.set_session_goal("Test compliance analysis")
@@ -423,10 +423,10 @@ class TestAgentIntegration:
     
     def test_agent_status_with_memory(self):
         """Test agent status includes memory information."""
-        with patch('aec_agent.agent.ChatOpenAI') as mock_llm:
+        with patch('aec_agent.reasoning_agent.ChatOpenAI') as mock_llm:
             mock_llm.return_value = Mock()
             
-            agent = create_agent(enable_memory=True, verbose=False)
+            agent = create_reasoning_agent(enable_memory=True, verbose=False)
             status = agent.get_status()
             
             assert "memory_enabled" in status
