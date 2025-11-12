@@ -51,14 +51,49 @@ class ConversationHistory:
         
         self.logger.info("Stored analysis result")
     
-    def add_interaction(self, interaction_data: Dict[str, Any]) -> None:
-        """Store user interaction in memory."""
+    def add_interaction(self, human_msg: str, ai_msg: str) -> None:
+        """Store user interaction in memory with sliding window compaction."""
+        interaction_data = {
+            "human_message": human_msg,
+            "ai_response": ai_msg
+        }
+        
         entry = MemoryEntry(
             entry_type="interaction",
             data=interaction_data
         )
         self.entries.append(entry)
+        self._compact_interactions_if_needed()
         self._trim_if_needed()
+    
+    def _compact_interactions_if_needed(self) -> None:
+        """Compact interaction history using sliding window (keep last 5, compact older ones)."""
+        interaction_entries = [e for e in self.entries if e.entry_type == "interaction"]
+        
+        # If we have more than 5 interactions, compact the older ones
+        if len(interaction_entries) > 5:
+            # Find the oldest interactions to compact
+            interactions_to_compact = interaction_entries[:-5]  # All but the last 5
+            
+            if interactions_to_compact:
+                # Create a summary of the old interactions
+                summary_text = "Previous conversation summary:\n"
+                for entry in interactions_to_compact:
+                    human_msg = entry.data.get("human_message", "")[:100]
+                    ai_msg = entry.data.get("ai_response", "")[:100]
+                    summary_text += f"Human: {human_msg}...\nAssistant: {ai_msg}...\n"
+                
+                # Remove the old interaction entries
+                self.entries = [e for e in self.entries if e not in interactions_to_compact]
+                
+                # Add the summary as a special entry
+                summary_entry = MemoryEntry(
+                    entry_type="conversation_summary",
+                    data={"summary": summary_text}
+                )
+                self.entries.insert(-5, summary_entry)  # Insert before the last 5 interactions
+                
+                self.logger.info(f"Compacted {len(interactions_to_compact)} old interactions into summary")
     
     def get_latest_building_data(self) -> Optional[Dict[str, Any]]:
         """Get the most recently stored building data."""
@@ -126,6 +161,26 @@ class ConversationHistory:
         
         return matching_entries
     
+    def get_conversation_context(self) -> str:
+        """Get formatted conversation context for the agent."""
+        context = ""
+        
+        # Add conversation summary if it exists
+        for entry in self.entries:
+            if entry.entry_type == "conversation_summary":
+                context += f"{entry.data['summary']}\n\n"
+        
+        # Add recent interactions
+        recent_interactions = [e for e in self.entries if e.entry_type == "interaction"][-5:]
+        if recent_interactions:
+            context += "Recent conversation:\n"
+            for entry in recent_interactions:
+                human_msg = entry.data.get("human_message", "")
+                ai_msg = entry.data.get("ai_response", "")
+                context += f"Human: {human_msg}\nAssistant: {ai_msg}\n\n"
+        
+        return context.strip()
+    
     def get_summary(self) -> Dict[str, Any]:
         """Get memory summary with statistics."""
         entry_types = {}
@@ -140,7 +195,8 @@ class ConversationHistory:
             "latest_building": {
                 "project_name": latest_building.get("metadata", {}).get("project_name") if latest_building else None,
                 "timestamp": self.entries[-1].timestamp.isoformat() if self.entries else None
-            } if latest_building else None
+            } if latest_building else None,
+            "recent_interactions": len([e for e in self.entries if e.entry_type == "interaction"])
         }
     
     def clear(self) -> None:

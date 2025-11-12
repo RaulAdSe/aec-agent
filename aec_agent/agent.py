@@ -24,6 +24,7 @@ from .tools.building_data_toolkit import (
 from .tools.compliance_search import (
     search_compliance_docs
 )
+from .memory import ConversationHistory
 
 
 class ComplianceAgent:
@@ -31,26 +32,33 @@ class ComplianceAgent:
     Simple compliance agent with access to building data and compliance tools.
     """
     
-    def __init__(self, model_name: str = "gpt-5-mini", temperature: float = 1.0, verbose: bool = True):
+    def __init__(self, model_name: str = "gpt-4o-mini", temperature: float = 0.1, verbose: bool = True):
         """Initialize the compliance agent."""
         self.model_name = model_name
         self.temperature = temperature
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         
+        # Initialize memory management
+        self.memory = ConversationHistory(max_entries=50)
+        
         # Initialize components
         self._setup_llm()
         self._setup_tools()
         self._setup_agent()
         
-        self.logger.info("Compliance agent initialized with all tools")
+        self.logger.info("Compliance agent initialized with sliding window memory")
     
     def _setup_llm(self):
         """Set up the language model."""
         self.llm = ChatOpenAI(
             model=self.model_name,
             temperature=self.temperature,
-            max_completion_tokens=1000
+            max_tokens=4000,
+            model_kwargs={
+                "frequency_penalty": 0.1,
+                "presence_penalty": 0.1
+            }
         )
     
     def _setup_tools(self):
@@ -199,11 +207,17 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 
-WORKFLOW GUIDELINES:
-1. For building analysis, load building data first using load_building_data
-2. Use get_all_elements to see available element types
-3. Use get_element_properties to discover property names
-4. Use other tools for detailed analysis and compliance checking
+IMPORTANT GUIDELINES:
+1. For simple greetings or general questions about capabilities, provide a direct answer without using tools
+2. For building analysis, load building data first using load_building_data with a valid file path
+3. Only use tools when you have specific building data to analyze or compliance questions to research
+4. If no building data is loaded and user asks about building elements, explain that data needs to be loaded first
+
+EXAMPLES:
+- "Hello" → Direct answer about capabilities
+- "What can you do?" → Direct answer listing capabilities
+- "Load building data from X" → Use load_building_data tool
+- "How many spaces are there?" → Use get_all_elements if data is loaded
 
 Question: {input}
 Thought: {agent_scratchpad}""")
@@ -219,37 +233,59 @@ Thought: {agent_scratchpad}""")
             agent=agent,
             tools=self.tools,
             verbose=self.verbose,
-            max_iterations=10,
+            max_iterations=15,
             handle_parsing_errors=True
         )
     
-    def process(self, query: str) -> Dict[str, Any]:
+    def process(self, query: str, clear_history: bool = False) -> Dict[str, Any]:
         """
         Process a query with the agent.
         
         Args:
             query: Natural language query
+            clear_history: Whether to clear conversation history before processing
             
         Returns:
             Response with status, message, and result
         """
         try:
+            # Clear history if requested
+            if clear_history:
+                self.memory.clear()
+            
+            # Process the query
             result = self.agent_executor.invoke({"input": query})
+            response = result.get("output", "")
+            
+            # Store the interaction in memory
+            self.memory.add_interaction(query, response)
             
             return {
                 "status": "success",
                 "message": "Query processed successfully",
-                "response": result.get("output", ""),
+                "response": response,
                 "raw_result": result
             }
             
         except Exception as e:
             self.logger.error(f"Error processing query: {e}")
+            # Still store the failed interaction
+            self.memory.add_interaction(query, f"Error: {str(e)}")
+            
             return {
                 "status": "error", 
                 "message": f"Error: {str(e)}",
                 "response": ""
             }
+    
+    def clear_history(self):
+        """Clear the agent's conversation history."""
+        self.memory.clear()
+        self.logger.info("Agent conversation history cleared")
+    
+    def get_memory_summary(self) -> Dict[str, Any]:
+        """Get current memory summary."""
+        return self.memory.get_summary()
     
     def get_status(self) -> Dict[str, Any]:
         """Get agent status."""
@@ -262,6 +298,6 @@ Thought: {agent_scratchpad}""")
         }
 
 
-def create_agent(model_name: str = "gpt-5-mini", temperature: float = 1.0, verbose: bool = True) -> ComplianceAgent:
+def create_agent(model_name: str = "gpt-4o-mini", temperature: float = 0.1, verbose: bool = True) -> ComplianceAgent:
     """Create a compliance agent."""
     return ComplianceAgent(model_name=model_name, temperature=temperature, verbose=verbose)
