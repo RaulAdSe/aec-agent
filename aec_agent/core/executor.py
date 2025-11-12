@@ -153,8 +153,8 @@ class ToolExecutor:
             return self._extract_search_query(task)
             
         else:
-            # Default: use task description as input
-            return task.description
+            # No generic fallback - fail explicitly for unknown tools
+            raise ValueError(f"No input preparation method for tool: {tool_name}")
     
     def _extract_file_path(self, task: Task, context: Dict[str, Any]) -> str:
         """Extract file path for building data loading."""
@@ -177,12 +177,19 @@ class ToolExecutor:
                 if ".json" in word:
                     return word.strip('",.')
         
-        # Default fallback
-        return "data/out/building_data.json"
+        # No fallback - fail explicitly if no path found
+        raise ValueError(f"No file path found in task: {task.name} - {task.description}")
     
     def _extract_element_type(self, task: Task) -> str:
         """Extract element type from task description."""
         desc = task.description.lower()
+        
+        # Check if task is asking for all elements (count, extract all, etc.)
+        if any(term in desc for term in ["count", "all", "total", "extract", "process"]):
+            # Look at the original goal or task metadata for more context
+            original_goal = task.metadata.get("original_goal", "").lower()
+            if "count" in original_goal or "all" in original_goal:
+                return "spaces"  # Default to spaces for all-element queries
         
         if any(term in desc for term in ["door", "doors"]):
             return "doors"
@@ -195,7 +202,7 @@ class ToolExecutor:
         elif any(term in desc for term in ["slab", "slabs", "floor", "floors"]):
             return "slabs"
         else:
-            return "spaces"  # Default
+            raise ValueError(f"Cannot determine element type from task description: {desc}")
     
     def _prepare_query_input(self, task: Task, context: Dict[str, Any]) -> str:
         """Prepare JSON input for query_elements tool."""

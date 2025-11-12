@@ -116,10 +116,8 @@ class ReasoningAgent:
             )
         
         self.memory_manager = MemoryManager(
-            session_id=session_id,
-            enable_persistence=memory_config.enable_persistence,
-            persistence_path=memory_config.session_persistence_path,
-            auto_save_interval=memory_config.auto_save_interval
+            config=memory_config,
+            session_id=session_id
         )
         
         self.logger.info(f"Memory system initialized with session_id={self.memory_manager.get_session_id()}")
@@ -195,7 +193,7 @@ class ReasoningAgent:
                 }
                 
                 self.memory_manager.set_building_data_context(path, context_data)
-                self.memory_manager.track_active_file(path, "building_data")
+                self.memory_manager.track_active_file(path)
                 
                 self.memory_manager.record_tool_execution(
                     tool_name="load_building_data",
@@ -326,8 +324,8 @@ class ReasoningAgent:
     def _setup_reasoning_components(self):
         """Initialize all reasoning components."""
         # Initialize individual components
-        self.goal_decomposer = GoalDecomposer(llm=self.llm)
-        self.tool_planner = ToolPlanner(llm=self.llm)
+        self.goal_decomposer = GoalDecomposer()
+        self.tool_planner = ToolPlanner()
         self.executor = ToolExecutor(
             tool_registry=self.tool_registry,
             timeout=60.0
@@ -365,7 +363,12 @@ class ReasoningAgent:
             # Set session goal in memory
             if self.memory_manager:
                 self.memory_manager.set_session_goal(goal)
-                context = self.memory_manager.get_reasoning_context()
+                # Get context from memory manager for reasoning
+                context = {
+                    "session_summary": self.memory_manager.get_session_summary(),
+                    "active_files": self.memory_manager.get_active_files(),
+                    "recent_tools": self.memory_manager.get_recent_tool_executions(5)
+                }
             else:
                 context = {}
             

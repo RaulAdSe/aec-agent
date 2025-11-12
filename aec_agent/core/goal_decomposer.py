@@ -2,13 +2,11 @@
 Goal Decomposer - Breaks complex goals into actionable subtasks.
 
 This module analyzes high-level goals and creates structured task breakdowns
-optimized for AEC compliance workflows.
+optimized for AEC compliance workflows using deterministic pattern matching.
 """
 
 import uuid
 from typing import Dict, Any, List, Optional
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
 
 from .reasoning_utils import ReasoningUtils, Task, Priority
 
@@ -17,16 +15,12 @@ class GoalDecomposer:
     """
     Breaks complex goals into actionable subtasks with dependencies.
     
-    Specializes in AEC compliance workflows while handling general tasks.
+    Uses deterministic pattern matching for AEC compliance workflows.
+    No fallbacks - explicit failure for unmatched patterns.
     """
     
-    def __init__(self, llm: Optional[ChatOpenAI] = None):
+    def __init__(self):
         """Initialize the goal decomposer."""
-        self.llm = llm or ChatOpenAI(
-            model="gpt-4o-mini", 
-            temperature=0.1,
-            max_tokens=2000
-        )
         self.logger = ReasoningUtils.setup_logger(__name__)
         
         # AEC-specific task patterns
@@ -54,6 +48,11 @@ class GoalDecomposer:
                 "Identify energy-related elements",
                 "Calculate energy metrics",
                 "Validate energy efficiency requirements"
+            ],
+            "simple_analysis": [
+                "Load and parse building data",
+                "Extract requested information",
+                "Present results"
             ]
         }
     
@@ -71,7 +70,7 @@ class GoalDecomposer:
         self.logger.info(f"Decomposing goal: {goal}")
         
         try:
-            # Check for AEC pattern match first
+            # Use only AEC pattern matching - no fallbacks
             aec_tasks = self._try_aec_pattern_match(goal, context)
             if aec_tasks:
                 self.logger.info(f"Used AEC pattern for decomposition")
@@ -82,14 +81,13 @@ class GoalDecomposer:
                     "message": f"Decomposed using AEC pattern into {len(aec_tasks)} tasks"
                 }
             
-            # Fall back to LLM-based decomposition
-            llm_tasks = self._llm_decomposition(goal, context)
-            self.logger.info(f"Used LLM for decomposition")
+            # No pattern match - fail explicitly
+            self.logger.error(f"No AEC pattern matches goal: {goal}")
             return {
-                "success": True,
-                "tasks": llm_tasks,
-                "method": "llm",
-                "message": f"Decomposed using LLM into {len(llm_tasks)} tasks"
+                "success": False,
+                "tasks": [],
+                "message": f"Goal does not match any known AEC patterns: {goal}",
+                "available_patterns": list(self.aec_patterns.keys())
             }
             
         except Exception as e:
@@ -105,15 +103,17 @@ class GoalDecomposer:
         """Try to match goal against known AEC patterns."""
         goal_lower = goal.lower()
         
-        # Detect AEC domain
-        if any(term in goal_lower for term in ["fire", "safety", "emergency", "exit"]):
+        # Detect AEC domain - be more specific to avoid false matches
+        if any(term in goal_lower for term in ["fire safety", "fire compliance", "emergency exit", "fire protection"]):
             pattern = "fire_safety"
-        elif any(term in goal_lower for term in ["accessibility", "accessible", "disability", "ada"]):
+        elif any(term in goal_lower for term in ["accessibility compliance", "accessible design", "ada compliance"]):
             pattern = "accessibility"
-        elif any(term in goal_lower for term in ["structural", "load", "beam", "column"]):
+        elif any(term in goal_lower for term in ["structural analysis", "structural compliance", "load calculation", "beam analysis"]):
             pattern = "structural"
-        elif any(term in goal_lower for term in ["energy", "thermal", "efficiency", "hvac"]):
+        elif any(term in goal_lower for term in ["energy efficiency", "thermal analysis", "hvac compliance"]):
             pattern = "energy"
+        elif any(term in goal_lower for term in ["count", "list", "extract", "show", "get all", "find all", "query"]):
+            pattern = "simple_analysis"
         else:
             return None
         
@@ -149,12 +149,19 @@ class GoalDecomposer:
     
     def _generate_task_description(self, task_name: str, pattern: str, goal: str) -> str:
         """Generate detailed description for a task."""
+        
+        # Extract file path from goal if present
+        file_path = self._extract_file_path_from_goal(goal)
+        
         descriptions = {
-            "Load building data": f"Load and validate building data required for {pattern} analysis",
+            "Load building data": f"Load and validate building data from {file_path} required for {pattern} analysis" if file_path else f"Load and validate building data required for {pattern} analysis",
+            "Load and parse building data": f"Load and validate building data from {file_path} required for {pattern} analysis" if file_path else f"Load and validate building data required for {pattern} analysis",
             "Identify fire-related elements": "Find all fire doors, exits, zones, and safety equipment",
             "Identify accessibility elements": "Find all doors, ramps, elevators, and accessibility features",
             "Identify structural elements": "Find all beams, columns, slabs, and structural components",
             "Identify energy-related elements": "Find all HVAC, lighting, and energy systems",
+            "Extract requested information": "Extract and process the specific information requested in the goal",
+            "Present results": "Format and present the extracted information in a clear summary",
             "Retrieve fire safety regulations": "Search compliance documents for fire safety requirements",
             "Retrieve accessibility standards": "Search compliance documents for accessibility standards",
             "Calculate structural metrics": "Calculate loads, stresses, and structural performance metrics",
@@ -167,173 +174,10 @@ class GoalDecomposer:
         
         return descriptions.get(task_name, f"Complete {task_name.lower()} for {goal}")
     
-    def _llm_decomposition(self, goal: str, context: Dict[str, Any]) -> List[Task]:
-        """Use LLM to decompose goal into tasks."""
-        
-        # Prepare context summary
-        context_summary = self._summarize_context(context)
-        
-        # Create decomposition prompt
-        prompt = PromptTemplate.from_template("""
-You are an expert at breaking down complex AEC (Architecture, Engineering, Construction) compliance goals into actionable subtasks.
-
-GOAL: {goal}
-
-CURRENT CONTEXT:
-{context_summary}
-
-Break this goal into 3-7 specific, actionable subtasks that can be executed with tools. Each task should:
-1. Be specific and measurable
-2. Have clear dependencies (if any)  
-3. Focus on one main action
-4. Be achievable with available tools
-
-AVAILABLE TOOL CATEGORIES:
-- load_building_data: Load IFC building data
-- query_elements: Find and filter building elements
-- calculate_metrics: Perform calculations on building data
-- search_compliance_docs: Search regulations and standards
-- validate_compliance: Check compliance against rules
-
-RESPOND WITH VALID JSON:
-{{
-    "tasks": [
-        {{
-            "name": "Task name",
-            "description": "Detailed description of what this task accomplishes",
-            "priority": "HIGH" | "MEDIUM" | "LOW",
-            "dependencies": ["task_name_1", "task_name_2"],
-            "estimated_tools": ["tool1", "tool2"]
-        }}
-    ]
-}}
-
-Remember:
-- Keep tasks focused and specific
-- First task usually loads data if needed
-- Validation tasks come after data gathering
-- Dependencies should form a logical sequence
-""")
-        
-        # Get LLM response
-        formatted_prompt = prompt.format(
-            goal=goal,
-            context_summary=context_summary
-        )
-        
-        response = self.llm.invoke(formatted_prompt)
-        response_text = response.content.strip()
-        
-        # Parse JSON response
-        import json
-        try:
-            parsed_response = json.loads(response_text)
-            task_defs = parsed_response.get("tasks", [])
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Failed to parse LLM response: {e}")
-            # Fallback to simple decomposition
-            return self._create_fallback_tasks(goal)
-        
-        # Convert to Task objects
-        tasks = []
-        task_name_to_id = {}
-        
-        for task_def in task_defs:
-            task_id = str(uuid.uuid4())
-            task_name = task_def.get("name", f"Task {len(tasks) + 1}")
-            
-            # Map priority
-            priority_str = task_def.get("priority", "MEDIUM")
-            priority = getattr(Priority, priority_str, Priority.MEDIUM)
-            
-            # Convert dependency names to IDs
-            dep_names = task_def.get("dependencies", [])
-            dep_ids = [task_name_to_id.get(dep) for dep in dep_names if dep in task_name_to_id]
-            
-            task = Task(
-                id=task_id,
-                name=task_name,
-                description=task_def.get("description", ""),
-                priority=priority,
-                dependencies=dep_ids,
-                metadata={
-                    "original_goal": goal,
-                    "estimated_tools": task_def.get("estimated_tools", []),
-                    "llm_generated": True
-                }
-            )
-            
-            tasks.append(task)
-            task_name_to_id[task_name] = task_id
-        
-        return tasks
-    
-    def _summarize_context(self, context: Dict[str, Any]) -> str:
-        """Create a summary of current context for the LLM."""
-        summary_parts = []
-        
-        # Check for loaded building data
-        if context.get("building_data_loaded"):
-            summary_parts.append("✓ Building data is already loaded")
-        else:
-            summary_parts.append("✗ No building data loaded yet")
-        
-        # Check for active files
-        active_files = context.get("active_files", [])
-        if active_files:
-            summary_parts.append(f"Active files: {', '.join(active_files)}")
-        
-        # Check for session goals
-        session_goal = context.get("session_goal")
-        if session_goal:
-            summary_parts.append(f"Session goal: {session_goal}")
-        
-        # Check for available element counts
-        building_context = context.get("building_context", {})
-        if building_context:
-            element_counts = building_context.get("available_element_types", {})
-            if element_counts:
-                count_summary = ", ".join([f"{k}: {v}" for k, v in element_counts.items() if v > 0])
-                summary_parts.append(f"Available elements: {count_summary}")
-        
-        return "\n".join(summary_parts) if summary_parts else "No specific context available"
-    
-    def _create_fallback_tasks(self, goal: str) -> List[Task]:
-        """Create simple fallback tasks when LLM decomposition fails."""
-        self.logger.warning("Using fallback task decomposition")
-        
-        tasks = []
-        
-        # Always start with data loading if not loaded
-        task1 = Task(
-            id=str(uuid.uuid4()),
-            name="Load required data",
-            description=f"Load building data and documents needed for: {goal}",
-            priority=Priority.HIGH,
-            metadata={"fallback": True}
-        )
-        tasks.append(task1)
-        
-        # Generic analysis task
-        task2 = Task(
-            id=str(uuid.uuid4()),
-            name="Analyze requirements",
-            description=f"Analyze data and requirements for: {goal}",
-            priority=Priority.MEDIUM,
-            dependencies=[task1.id],
-            metadata={"fallback": True}
-        )
-        tasks.append(task2)
-        
-        # Generic validation task
-        task3 = Task(
-            id=str(uuid.uuid4()),
-            name="Validate results",
-            description=f"Validate analysis results for: {goal}",
-            priority=Priority.MEDIUM,
-            dependencies=[task2.id],
-            metadata={"fallback": True}
-        )
-        tasks.append(task3)
-        
-        return tasks
+    def _extract_file_path_from_goal(self, goal: str) -> Optional[str]:
+        """Extract file path from goal text."""
+        words = goal.split()
+        for word in words:
+            if '.json' in word or 'data/' in word:
+                return word.strip('",.')
+        return None

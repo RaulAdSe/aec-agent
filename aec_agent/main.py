@@ -68,16 +68,16 @@ def analyze(building_data_file: str, output: Optional[str], analysis_type: str):
             query = f"Load building data from {building_data_file} and perform a general compliance analysis"
         
         # Perform analysis
-        result = agent.process({"query": query})
+        result = agent.process_goal(query)
         
-        if result['status'] == 'success':
+        if result['status'] == 'success' or result['status'] == 'partial':
             # Prepare results for output
             results = {
                 "analysis_type": analysis_type,
                 "building_data_file": building_data_file,
-                "status": "success",
-                "analysis": result['response'],
-                "tools_used": [],
+                "status": result['status'],
+                "analysis": result['message'],
+                "reasoning_result": result.get('reasoning_result', {}),
                 "timestamp": "2024-01-01T00:00:00"  # TODO: Use actual timestamp
             }
             
@@ -152,11 +152,19 @@ def query(query: str, building_data: Optional[str], verbose: bool):
         if building_data:
             click.echo(f"📊 Building data: {building_data}")
         
-        result = agent.process(query_text)
+        result = agent.process_goal(query_text)
         
         if result['status'] == 'success':
             click.echo(f"\n✅ Result:")
-            click.echo(result['response'])
+            click.echo(result['message'])
+            # Show reasoning details
+            reasoning_result = result.get('reasoning_result', {})
+            summary = reasoning_result.get('summary', {})
+            if summary:
+                click.echo(f"Tasks completed: {summary.get('completed_tasks', 0)}/{summary.get('total_tasks', 0)}")
+        elif result['status'] == 'partial':
+            click.echo(f"\n⚠️ Partial result:")
+            click.echo(result['message'])
             
             # Note: tools_used not available in simplified version
         else:
@@ -214,12 +222,19 @@ Example queries:
                 else:
                     # Process with LangChain agent
                     click.echo("🔄 Processing...")
-                    result = agent.process(user_input)
+                    result = agent.process_goal(user_input)
                     
                     if result['status'] == 'success':
                         click.echo(f"\n💬 Response:")
-                        click.echo(result['response'])
-                        # Note: tools_used not available in simplified version
+                        click.echo(result['message'])
+                        # Show task summary
+                        reasoning_result = result.get('reasoning_result', {})
+                        summary = reasoning_result.get('summary', {})
+                        if summary:
+                            click.echo(f"Tasks completed: {summary.get('completed_tasks', 0)}/{summary.get('total_tasks', 0)}")
+                    elif result['status'] == 'partial':
+                        click.echo(f"\n⚠️ Partial response:")
+                        click.echo(result['message'])
                     else:
                         click.echo(f"❌ Error: {result.get('message', 'Unknown error')}")
                         

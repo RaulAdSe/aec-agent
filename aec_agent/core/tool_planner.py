@@ -2,12 +2,11 @@
 Tool Planner - Maps tasks to optimal tool sequences.
 
 This module analyzes tasks and determines the best sequence of tools
-to execute for each task, considering dependencies and context.
+to execute for each task, considering dependencies and context using
+deterministic pattern matching.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
+from typing import Dict, Any, List, Optional
 
 from .reasoning_utils import ReasoningUtils, Task
 
@@ -16,17 +15,13 @@ class ToolPlanner:
     """
     Maps tasks to optimal tool execution sequences.
     
-    Understands tool capabilities, dependencies, and prerequisites
-    to create efficient execution plans.
+    Uses deterministic pattern matching to understand tool capabilities,
+    dependencies, and prerequisites. No fallbacks - explicit failure for
+    unmatched patterns.
     """
     
-    def __init__(self, llm: Optional[ChatOpenAI] = None):
+    def __init__(self):
         """Initialize the tool planner."""
-        self.llm = llm or ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0.1, 
-            max_tokens=1500
-        )
         self.logger = ReasoningUtils.setup_logger(__name__)
         
         # Tool dependency mapping
@@ -109,7 +104,11 @@ class ToolPlanner:
             "validate": ["search_compliance_documents", "validate_compliance_rule"],
             "check": ["validate_compliance_rule"],
             "retrieve": ["search_compliance_documents"],
-            "search": ["search_compliance_documents"]
+            "search": ["search_compliance_documents"],
+            "extract": ["get_all_elements"],
+            "extract requested information": ["get_all_elements"],
+            "present": ["get_all_elements"],
+            "present results": ["get_all_elements"]
         }
     
     def plan_tools(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -126,7 +125,7 @@ class ToolPlanner:
         self.logger.info(f"Planning tools for task: {task.name}")
         
         try:
-            # Try pattern-based planning first
+            # Use only pattern-based planning - no fallbacks
             pattern_tools = self._try_pattern_matching(task, context)
             if pattern_tools:
                 self.logger.info(f"Used pattern matching for {task.name}")
@@ -137,14 +136,13 @@ class ToolPlanner:
                     "metadata": {"pattern_matched": True}
                 }
             
-            # Fall back to LLM-based planning
-            llm_tools = self._llm_tool_planning(task, context)
-            self.logger.info(f"Used LLM planning for {task.name}")
+            # No pattern match - fail explicitly
+            self.logger.error(f"No pattern matches task: {task.name}")
             return {
-                "success": True,
-                "tool_sequence": llm_tools,
-                "method": "llm",
-                "metadata": {"llm_planned": True}
+                "success": False,
+                "tool_sequence": [],
+                "message": f"Task does not match any known tool patterns: {task.name}",
+                "available_patterns": list(self._get_available_patterns())
             }
             
         except Exception as e:
@@ -208,27 +206,17 @@ class ToolPlanner:
     
     def _filter_tools_by_context(self, tools: List[str], context: Dict[str, Any]) -> List[str]:
         """Filter tools based on current context and dependencies."""
-        filtered_tools = []
+        # For deterministic behavior, return single best tool rather than sequences
+        # Prerequisites should be handled by proper context, not tool sequences
         
         for tool in tools:
             # Check if prerequisites are met
             if self._check_tool_prerequisites(tool, context):
-                filtered_tools.append(tool)
-            else:
-                # Add prerequisite tools first
-                prereq_tools = self._get_missing_prerequisites(tool, context)
-                filtered_tools.extend(prereq_tools)
-                filtered_tools.append(tool)
+                return [tool]  # Return single tool if prerequisites met
         
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_tools = []
-        for tool in filtered_tools:
-            if tool not in seen:
-                seen.add(tool)
-                unique_tools.append(tool)
-        
-        return unique_tools
+        # If no tool has met prerequisites, return first tool and let execution handle it
+        # This will fail explicitly if prerequisites aren't met, which is desired behavior
+        return tools[:1] if tools else []
     
     def _check_tool_prerequisites(self, tool: str, context: Dict[str, Any]) -> bool:
         """Check if tool prerequisites are satisfied."""
@@ -256,118 +244,6 @@ class ToolPlanner:
         
         return missing
     
-    def _llm_tool_planning(self, task: Task, context: Dict[str, Any]) -> List[str]:
-        """Use LLM to plan tool sequence for a task."""
-        
-        # Create tool descriptions for the prompt
-        tool_descriptions = []
-        for tool_name, info in self.tool_capabilities.items():
-            desc = f"- {tool_name}: {info['purpose']} (Input: {info['input']})"
-            tool_descriptions.append(desc)
-        
-        tool_list = "\n".join(tool_descriptions)
-        
-        # Create context summary
-        context_summary = self._create_context_summary(context)
-        
-        # Create planning prompt
-        prompt = PromptTemplate.from_template("""
-You are an expert at selecting the right tools for AEC compliance tasks.
-
-TASK: {task_name}
-DESCRIPTION: {task_description}
-
-CURRENT CONTEXT:
-{context_summary}
-
-AVAILABLE TOOLS:
-{tool_list}
-
-TOOL DEPENDENCIES:
-- Most tools (except search_compliance_documents) require building data to be loaded first
-- Validation tools work best when compliance documents have been searched first
-- Element-specific tools need element identification first
-
-Select 1-3 tools that would best accomplish this task. Consider:
-1. What data/information is needed
-2. What operations need to be performed
-3. Current context and what's already available
-4. Prerequisites and dependencies
-
-RESPOND WITH ONLY A JSON LIST:
-["tool1", "tool2", "tool3"]
-
-Examples:
-- For loading data: ["load_building_data"]
-- For finding doors: ["query_elements"] 
-- For compliance checking: ["search_compliance_documents", "validate_compliance_rule"]
-- For calculating areas: ["calculate_metrics"]
-""")
-        
-        # Get LLM response
-        formatted_prompt = prompt.format(
-            task_name=task.name,
-            task_description=task.description,
-            context_summary=context_summary,
-            tool_list=tool_list
-        )
-        
-        response = self.llm.invoke(formatted_prompt)
-        response_text = response.content.strip()
-        
-        # Parse JSON response
-        import json
-        try:
-            tools = json.loads(response_text)
-            if isinstance(tools, list):
-                # Validate tools exist
-                valid_tools = [t for t in tools if t in self.tool_capabilities]
-                return valid_tools
-        except json.JSONDecodeError:
-            self.logger.warning(f"Failed to parse LLM tool planning response: {response_text}")
-        
-        # Fallback to single generic tool
-        return self._create_fallback_tools(task)
-    
-    def _create_context_summary(self, context: Dict[str, Any]) -> str:
-        """Create context summary for LLM prompt."""
-        summary_parts = []
-        
-        if context.get("building_data_loaded"):
-            summary_parts.append("✓ Building data is loaded and available")
-        else:
-            summary_parts.append("✗ No building data loaded - will need to load first")
-        
-        building_context = context.get("building_context", {})
-        if building_context:
-            elements = building_context.get("available_element_types", {})
-            if elements:
-                element_summary = ", ".join([f"{k}: {v}" for k, v in elements.items() if v > 0])
-                summary_parts.append(f"Available elements: {element_summary}")
-        
-        active_files = context.get("active_files", [])
-        if active_files:
-            summary_parts.append(f"Active files: {', '.join(active_files)}")
-        
-        return "\n".join(summary_parts) if summary_parts else "No specific context"
-    
-    def _create_fallback_tools(self, task: Task) -> List[str]:
-        """Create fallback tool selection when other methods fail."""
-        task_text = f"{task.name} {task.description}".lower()
-        
-        # Simple keyword matching
-        if "load" in task_text or "data" in task_text:
-            return ["load_building_data"]
-        elif "search" in task_text or "find" in task_text or "query" in task_text:
-            return ["query_elements"]
-        elif "calculate" in task_text or "compute" in task_text:
-            return ["calculate_metrics"]
-        elif "validate" in task_text or "check" in task_text or "compliance" in task_text:
-            return ["validate_compliance_rule"]
-        else:
-            # Default to element querying as most generic useful tool
-            return ["query_elements"]
-    
     def get_tool_info(self, tool_name: str) -> Dict[str, Any]:
         """Get detailed information about a specific tool."""
         return self.tool_capabilities.get(tool_name, {})
@@ -375,3 +251,11 @@ Examples:
     def list_available_tools(self) -> List[str]:
         """Get list of all available tools."""
         return list(self.tool_capabilities.keys())
+    
+    def _get_available_patterns(self) -> List[str]:
+        """Get list of available task patterns."""
+        patterns = []
+        # Extract patterns from task mapping
+        for pattern_list in self.task_patterns.values():
+            patterns.extend(pattern_list)
+        return sorted(set(patterns))

@@ -168,10 +168,32 @@ class ResultValidator:
     def _validate_building_data_logic(self, output: Dict[str, Any]) -> ValidationResult:
         """Validate building data loading results."""
         data = output.get("data", {})
-        file_info = data.get("file_info", {})
         
-        # Check if total elements is reasonable
+        if not data or not isinstance(data, dict):
+            return ValidationResult(
+                success=False,
+                message="Building data is missing or invalid",
+                validation_level="logical",
+                details={"data_type": type(data)}
+            )
+        
+        # Try to get total elements from file_info first, then count manually
+        file_info = data.get("file_info", {})
         total_elements = file_info.get("total_elements", 0)
+        
+        # If no file_info, count elements manually from data structure
+        if total_elements == 0 or total_elements == "unknown":
+            # Count elements from various possible keys
+            element_count = 0
+            if "elements" in data:
+                element_count = len(data["elements"])
+            else:
+                # Count from typical IFC element types
+                for element_type in ["spaces", "doors", "walls", "slabs", "stairs", "columns", "beams"]:
+                    if element_type in data:
+                        element_count += len(data[element_type])
+            total_elements = element_count
+        
         if total_elements <= 0:
             return ValidationResult(
                 success=False,
@@ -280,9 +302,9 @@ class ResultValidator:
                     validation_level="progress"
                 )
         
-        # Default: if tool executed successfully, assume some progress
+        # No default assumption - require explicit progress validation for each tool
         return ValidationResult(
-            success=True,
-            message="Tool executed successfully - assuming progress made",
+            success=False,
+            message=f"No specific progress validation defined for tool: {tool_name}",
             validation_level="progress"
         )
