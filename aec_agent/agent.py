@@ -5,12 +5,16 @@ One agent that can handle building data analysis and compliance search.
 """
 
 import logging
+import os
 from typing import Dict, Any
 
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.tools import Tool
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
+from langsmith import traceable
+from langchain.callbacks.manager import CallbackManager
+from langchain.callbacks.tracers import LangChainTracer
 
 from .tools.building_data_toolkit import (
     load_building_data,
@@ -42,24 +46,51 @@ class ComplianceAgent:
         # Initialize memory management
         self.memory = ConversationHistory(max_entries=50)
         
+        # Setup LangSmith tracing
+        self._setup_langsmith_tracing()
+        
         # Initialize components
         self._setup_llm()
         self._setup_tools()
         self._setup_agent()
         
-        self.logger.info("Compliance agent initialized with sliding window memory")
+        self.logger.info("Compliance agent initialized with LangSmith tracing and sliding window memory")
+    
+    def _setup_langsmith_tracing(self):
+        """Setup LangSmith tracing for monitoring agent behavior."""
+        langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+        if langsmith_api_key:
+            # Configure LangSmith environment
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_API_KEY"] = langsmith_api_key
+            os.environ["LANGCHAIN_PROJECT"] = "AEC-Compliance-Agent"
+            
+            # Setup callback manager with LangChain tracer
+            tracer = LangChainTracer(project_name="AEC-Compliance-Agent")
+            self.callback_manager = CallbackManager([tracer])
+            
+            self.logger.info("LangSmith tracing enabled for project: AEC-Compliance-Agent")
+        else:
+            self.callback_manager = None
+            self.logger.warning("LANGSMITH_API_KEY not found - tracing disabled")
     
     def _setup_llm(self):
         """Set up the language model."""
-        self.llm = ChatOpenAI(
-            model=self.model_name,
-            temperature=self.temperature,
-            max_tokens=4000,
-            model_kwargs={
+        llm_kwargs = {
+            "model": self.model_name,
+            "temperature": self.temperature,
+            "max_tokens": 4000,
+            "model_kwargs": {
                 "frequency_penalty": 0.1,
                 "presence_penalty": 0.1
             }
-        )
+        }
+        
+        # Add callbacks if LangSmith is enabled
+        if self.callback_manager:
+            llm_kwargs["callbacks"] = self.callback_manager
+            
+        self.llm = ChatOpenAI(**llm_kwargs)
     
     def _setup_tools(self):
         """Set up all available tools."""
@@ -229,14 +260,21 @@ Thought: {agent_scratchpad}""")
             prompt=react_prompt
         )
         
-        self.agent_executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=self.verbose,
-            max_iterations=15,
-            handle_parsing_errors=True
-        )
+        executor_kwargs = {
+            "agent": agent,
+            "tools": self.tools,
+            "verbose": self.verbose,
+            "max_iterations": 15,
+            "handle_parsing_errors": True
+        }
+        
+        # Add callbacks if LangSmith is enabled
+        if self.callback_manager:
+            executor_kwargs["callbacks"] = self.callback_manager
+            
+        self.agent_executor = AgentExecutor(**executor_kwargs)
     
+    @traceable(name="compliance_agent_query", project_name="AEC-Compliance-Agent")
     def process(self, query: str, clear_history: bool = False) -> Dict[str, Any]:
         """
         Process a query with the agent.
@@ -253,8 +291,19 @@ Thought: {agent_scratchpad}""")
             if clear_history:
                 self.memory.clear()
             
-            # Process the query
-            result = self.agent_executor.invoke({"input": query})
+            # Process the query with metadata for LangSmith
+            run_metadata = {
+                "model": self.model_name,
+                "temperature": self.temperature,
+                "clear_history": clear_history,
+                "memory_entries": len(self.memory.entries)
+            }
+            
+            invoke_kwargs = {"input": query}
+            if self.callback_manager:
+                invoke_kwargs["config"] = {"metadata": run_metadata}
+                
+            result = self.agent_executor.invoke(invoke_kwargs)
             response = result.get("output", "")
             
             # Store the interaction in memory
