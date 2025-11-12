@@ -8,7 +8,7 @@ import time
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
-from .utils import ReasoningUtils, Task, TaskStatus, ExecutionResult
+from .reasoning_utils import ReasoningUtils, Task, TaskStatus, ExecutionResult
 from .goal_decomposer import GoalDecomposer
 from .tool_planner import ToolPlanner
 from .executor import ToolExecutor

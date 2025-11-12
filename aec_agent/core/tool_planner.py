@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 
-from .utils import ReasoningUtils, Task
+from .reasoning_utils import ReasoningUtils, Task
 
 
 class ToolPlanner:

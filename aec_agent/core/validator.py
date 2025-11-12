@@ -8,7 +8,7 @@ and overall progress toward goals.
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
-from .utils import ReasoningUtils, Task, TaskStatus, ExecutionResult
+from .reasoning_utils import ReasoningUtils, Task, TaskStatus, ExecutionResult
 
 
 @dataclass
@@ -32,46 +32,11 @@ class ResultValidator:
     1. Output validation - Check tool output format and completeness
     2. Logical validation - Verify results make logical sense
     3. Progress validation - Confirm steps advance toward goal
-    4. Goal validation - Check if goal requirements are satisfied
     """
     
     def __init__(self):
         """Initialize the result validator."""
         self.logger = ReasoningUtils.setup_logger(__name__)
-        
-        # Expected output patterns for different tools
-        self.output_patterns = {
-            "load_building_data": {
-                "required_fields": ["status", "data"],
-                "success_indicators": ["total_elements", "file_info"],
-                "logical_checks": ["element_count_positive"]
-            },
-            "get_all_elements": {
-                "required_fields": ["status"],
-                "success_indicators": ["elements", "data"],
-                "logical_checks": ["non_empty_elements"]
-            },
-            "query_elements": {
-                "required_fields": ["status"],
-                "success_indicators": ["elements", "data"], 
-                "logical_checks": ["reasonable_element_count"]
-            },
-            "calculate_metrics": {
-                "required_fields": ["status", "result"],
-                "success_indicators": ["calculations"],
-                "logical_checks": ["positive_numeric_results"]
-            },
-            "validate_compliance_rule": {
-                "required_fields": ["status", "validation_results"],
-                "success_indicators": ["compliance_status"],
-                "logical_checks": ["boolean_compliance_status"]
-            },
-            "search_compliance_documents": {
-                "required_fields": ["status"],
-                "success_indicators": ["documents", "results"],
-                "logical_checks": ["relevant_documents_found"]
-            }
-        }
     
     def validate_execution(self, task: Task, execution_result: ExecutionResult) -> Dict[str, Any]:
         """
@@ -139,11 +104,7 @@ class ResultValidator:
     
     def _validate_output_format(self, execution_result: ExecutionResult) -> ValidationResult:
         """Validate the format and structure of tool output."""
-        tool_name = execution_result.tool_name
         output = execution_result.output
-        
-        # Get expected pattern for this tool
-        pattern = self.output_patterns.get(tool_name, {})
         
         if not isinstance(output, dict):
             return ValidationResult(
@@ -154,38 +115,18 @@ class ResultValidator:
             )
         
         # Check required fields
-        required_fields = pattern.get("required_fields", ["status"])
-        missing_fields = [field for field in required_fields if field not in output]
-        
-        if missing_fields:
+        if "status" not in output:
             return ValidationResult(
                 success=False,
-                message=f"Missing required fields: {missing_fields}",
+                message="Missing required 'status' field",
                 validation_level="output",
-                details={"missing_fields": missing_fields}
+                details={"missing_fields": ["status"]}
             )
-        
-        # Check success indicators (if status is success)
-        if output.get("status") == "success":
-            success_indicators = pattern.get("success_indicators", [])
-            missing_indicators = [
-                field for field in success_indicators 
-                if field not in output or not output[field]
-            ]
-            
-            if missing_indicators:
-                return ValidationResult(
-                    success=False,
-                    message=f"Missing success indicators: {missing_indicators}",
-                    validation_level="output",
-                    details={"missing_indicators": missing_indicators}
-                )
         
         return ValidationResult(
             success=True,
             message="Output format validation passed",
-            validation_level="output",
-            details={"validated_fields": required_fields}
+            validation_level="output"
         )
     
     def _validate_logical_consistency(self, execution_result: ExecutionResult, task: Task) -> ValidationResult:
@@ -209,10 +150,6 @@ class ResultValidator:
                 return self._validate_element_query_logic(output)
             elif tool_name == "calculate_metrics":
                 return self._validate_calculation_logic(output)
-            elif tool_name == "validate_compliance_rule":
-                return self._validate_compliance_logic(output)
-            elif tool_name == "search_compliance_documents":
-                return self._validate_search_logic(output)
             else:
                 return ValidationResult(
                     success=True,
@@ -243,28 +180,15 @@ class ResultValidator:
                 details={"total_elements": total_elements}
             )
         
-        # Check if we have some element types
-        element_types = ["spaces", "doors", "walls", "slabs", "stairs"]
-        found_types = [t for t in element_types if t in data and len(data[t]) > 0]
-        
-        if not found_types:
-            return ValidationResult(
-                success=False,
-                message="No recognizable element types found in building data",
-                validation_level="logical",
-                details={"checked_types": element_types}
-            )
-        
         return ValidationResult(
             success=True,
-            message=f"Building data is logically consistent ({total_elements} elements, {len(found_types)} types)",
+            message=f"Building data is logically consistent ({total_elements} elements)",
             validation_level="logical",
-            details={"total_elements": total_elements, "element_types": found_types}
+            details={"total_elements": total_elements}
         )
     
     def _validate_element_query_logic(self, output: Dict[str, Any]) -> ValidationResult:
         """Validate element query results."""
-        # Check for elements in data field
         elements = output.get("elements") or output.get("data", [])
         
         if not isinstance(elements, list):
@@ -275,7 +199,7 @@ class ResultValidator:
                 details={"elements_type": type(elements).__name__}
             )
         
-        # Check if element count is reasonable (not too high)
+        # Check if element count is reasonable
         if len(elements) > 10000:
             return ValidationResult(
                 success=False,
@@ -324,61 +248,6 @@ class ResultValidator:
             validation_level="logical"
         )
     
-    def _validate_compliance_logic(self, output: Dict[str, Any]) -> ValidationResult:
-        """Validate compliance validation results."""
-        validation_results = output.get("validation_results", {})
-        
-        if not isinstance(validation_results, dict):
-            return ValidationResult(
-                success=False,
-                message="Validation results should be a dictionary",
-                validation_level="logical"
-            )
-        
-        # Check for compliance status
-        if "compliance_status" in validation_results:
-            status = validation_results["compliance_status"]
-            if status not in ["compliant", "non_compliant", "partial", "unknown"]:
-                return ValidationResult(
-                    success=False,
-                    message=f"Invalid compliance status: {status}",
-                    validation_level="logical",
-                    details={"status": status}
-                )
-        
-        return ValidationResult(
-            success=True,
-            message="Compliance validation results are logical",
-            validation_level="logical"
-        )
-    
-    def _validate_search_logic(self, output: Dict[str, Any]) -> ValidationResult:
-        """Validate document search results."""
-        results = output.get("results") or output.get("documents", [])
-        
-        if not isinstance(results, list):
-            return ValidationResult(
-                success=False,
-                message="Search results should be a list",
-                validation_level="logical"
-            )
-        
-        # Check if we have some results for successful search
-        if len(results) == 0:
-            return ValidationResult(
-                success=False,
-                message="No search results found - may indicate query issues",
-                validation_level="logical",
-                details={"result_count": 0}
-            )
-        
-        return ValidationResult(
-            success=True,
-            message=f"Search results are logical ({len(results)} documents found)",
-            validation_level="logical",
-            details={"result_count": len(results)}
-        )
-    
     def _validate_task_progress(self, task: Task, execution_result: ExecutionResult) -> ValidationResult:
         """Validate that execution made progress toward completing the task."""
         
@@ -411,69 +280,9 @@ class ResultValidator:
                     validation_level="progress"
                 )
         
-        elif tool_name == "calculate_metrics" and isinstance(output, dict):
-            if output.get("status") == "success" and "result" in output:
-                return ValidationResult(
-                    success=True,
-                    message="Calculations completed - progress toward task completion",
-                    validation_level="progress"
-                )
-        
-        elif tool_name == "search_compliance_documents" and isinstance(output, dict):
-            results = output.get("results") or output.get("documents", [])
-            if isinstance(results, list) and len(results) > 0:
-                return ValidationResult(
-                    success=True,
-                    message=f"Found {len(results)} compliance documents - progress toward validation",
-                    validation_level="progress"
-                )
-        
         # Default: if tool executed successfully, assume some progress
         return ValidationResult(
             success=True,
             message="Tool executed successfully - assuming progress made",
             validation_level="progress"
         )
-    
-    def validate_goal_achievement(self, tasks: List[Task], goal: str) -> ValidationResult:
-        """Validate whether the overall goal has been achieved."""
-        
-        completed_tasks = [task for task in tasks if task.status == TaskStatus.COMPLETED]
-        total_tasks = len(tasks)
-        completion_rate = len(completed_tasks) / total_tasks if total_tasks > 0 else 0
-        
-        if completion_rate >= 1.0:
-            return ValidationResult(
-                success=True,
-                message=f"Goal achieved: All {total_tasks} tasks completed",
-                validation_level="goal",
-                details={
-                    "completed_tasks": len(completed_tasks),
-                    "total_tasks": total_tasks,
-                    "completion_rate": completion_rate
-                }
-            )
-        elif completion_rate >= 0.8:
-            return ValidationResult(
-                success=True,
-                message=f"Goal substantially achieved: {len(completed_tasks)}/{total_tasks} tasks completed",
-                validation_level="goal",
-                details={
-                    "completed_tasks": len(completed_tasks),
-                    "total_tasks": total_tasks,
-                    "completion_rate": completion_rate
-                }
-            )
-        else:
-            failed_tasks = [task for task in tasks if task.status == TaskStatus.FAILED]
-            return ValidationResult(
-                success=False,
-                message=f"Goal not achieved: Only {len(completed_tasks)}/{total_tasks} tasks completed, {len(failed_tasks)} failed",
-                validation_level="goal",
-                details={
-                    "completed_tasks": len(completed_tasks),
-                    "total_tasks": total_tasks,
-                    "failed_tasks": len(failed_tasks),
-                    "completion_rate": completion_rate
-                }
-            )

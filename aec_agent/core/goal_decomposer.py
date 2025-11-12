@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 
-from .utils import ReasoningUtils, Task, Priority
+from .reasoning_utils import ReasoningUtils, Task, Priority
 
 
 class GoalDecomposer:

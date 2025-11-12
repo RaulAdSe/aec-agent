@@ -106,13 +106,18 @@ def status():
     click.echo("=" * 30)
     click.echo(f"Environment: {config.environment}")
     click.echo(f"Default Model: {config.default_model}")
-    click.echo(f"TOON Enabled: {config.use_toon}")
+    click.echo(f"TOON Enabled: {config.use_toon} (disabled)")
     click.echo(f"Data Directory: {config.data_dir}")
     click.echo(f"Log Level: {config.log_level}")
     
     # Check API key availability
     openai_status = "✓ Available" if config.openai_api_key else "✗ Not configured"
     click.echo(f"OpenAI API Key: {openai_status}")
+    
+    # Check LangSmith tracing
+    langsmith_status = "✓ Enabled" if config.langchain_tracing_v2 and config.langchain_api_key else "✗ Disabled"
+    click.echo(f"LangSmith Tracing: {langsmith_status}")
+    click.echo(f"LangSmith Project: {config.langchain_project}")
 
 
 @cli.command()
@@ -277,7 +282,7 @@ def init_project(project_name: str):
         "created_at": "2024-01-01T00:00:00",  # TODO: Use actual timestamp
         "compliance_codes": ["CTE DB-SI", "CTE DB-SUA"],
         "analysis_settings": {
-            "use_toon": True,
+            "use_toon": False,
             "confidence_threshold": 0.8
         }
     }
@@ -325,6 +330,88 @@ def output_results(results: Dict[str, Any], output_file: Optional[str] = None):
         click.echo("Analysis Results:")
         click.echo("=" * 40)
         click.echo(json.dumps(results, indent=2, ensure_ascii=False))
+
+
+@cli.command()
+@click.argument('goal')
+@click.option('--session-id', help='Session ID for memory continuity')
+@click.option('--max-iterations', default=20, help='Maximum reasoning iterations')
+@click.option('--verbose', is_flag=True, help='Enable verbose output')
+def reason(goal: str, session_id: Optional[str] = None, max_iterations: int = 20, verbose: bool = False):
+    """
+    Process a goal using autonomous reasoning.
+    
+    Example: aec_agent reason "Analyze fire safety compliance"
+    """
+    try:
+        from .reasoning_agent import create_reasoning_agent
+        
+        click.echo(f"🤖 Starting autonomous reasoning for goal: {goal}")
+        click.echo("=" * 60)
+        
+        # Create reasoning agent
+        agent = create_reasoning_agent(
+            model_name=config.default_model,
+            temperature=config.temperature,
+            verbose=verbose,
+            enable_memory=True,
+            session_id=session_id,
+            max_iterations=max_iterations
+        )
+        
+        # Process the goal
+        result = agent.process_goal(goal)
+        
+        # Display results
+        click.echo("\n📊 Reasoning Results:")
+        click.echo("=" * 40)
+        click.echo(f"Status: {result.get('status')}")
+        click.echo(f"Message: {result.get('message')}")
+        
+        reasoning_result = result.get('reasoning_result', {})
+        summary = reasoning_result.get('summary', {})
+        
+        if summary:
+            click.echo(f"\n📈 Summary:")
+            click.echo(f"  Goal Achieved: {summary.get('goal_achieved', False)}")
+            click.echo(f"  Tasks Completed: {summary.get('completed_tasks', 0)}/{summary.get('total_tasks', 0)}")
+            click.echo(f"  Execution Time: {summary.get('execution_time', 0):.2f}s")
+            click.echo(f"  Iterations: {summary.get('iterations', 0)}")
+        
+        # Display task breakdown
+        tasks = reasoning_result.get('tasks', [])
+        if tasks:
+            click.echo(f"\n📋 Task Breakdown:")
+            for i, task in enumerate(tasks, 1):
+                status_icon = "✅" if task['status'] == 'completed' else "❌" if task['status'] == 'failed' else "⏳"
+                click.echo(f"  {i}. {status_icon} {task['name']} ({task['status']})")
+                if task.get('tools'):
+                    click.echo(f"     Tools: {', '.join(task['tools'])}")
+        
+        # Display session info if available
+        session_summary = result.get('session_summary')
+        if session_summary:
+            click.echo(f"\n💾 Session Info:")
+            click.echo(f"  Session ID: {session_summary.get('session_id')}")
+            click.echo(f"  Memory Stats: {session_summary['memory_stats']['total_turns']} conversation turns")
+        
+        if verbose and reasoning_result.get('outputs'):
+            click.echo(f"\n🔍 Detailed Outputs:")
+            for output in reasoning_result['outputs']:
+                click.echo(f"  Tool: {output['tool']}")
+                click.echo(f"  Time: {output['execution_time']:.2f}s")
+                click.echo(f"  Output: {str(output['output'])[:200]}...")
+                click.echo()
+        
+        click.echo(f"\n🎉 Reasoning completed!")
+        
+    except ImportError as e:
+        click.echo(f"❌ Error: Reasoning agent not available. {e}")
+    except Exception as e:
+        click.echo(f"❌ Error: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == '__main__':

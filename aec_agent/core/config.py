@@ -26,16 +26,16 @@ class AppConfig(BaseModel):
     temperature: float = Field(default=0.1, description="LLM temperature")
     max_tokens: int = Field(default=8192, description="Maximum tokens per response")
     
-    # TOON Configuration
-    use_toon: bool = Field(default=True, description="Enable TOON format")
+    # TOON Configuration - DISABLED
+    use_toon: bool = Field(default=False, description="Enable TOON format (disabled)")
     
     # API Keys (loaded from environment)
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
     
-    # Optional: LangSmith Configuration (commented out for clean start)
-    # langchain_tracing_v2: bool = Field(default=False, description="Enable LangSmith tracing")
-    # langchain_api_key: Optional[str] = Field(default=None, description="LangSmith API key")
-    # langchain_project: str = Field(default="aec-compliance-agent", description="LangSmith project name")
+    # LangSmith Configuration - ENABLED
+    langchain_tracing_v2: bool = Field(default=True, description="Enable LangSmith tracing")
+    langchain_api_key: Optional[str] = Field(default=None, description="LangSmith API key")
+    langchain_project: str = Field(default="AEC-Reasoning-Agent", description="LangSmith project name")
     
     class Config:
         env_file = ".env"
@@ -47,6 +47,16 @@ class AppConfig(BaseModel):
         # Load OpenAI API key from environment
         if not self.openai_api_key:
             self.openai_api_key = os.getenv("OPENAI_API_KEY")
+            
+        # Load LangSmith API key from environment
+        if not self.langchain_api_key:
+            self.langchain_api_key = os.getenv("LANGSMITH_API_KEY")
+            
+        # Setup LangSmith tracing environment variables
+        if self.langchain_tracing_v2 and self.langchain_api_key:
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_API_KEY"] = self.langchain_api_key
+            os.environ["LANGCHAIN_PROJECT"] = self.langchain_project
 
 
 # Global config instance
