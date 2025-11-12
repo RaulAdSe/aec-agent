@@ -54,10 +54,10 @@ def analyze(building_data_file: str, output: Optional[str], analysis_type: str):
     logger.info(f"Starting {analysis_type} analysis of {building_data_file}")
     
     try:
-        from .agent import create_agent
+        from .reasoning_agent import create_reasoning_agent
         
         # Create LangChain agent
-        agent = create_agent(verbose=config.log_level == "DEBUG", temperature=0.1)
+        agent = create_reasoning_agent(verbose=config.log_level == "DEBUG", temperature=0.1)
         
         # Prepare query based on analysis type and file
         if analysis_type == 'fire_safety':
@@ -120,34 +120,7 @@ def status():
     click.echo(f"LangSmith Project: {config.langchain_project}")
 
 
-@cli.command()
-@click.option('--host', default="127.0.0.1", help='Host to bind the server')
-@click.option('--port', default=8000, help='Port to bind the server')
-@click.option('--reload', is_flag=True, help='Enable auto-reload')
-def serve(host: str, port: int, reload: bool):
-    """Start the LangChain agent API server."""
-    
-    click.echo(f"🚀 Starting AEC Compliance Agent API server on {host}:{port}")
-    click.echo(f"📖 API docs: http://{host}:{port}/docs")
-    click.echo(f"🔧 Agent endpoint: http://{host}:{port}/compliance")
-    
-    try:
-        import uvicorn
-        from .services.langchain_service import create_app
-        
-        app = create_app()
-        
-        uvicorn.run(
-            app,
-            host=host,
-            port=port,
-            reload=reload
-        )
-    except ImportError as e:
-        click.echo(f"❌ Missing dependencies for API server: {e}")
-        click.echo("Install with: pip install uvicorn fastapi langserve")
-    except Exception as e:
-        click.echo(f"❌ Failed to start server: {e}")
+# API server functionality removed - use reasoning agent directly
 
 
 @cli.command()
@@ -162,12 +135,12 @@ def query(query: str, building_data: Optional[str], verbose: bool):
         return
     
     try:
-        from .agent import create_agent
+        from .reasoning_agent import create_reasoning_agent
         
         if verbose:
             click.echo("🔧 Creating LangChain agent...")
         
-        agent = create_agent(verbose=verbose, temperature=0.1)
+        agent = create_reasoning_agent(verbose=verbose, temperature=0.1)
         
         # Prepare query with optional building data
         query_text = query
@@ -205,13 +178,13 @@ def chat():
         return
         
     try:
-        from .agent import create_agent
+        from .reasoning_agent import create_reasoning_agent
         
         click.echo("🏗️ AEC Compliance Agent - Interactive Chat")
         click.echo("Enter natural language queries about building compliance")
         click.echo("Type 'exit' to quit")
         
-        agent = create_agent(verbose=False, temperature=0.1)
+        agent = create_reasoning_agent(verbose=False, temperature=0.1)
         click.echo(f"✅ Agent ready: {agent.get_status()['name']}")
         
         while True:

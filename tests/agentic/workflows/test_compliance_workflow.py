@@ -1,54 +1,58 @@
-"""Test agent workflow decision-making."""
+"""Test reasoning agent workflow decision-making."""
 
-from unittest.mock import patch
-from src.agents.compliance_agent import ComplianceAgent
+from unittest.mock import patch, MagicMock
+from aec_agent import ReasoningAgent
 
 
-def test_agent_tool_selection():
-    """Test agent selects appropriate tools."""
-    agent = ComplianceAgent()
+def test_agent_tool_registry():
+    """Test agent has initialized tool registry."""
+    agent = ReasoningAgent(enable_memory=False)
     
     # Agent should have initialized tools
-    tools = agent.toolkit.get_tools()
-    assert len(tools) > 0
+    assert len(agent.tool_registry) > 0
     
-    # Should have data conversion tool
-    tool_names = [tool["name"] for tool in tools]
-    assert "convert_data_format" in tool_names
+    # Should have key tools
+    tool_names = list(agent.tool_registry.keys())
+    assert "load_building_data" in tool_names
+    assert "query_elements" in tool_names
+    assert "search_compliance_documents" in tool_names
 
 
 def test_agent_memory_workflow():
     """Test agent memory management during workflow."""
-    agent = ComplianceAgent()
+    agent = ReasoningAgent(enable_memory=True)
     
     # Initial state
-    assert agent.get_memory_summary()["total_entries"] == 0
+    initial_summary = agent.get_session_summary()
+    assert initial_summary is not None
     
-    # Process data
-    sample_data = {"metadata": {"project_name": "Memory Test"}}
-    agent.process(sample_data)
+    # Set session goal
+    agent.set_session_goal("Test workflow goal")
     
     # Memory should be updated
-    memory = agent.get_memory_summary()
-    assert memory["total_entries"] > 0
-    assert memory["latest_building"]["project_name"] == "Memory Test"
+    memory = agent.get_session_summary()
+    assert memory["goal"]["description"] == "Test workflow goal"
     
     # Clear memory
     agent.clear_memory()
-    assert agent.get_memory_summary()["total_entries"] == 0
+    updated_summary = agent.get_session_summary()
+    assert updated_summary["memory_stats"]["total_turns"] == 0
 
 
-def test_agent_decision_flow():
-    """Test agent decision-making process."""
-    with patch('src.services.ai_client.AIClient.analyze_compliance') as mock_ai:
-        mock_ai.return_value = {
-            "status": "success", 
-            "analysis": "Test analysis result"
+def test_agent_reasoning_flow():
+    """Test agent reasoning process."""
+    # Mock the LLM responses for controlled testing
+    with patch('aec_agent.core.goal_decomposer.GoalDecomposer.decompose') as mock_decompose:
+        mock_decompose.return_value = {
+            "success": True,
+            "tasks": [],
+            "method": "test"
         }
         
-        agent = ComplianceAgent()
-        result = agent.process({"test": "data"})
+        agent = ReasoningAgent(enable_memory=False)
+        result = agent.process_goal("Test goal")
         
-        # Should have made decisions and processed
+        # Should have processed the goal
         assert "status" in result
-        mock_ai.assert_called_once()
+        assert result["goal"] == "Test goal"
+        mock_decompose.assert_called_once()
