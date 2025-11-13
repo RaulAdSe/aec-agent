@@ -323,14 +323,14 @@ class ReasoningAgent:
     
     def _setup_reasoning_components(self):
         """Initialize all reasoning components."""
-        # Initialize individual components
-        self.goal_decomposer = GoalDecomposer()
-        self.tool_planner = ToolPlanner()
+        # Initialize individual components with LLM support
+        self.goal_decomposer = GoalDecomposer(llm=self.llm)
+        self.tool_planner = ToolPlanner(llm=self.llm)
         self.executor = ToolExecutor(
             tool_registry=self.tool_registry,
             timeout=60.0
         )
-        self.validator = ResultValidator()
+        self.validator = ResultValidator(llm=self.llm)
         
         # Create the main reasoning controller
         self.reasoning_controller = ReasoningController(
@@ -339,7 +339,8 @@ class ReasoningAgent:
             executor=self.executor,
             validator=self.validator,
             max_iterations=self.max_iterations,
-            max_execution_time=self.max_execution_time
+            max_execution_time=self.max_execution_time,
+            llm=self.llm
         )
     
     @traceable(name="reasoning_agent_process", project_name="AEC-Reasoning-Agent")

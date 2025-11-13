@@ -11,6 +11,9 @@ from typing import Any, Dict, Callable, Optional
 
 from .reasoning_utils import ReasoningUtils, Task, ExecutionResult
 
+# Import LangSmith tracing
+from langsmith import traceable
+
 
 class ToolExecutor:
     """
@@ -36,6 +39,7 @@ class ToolExecutor:
         self.logger = ReasoningUtils.setup_logger(__name__)
         self.execution_history = []
     
+    @traceable(name="tool_execution", metadata={"component": "executor"})
     def execute_tool(
         self, 
         tool_name: str, 
@@ -106,7 +110,7 @@ class ToolExecutor:
                 }
             )
             
-            self.logger.info(f"Tool '{tool_name}' executed successfully in {execution_time:.2f}s")
+            self.logger.info(f"Tool '{tool_name}' executed successfully in {execution_time:.4f}s ({execution_time*1000:.1f}ms)")
             self._record_execution(result)
             
             return result

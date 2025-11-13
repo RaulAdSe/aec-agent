@@ -10,6 +10,15 @@ from dataclasses import dataclass
 
 from .reasoning_utils import ReasoningUtils, Task, TaskStatus, ExecutionResult
 
+# Import LangSmith tracing
+from langsmith import traceable
+
+# Import LLM components  
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from langchain.schema import StrOutputParser
+import json
+
 
 @dataclass
 class ValidationResult:
@@ -34,10 +43,21 @@ class ResultValidator:
     3. Progress validation - Confirm steps advance toward goal
     """
     
-    def __init__(self):
+    def __init__(self, llm=None):
         """Initialize the result validator."""
         self.logger = ReasoningUtils.setup_logger(__name__)
+        
+        # Setup LLM for intelligent validation
+        if llm is None:
+            self.llm = ChatOpenAI(
+                model="gpt-4o-mini",
+                temperature=0.1,
+                max_tokens=1000
+            )
+        else:
+            self.llm = llm
     
+    @traceable(name="result_validation", metadata={"component": "validator"})
     def validate_execution(self, task: Task, execution_result: ExecutionResult) -> Dict[str, Any]:
         """
         Validate the execution result for a task.
@@ -51,56 +71,150 @@ class ResultValidator:
         """
         self.logger.info(f"Validating execution of {execution_result.tool_name} for task {task.name}")
         
-        validation_results = []
-        overall_success = True
-        
-        # 1. Basic execution validation
+        # 1. Basic execution check
         if not execution_result.success:
-            validation_results.append(ValidationResult(
-                success=False,
-                message=f"Tool execution failed: {execution_result.error_message}",
-                validation_level="execution"
-            ))
-            overall_success = False
-        else:
-            # 2. Output format validation
-            output_validation = self._validate_output_format(execution_result)
-            validation_results.append(output_validation)
-            if not output_validation.success:
-                overall_success = False
-            
-            # 3. Logical consistency validation
-            logical_validation = self._validate_logical_consistency(execution_result, task)
-            validation_results.append(logical_validation)
-            if not logical_validation.success:
-                overall_success = False
-            
-            # 4. Progress validation
-            progress_validation = self._validate_task_progress(task, execution_result)
-            validation_results.append(progress_validation)
-            if not progress_validation.success:
-                overall_success = False
+            return {
+                "success": False,
+                "message": f"Tool execution failed: {execution_result.error_message}",
+                "validation_level": "execution",
+                "method": "basic_check"
+            }
         
-        # Create summary
-        if overall_success:
-            message = f"All validations passed for {execution_result.tool_name}"
-        else:
-            failed_checks = [v.validation_level for v in validation_results if not v.success]
-            message = f"Validation failed at: {', '.join(failed_checks)}"
+        # 2. LLM-based intelligent validation
+        llm_validation = self._llm_validate_result(task, execution_result)
+        if llm_validation is not None:
+            self.logger.info(f"Used LLM for validation of {task.name}")
+            return llm_validation
         
-        return {
-            "success": overall_success,
-            "message": message,
-            "validation_results": [
-                {
-                    "level": v.validation_level,
-                    "success": v.success,
-                    "message": v.message,
-                    "details": v.details
-                }
-                for v in validation_results
-            ]
-        }
+        # 3. Fallback to rule-based validation  
+        fallback_validation = self._fallback_validate_result(task, execution_result)
+        self.logger.info(f"Used fallback validation for {task.name}")
+        return fallback_validation
+    
+    @traceable(name="llm_result_validation")
+    def _llm_validate_result(self, task: Task, execution_result: ExecutionResult) -> Optional[Dict[str, Any]]:
+        """Use LLM to intelligently validate task execution results."""
+        
+        # Create validation prompt
+        validation_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are an expert validator for AEC (Architecture, Engineering, Construction) compliance analysis tools.
+
+Your job is to validate whether a tool execution successfully accomplished its intended task.
+
+Tool execution details:
+- Tool: {tool_name}
+- Task: {task_name}
+- Task Description: {task_description}
+- Execution Time: {execution_time}s
+- Output Status: {output_status}
+- Output Data Available: {has_output_data}
+
+Output Preview: {output_preview}
+
+Validation criteria:
+1. Did the tool execute without errors?
+2. Does the output format match what's expected for this tool?
+3. Is the result logically consistent? (e.g., counts should be non-negative numbers)
+4. Does this result advance progress toward completing the task?
+
+Return ONLY a JSON response with:
+{{
+  "success": true/false,
+  "message": "Brief explanation of validation result",
+  "confidence": 0.0-1.0,
+  "issues": ["list of any issues found"]
+}}
+
+Be strict but reasonable. If tool ran successfully and produced expected output format, it's likely valid."""),
+            ("human", "Validate this tool execution result:")
+        ])
+        
+        try:
+            # Prepare output preview
+            output = execution_result.output
+            if isinstance(output, dict):
+                output_preview = str(output)[:500] + ("..." if len(str(output)) > 500 else "")
+                output_status = output.get("status", "unknown")
+                has_output_data = "data" in output or "result" in output or len(output) > 1
+            else:
+                output_preview = str(output)[:500] if output else "No output"
+                output_status = "unknown"
+                has_output_data = output is not None
+            
+            # Execute LLM validation
+            chain = validation_prompt | self.llm | StrOutputParser()
+            response = chain.invoke({
+                "tool_name": execution_result.tool_name,
+                "task_name": task.name,
+                "task_description": task.description,
+                "execution_time": execution_result.execution_time,
+                "output_status": output_status,
+                "has_output_data": has_output_data,
+                "output_preview": output_preview
+            })
+            
+            # Parse JSON response
+            validation_result = json.loads(response.strip())
+            
+            if not isinstance(validation_result, dict):
+                self.logger.warning("LLM returned invalid validation format")
+                return None
+            
+            # Convert to our format
+            return {
+                "success": validation_result.get("success", False),
+                "message": validation_result.get("message", "LLM validation completed"),
+                "validation_level": "llm_intelligent",
+                "method": "llm_reasoning",
+                "confidence": validation_result.get("confidence", 0.0),
+                "issues": validation_result.get("issues", [])
+            }
+            
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"LLM validation response was not valid JSON: {e}")
+            return None
+        except Exception as e:
+            self.logger.error(f"LLM validation failed for {task.name}: {e}")
+            return None
+    
+    def _fallback_validate_result(self, task: Task, execution_result: ExecutionResult) -> Dict[str, Any]:
+        """Fallback rule-based validation when LLM validation fails."""
+        
+        # Basic output format check
+        output = execution_result.output
+        if not isinstance(output, dict):
+            return {
+                "success": False,
+                "message": "Tool output is not in expected dictionary format",
+                "validation_level": "format",
+                "method": "rule_based_fallback"
+            }
+        
+        # Check for status field
+        status = output.get("status")
+        if status not in ["success", "error", "partial"]:
+            return {
+                "success": False,
+                "message": f"Tool output has invalid status: {status}",
+                "validation_level": "status",
+                "method": "rule_based_fallback"
+            }
+        
+        # If status is success, validate basic output
+        if status == "success":
+            return {
+                "success": True,
+                "message": "Basic validation passed - tool executed successfully",
+                "validation_level": "basic",
+                "method": "rule_based_fallback"
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"Tool execution status was: {status}",
+                "validation_level": "status",
+                "method": "rule_based_fallback"
+            }
     
     def _validate_output_format(self, execution_result: ExecutionResult) -> ValidationResult:
         """Validate the format and structure of tool output."""

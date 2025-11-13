@@ -10,19 +10,36 @@ from typing import Dict, Any, List, Optional
 
 from .reasoning_utils import ReasoningUtils, Task
 
+# Import LangSmith tracing
+from langsmith import traceable
+
+# Import LLM components
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from langchain.schema import StrOutputParser
+import json
+
 
 class ToolPlanner:
     """
     Maps tasks to optimal tool execution sequences.
     
-    Uses deterministic pattern matching to understand tool capabilities,
-    dependencies, and prerequisites. No fallbacks - explicit failure for
-    unmatched patterns.
+    Uses LLM-based reasoning with fallback to deterministic pattern matching.
     """
     
-    def __init__(self):
+    def __init__(self, llm=None):
         """Initialize the tool planner."""
         self.logger = ReasoningUtils.setup_logger(__name__)
+        
+        # Setup LLM for intelligent tool planning
+        if llm is None:
+            self.llm = ChatOpenAI(
+                model="gpt-4o-mini",
+                temperature=0.1,
+                max_tokens=1000
+            )
+        else:
+            self.llm = llm
         
         # Tool dependency mapping
         self.tool_dependencies = {
@@ -111,6 +128,7 @@ class ToolPlanner:
             "present results": ["get_all_elements"]
         }
     
+    @traceable(name="tool_planning", metadata={"component": "tool_planner"})
     def plan_tools(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Plan the optimal tool sequence for a task.
@@ -125,23 +143,34 @@ class ToolPlanner:
         self.logger.info(f"Planning tools for task: {task.name}")
         
         try:
-            # Use only pattern-based planning - no fallbacks
+            # First try LLM-based intelligent tool selection
+            llm_tools = self._llm_plan_tools(task, context)
+            if llm_tools:
+                self.logger.info(f"Used LLM for tool planning: {task.name}")
+                return {
+                    "success": True,
+                    "tool_sequence": llm_tools,
+                    "method": "llm_reasoning",
+                    "metadata": {"llm_planned": True}
+                }
+            
+            # Fallback to pattern matching if LLM fails
             pattern_tools = self._try_pattern_matching(task, context)
             if pattern_tools:
-                self.logger.info(f"Used pattern matching for {task.name}")
+                self.logger.info(f"Used pattern matching fallback for {task.name}")
                 return {
                     "success": True,
                     "tool_sequence": pattern_tools,
-                    "method": "pattern",
+                    "method": "pattern_fallback",
                     "metadata": {"pattern_matched": True}
                 }
             
-            # No pattern match - fail explicitly
-            self.logger.error(f"No pattern matches task: {task.name}")
+            # No planning possible
+            self.logger.error(f"Both LLM and pattern matching failed for task: {task.name}")
             return {
                 "success": False,
                 "tool_sequence": [],
-                "message": f"Task does not match any known tool patterns: {task.name}",
+                "message": f"Tool planning failed for task: {task.name}",
                 "available_patterns": list(self._get_available_patterns())
             }
             
@@ -153,6 +182,84 @@ class ToolPlanner:
                 "message": f"Tool planning failed: {str(e)}",
                 "error": ReasoningUtils.extract_error_info(e)
             }
+    
+    @traceable(name="llm_tool_planning")
+    def _llm_plan_tools(self, task: Task, context: Dict[str, Any]) -> Optional[List[str]]:
+        """Use LLM to intelligently select optimal tools for a task."""
+        
+        # Create tool planning prompt
+        tool_planning_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are an expert tool selection specialist for AEC (Architecture, Engineering, Construction) compliance analysis.
+
+Available tools and their capabilities:
+- load_building_data: Load IFC JSON building data files (input: file_path)
+- get_all_elements: Get all elements of a specific type like spaces, doors, walls, slabs, stairs (input: element_type)
+- get_element_properties: Get detailed properties of a specific element (input: element_id)
+- query_elements: Filter elements with specific criteria (input: JSON with element_type and filters)
+- calculate_metrics: Perform calculations like counts, areas, volumes (input: JSON with operation and parameters)
+- find_related_elements: Find spatial relationships between elements (input: JSON with element_id and relationship_type)
+- validate_compliance_rule: Check elements against compliance rules (input: JSON with rule_type, element_id, criteria)
+- search_compliance_documents: Search building codes and regulations (input: query_string)
+
+Context: {context}
+Task Dependencies: Building data must be loaded before other operations
+
+Your job: Select the SINGLE BEST tool for this specific task.
+
+Rules:
+1. Return ONLY the tool name (e.g., "get_all_elements")
+2. Choose the most direct tool that accomplishes the task
+3. Consider dependencies (data must be loaded first)
+4. Be specific - if task mentions doors, use tools that work with doors
+5. If no tool fits perfectly, return "none"
+
+Examples:
+Task: "Load building data" → "load_building_data"
+Task: "Get all doors" → "get_all_elements" 
+Task: "Count spaces" → "calculate_metrics"
+Task: "Find fire doors" → "query_elements"
+Task: "Check compliance" → "validate_compliance_rule"
+Task: "Search regulations" → "search_compliance_documents"
+"""),
+            ("human", """Task: {task_name}
+Description: {task_description}
+Context: Building data loaded = {building_data_loaded}
+
+Select the best tool:""")
+        ])
+        
+        try:
+            # Execute LLM tool selection
+            chain = tool_planning_prompt | self.llm | StrOutputParser()
+            response = chain.invoke({
+                "task_name": task.name,
+                "task_description": task.description,
+                "building_data_loaded": context.get("building_data_loaded", False),
+                "context": str(context) if context else "No additional context"
+            })
+            
+            tool_name = response.strip().lower()
+            
+            # Validate the tool exists
+            available_tools = [
+                "load_building_data", "get_all_elements", "get_element_properties",
+                "query_elements", "calculate_metrics", "find_related_elements", 
+                "validate_compliance_rule", "search_compliance_documents"
+            ]
+            
+            if tool_name in available_tools:
+                self.logger.info(f"LLM selected tool '{tool_name}' for task '{task.name}'")
+                return [tool_name]
+            elif tool_name == "none":
+                self.logger.warning(f"LLM indicated no suitable tool for task '{task.name}'")
+                return None
+            else:
+                self.logger.warning(f"LLM selected invalid tool '{tool_name}' for task '{task.name}'")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"LLM tool planning failed for {task.name}: {e}")
+            return None
     
     def _try_pattern_matching(self, task: Task, context: Dict[str, Any]) -> Optional[List[str]]:
         """Try to match task against known patterns."""

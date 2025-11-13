@@ -14,6 +14,9 @@ from .tool_planner import ToolPlanner
 from .executor import ToolExecutor
 from .validator import ResultValidator
 
+# Import LangSmith tracing
+from langsmith import traceable
+
 
 @dataclass
 class ReasoningState:
@@ -46,7 +49,8 @@ class ReasoningController:
         executor: ToolExecutor,
         validator: ResultValidator,
         max_iterations: int = 20,
-        max_execution_time: float = 300.0  # 5 minutes
+        max_execution_time: float = 300.0,  # 5 minutes
+        llm: Optional[Any] = None
     ):
         """Initialize the reasoning controller."""
         self.goal_decomposer = goal_decomposer
@@ -59,6 +63,7 @@ class ReasoningController:
         self.logger = ReasoningUtils.setup_logger(__name__)
         self.state: Optional[ReasoningState] = None
     
+    @traceable(name="autonomous_reasoning_process", metadata={"component": "reasoning_controller"})
     def reason(self, goal: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Execute the complete reasoning process for a goal.
@@ -72,6 +77,9 @@ class ReasoningController:
         """
         start_time = time.time()
         self.logger.info(f"Starting reasoning for goal: {goal}")
+        
+        # Log inputs for tracing
+        self.logger.info(f"Reasoning inputs - Goal: {goal}, Context keys: {list(context.keys()) if context else []}")
         
         # Initialize reasoning state
         self.state = ReasoningState(goal=goal, tasks=[])
@@ -102,6 +110,7 @@ class ReasoningController:
                 "execution_time": time.time() - start_time
             }
     
+    @traceable(name="analyze_and_plan_phase")
     def _analyze_and_plan(self, goal: str, context: Dict[str, Any]) -> None:
         """Analyze the goal and create execution plan."""
         self.logger.info("Phase 1: Analyzing goal and creating plan")
@@ -125,6 +134,7 @@ class ReasoningController:
         
         self.logger.info(f"Task breakdown: {ReasoningUtils.format_task_summary(self.state.tasks)}")
     
+    @traceable(name="execute_reasoning_loop")
     def _execute_reasoning_loop(self) -> List[ExecutionResult]:
         """Execute the main reasoning loop until completion or limits reached."""
         self.logger.info("Phase 2: Executing reasoning loop")
@@ -204,6 +214,7 @@ class ReasoningController:
         
         return all_results
     
+    @traceable(name="execute_single_task")
     def _execute_task(self, task: Task) -> ExecutionResult:
         """Execute a single task using its planned tool sequence."""
         if not task.tool_sequence:

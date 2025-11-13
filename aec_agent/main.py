@@ -381,7 +381,10 @@ def reason(goal: str, session_id: Optional[str] = None, max_iterations: int = 20
         if session_summary:
             click.echo(f"\n💾 Session Info:")
             click.echo(f"  Session ID: {session_summary.get('session_id')}")
-            click.echo(f"  Memory Stats: {session_summary['memory_stats']['total_turns']} conversation turns")
+            memory_stats = session_summary.get('memory_stats', {})
+            if memory_stats:
+                total_turns = memory_stats.get('total_turns', 'unknown')
+                click.echo(f"  Memory Stats: {total_turns} conversation turns")
         
         if verbose and reasoning_result.get('outputs'):
             click.echo(f"\n🔍 Detailed Outputs:")

@@ -76,21 +76,19 @@ class ShortTermMemory:
             return_messages=True
         )
         
-        # Summary memory for older context
-        self.summary_memory = ConversationSummaryMemory(
-            llm=self.llm,
-            memory_key="conversation_summary",
-            input_key="input",
-            output_key="output",
-            max_token_limit=self.config.max_token_limit,
-            return_messages=False
-        )
+        # Use simple buffer memory instead of LLM-based summary to avoid slow traces
+        # Summary memory for older context - DISABLED to prevent LLM calls in traces
+        # self.summary_memory = ConversationSummaryMemory(
+        #     llm=self.llm,
+        #     memory_key="conversation_summary",
+        #     input_key="input",
+        #     output_key="output",
+        #     max_token_limit=self.config.max_token_limit,
+        #     return_messages=False
+        # )
         
-        # Combined memory
-        self.combined_memory = CombinedMemory(memories=[
-            self.buffer_memory,
-            self.summary_memory
-        ])
+        # Use only buffer memory to avoid LLM calls
+        self.combined_memory = self.buffer_memory
         
         self.logger.debug("Memory components initialized successfully")
     
