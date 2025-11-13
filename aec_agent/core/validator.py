@@ -83,7 +83,7 @@ class ResultValidator:
             validation_result.update(self._assess_replanning_trigger(task, execution_result, validation_result))
             return validation_result
         
-        # 2. LLM-based intelligent validation
+        # 2. LLM-based intelligent validation ONLY - NO FALLBACKS
         llm_validation = self._llm_validate_result(task, execution_result)
         if llm_validation is not None:
             self.logger.info(f"Used LLM for validation of {task.name}")
@@ -91,12 +91,8 @@ class ResultValidator:
             llm_validation.update(self._assess_replanning_trigger(task, execution_result, llm_validation))
             return llm_validation
         
-        # 3. Fallback to rule-based validation  
-        fallback_validation = self._fallback_validate_result(task, execution_result)
-        self.logger.info(f"Used fallback validation for {task.name}")
-        # Add replanning trigger assessment
-        fallback_validation.update(self._assess_replanning_trigger(task, execution_result, fallback_validation))
-        return fallback_validation
+        # NO FALLBACKS - Fail explicitly if LLM validation fails
+        raise RuntimeError(f"LLM validation failed for task: {task.name}. No fallback mechanisms available.")
     
     @traceable(name="replanning_trigger_assessment")
     def validate_with_replanning_assessment(
@@ -214,44 +210,6 @@ Be strict but reasonable. If tool ran successfully and produced expected output 
             self.logger.error(f"LLM validation failed for {task.name}: {e}")
             return None
     
-    def _fallback_validate_result(self, task: Task, execution_result: ExecutionResult) -> Dict[str, Any]:
-        """Fallback rule-based validation when LLM validation fails."""
-        
-        # Basic output format check
-        output = execution_result.output
-        if not isinstance(output, dict):
-            return {
-                "success": False,
-                "message": "Tool output is not in expected dictionary format",
-                "validation_level": "format",
-                "method": "rule_based_fallback"
-            }
-        
-        # Check for status field
-        status = output.get("status")
-        if status not in ["success", "error", "partial"]:
-            return {
-                "success": False,
-                "message": f"Tool output has invalid status: {status}",
-                "validation_level": "status",
-                "method": "rule_based_fallback"
-            }
-        
-        # If status is success, validate basic output
-        if status == "success":
-            return {
-                "success": True,
-                "message": "Basic validation passed - tool executed successfully",
-                "validation_level": "basic",
-                "method": "rule_based_fallback"
-            }
-        else:
-            return {
-                "success": False,
-                "message": f"Tool execution status was: {status}",
-                "validation_level": "status",
-                "method": "rule_based_fallback"
-            }
     
     def _validate_output_format(self, execution_result: ExecutionResult) -> ValidationResult:
         """Validate the format and structure of tool output."""

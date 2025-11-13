@@ -1,5 +1,6 @@
 """
 Unit tests for ProgressEvaluator class - Phase 2 reactive implementation.
+NO FALLBACK MECHANISMS - LLM-only evaluation.
 """
 
 import pytest
@@ -9,7 +10,7 @@ from typing import Dict, Any, List
 from aec_agent.core.progress_evaluator import ProgressEvaluator, ProgressAssessment
 from aec_agent.core.reasoning_utils import Task, Priority, TaskStatus
 from tests.reactive_agent.fixtures.reactive_fixtures import (
-    sample_tasks, create_test_task, assert_task_valid
+    sample_tasks, create_test_task, assert_task_valid, MockLLM
 )
 
 
@@ -31,26 +32,10 @@ class TestProgressEvaluator:
         assert evaluator.llm == mock_llm
         assert hasattr(evaluator, 'logger')
     
-    @patch('aec_agent.core.progress_evaluator.ChatOpenAI')
-    def test_evaluate_progress_goal_achieved(self, mock_chat_openai):
+    def test_evaluate_progress_goal_achieved(self):
         """Test progress evaluation when goal is achieved."""
-        # Mock LLM response for goal achievement
-        mock_llm = Mock()
-        mock_response = {
-            "goal_achieved": True,
-            "confidence": 0.95,
-            "reasoning": "All door elements have been successfully counted",
-            "completion_percentage": 100,
-            "missing_requirements": [],
-            "evidence_for_completion": [
-                "Building data loaded successfully",
-                "15 door elements identified and counted",
-                "Results validated with high confidence"
-            ],
-            "recommendations": ["Task completed successfully"]
-        }
-        mock_llm.invoke.return_value = Mock(content=str(mock_response))
-        
+        # Use MockLLM that returns proper responses for door counting
+        mock_llm = MockLLM()
         evaluator = ProgressEvaluator(llm=mock_llm)
         
         execution_context = {
@@ -95,9 +80,11 @@ class TestProgressEvaluator:
             current_tasks=current_tasks
         )
         
+        # Verify assessment structure and achievement (matches MockLLM response)
         assert isinstance(assessment, ProgressAssessment)
-        assert assessment.goal_achieved is True
-        assert assessment.confidence >= 0.9
+        assert assessment.goal_achieved == True
+        assert assessment.confidence == 0.9
+        assert "door count completed successfully" in assessment.reasoning.lower()
         assert assessment.completion_percentage == 100
         assert len(assessment.missing_requirements) == 0
         assert len(assessment.evidence_for_completion) > 0

@@ -216,36 +216,81 @@ def memory_manager(test_config):
     return MemoryManager(config=test_config)
 
 
+from langchain.schema.output_parser import BaseOutputParser
+
+class MockResponse:
+    """Mock response object that mimics LangChain response."""
+    
+    def __init__(self, content: str):
+        self.content = content
+    
+    def __str__(self):
+        return self.content
+
+
+class MockOutputParser(BaseOutputParser):
+    """Mock output parser that returns strings directly."""
+    
+    def parse(self, text: str) -> str:
+        return text
+
+    @property
+    def _type(self) -> str:
+        return "mock_parser"
+
+
 class MockLLM:
-    """Mock LLM for testing that avoids API calls."""
+    """Mock LLM for testing that avoids API calls and works with LangChain."""
     
     def __init__(self, responses: Optional[Dict[str, str]] = None):
         self.responses = responses or {}
         self.call_count = 0
         self.last_prompt = None
     
-    def invoke(self, prompt_input: Dict[str, Any]) -> str:
-        """Mock LLM invocation."""
+    def invoke(self, prompt_input: Dict[str, Any]) -> MockResponse:
+        """Mock LLM invocation with comprehensive responses for all agent components."""
         self.call_count += 1
         self.last_prompt = prompt_input
         
         # Return predefined responses based on prompt content
         prompt_text = str(prompt_input).lower()
         
-        if "goal_achieved" in prompt_text:
-            return '{"goal_achieved": false, "confidence": 0.6, "reasoning": "More work needed", "completion_percentage": 40, "missing_requirements": ["Complete remaining tasks"], "evidence_for_completion": ["Loaded data"], "recommendations": ["Continue execution"]}'
+        # Progress Evaluator responses
+        if "goal_achieved" in prompt_text or "progress" in prompt_text:
+            if "doors" in prompt_text and "count" in prompt_text:
+                content = '{"goal_achieved": true, "confidence": 0.9, "reasoning": "Door count completed successfully with 15 doors found", "completion_percentage": 100, "missing_requirements": [], "evidence_for_completion": ["Building data loaded", "Door count executed", "15 doors found"], "recommendations": ["Goal achieved"]}'
+            else:
+                content = '{"goal_achieved": false, "confidence": 0.6, "reasoning": "More work needed", "completion_percentage": 40, "missing_requirements": ["Complete remaining tasks"], "evidence_for_completion": ["Loaded data"], "recommendations": ["Continue execution"]}'
         
-        elif "replanning" in prompt_text or "replan" in prompt_text:
-            return '{"reasoning": "Need alternative approach", "confidence": 0.7, "tasks_to_remove": [], "tasks_to_modify": [], "tasks_to_add": [{"name": "Try alternative tool", "description": "Use get_all_elements instead", "priority": "HIGH"}]}'
+        # Replanner responses
+        elif "replanning" in prompt_text or "replan" in prompt_text or "revise task" in prompt_text:
+            content = '{"reasoning": "Need alternative approach due to validation failure", "confidence": 0.7, "tasks_to_remove": [], "tasks_to_modify": [], "tasks_to_add": [{"name": "Try alternative tool", "description": "Use get_all_elements instead of query_elements", "priority": "HIGH"}]}'
         
-        elif "tool selection" in prompt_text or "select" in prompt_text:
-            return "get_all_elements"
+        # Tool Planner responses  
+        elif "tool selection" in prompt_text or "select" in prompt_text or "best tool" in prompt_text:
+            if "doors" in prompt_text:
+                content = "get_all_elements"
+            elif "load" in prompt_text and "building" in prompt_text:
+                content = "load_building_data"
+            elif "calculate" in prompt_text or "count" in prompt_text:
+                content = "calculate_metrics"
+            elif "query" in prompt_text or "filter" in prompt_text:
+                content = "query_elements"
+            else:
+                content = "get_all_elements"
         
-        elif "validation" in prompt_text:
-            return '{"success": true, "message": "Mock validation successful", "confidence": 0.8, "issues": []}'
+        # Validator responses
+        elif "validation" in prompt_text or "validate" in prompt_text:
+            if "tool output" in prompt_text or "execution" in prompt_text:
+                content = '{"success": true, "message": "Tool execution validated successfully", "confidence": 0.9, "issues": []}'
+            else:
+                content = '{"success": true, "message": "Mock validation successful", "confidence": 0.8, "issues": []}'
         
+        # Default response for any other prompts
         else:
-            return '{"success": true, "message": "Mock LLM response", "confidence": 0.7}'
+            content = '{"success": true, "message": "Mock LLM response", "confidence": 0.7}'
+        
+        return MockResponse(content)
 
 
 @pytest.fixture 

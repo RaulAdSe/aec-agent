@@ -55,34 +55,6 @@ class ProgressEvaluator:
         else:
             self.llm = llm
         
-        # Progress evaluation patterns for AEC domain
-        self.evaluation_patterns = {
-            "counting_tasks": {
-                "completion_indicators": ["count", "total", "number", "quantity"],
-                "evidence_requirements": ["numeric_result", "element_list"],
-                "minimum_confidence": 0.8
-            },
-            "compliance_analysis": {
-                "completion_indicators": ["compliant", "violation", "passes", "fails"],
-                "evidence_requirements": ["validation_result", "rule_check"],
-                "minimum_confidence": 0.9
-            },
-            "data_extraction": {
-                "completion_indicators": ["extracted", "retrieved", "found", "loaded"],
-                "evidence_requirements": ["data_output", "element_properties"],
-                "minimum_confidence": 0.7
-            },
-            "calculation_tasks": {
-                "completion_indicators": ["calculated", "computed", "measured"],
-                "evidence_requirements": ["numeric_result", "calculation_output"],
-                "minimum_confidence": 0.8
-            },
-            "search_tasks": {
-                "completion_indicators": ["found", "located", "identified", "searched"],
-                "evidence_requirements": ["search_results", "match_found"],
-                "minimum_confidence": 0.7
-            }
-        }
     
     @traceable(name="evaluate_goal_progress", metadata={"component": "progress_evaluator"})
     def evaluate_progress(
@@ -92,7 +64,7 @@ class ProgressEvaluator:
         current_tasks: List[Task]
     ) -> ProgressAssessment:
         """
-        Evaluate progress toward achieving the original goal.
+        Evaluate progress toward achieving the original goal using LLM intelligence only.
         
         Args:
             original_goal: The original goal statement
@@ -101,28 +73,20 @@ class ProgressEvaluator:
             
         Returns:
             ProgressAssessment with goal completion analysis
+            
+        Raises:
+            RuntimeError: If LLM evaluation fails (no fallbacks)
         """
         self.logger.info(f"Evaluating progress for goal: {original_goal[:50]}...")
         
-        try:
-            # First try LLM-powered intelligent evaluation
-            llm_assessment = self._llm_evaluate_progress(original_goal, execution_context, current_tasks)
-            if llm_assessment:
-                self.logger.info(f"LLM assessment: {llm_assessment.confidence:.1%} confidence")
-                return llm_assessment
-            
-            # Fallback to pattern-based evaluation
-            pattern_assessment = self._pattern_based_evaluation(original_goal, execution_context, current_tasks)
-            if pattern_assessment:
-                self.logger.info(f"Pattern assessment: {pattern_assessment.confidence:.1%} confidence")
-                return pattern_assessment
-            
-            # If all approaches fail, return conservative assessment
-            return self._conservative_assessment(original_goal, execution_context, current_tasks)
-            
-        except Exception as e:
-            self.logger.error(f"Progress evaluation failed: {e}")
-            return self._conservative_assessment(original_goal, execution_context, current_tasks)
+        # Use ONLY LLM-powered intelligent evaluation - NO FALLBACKS
+        llm_assessment = self._llm_evaluate_progress(original_goal, execution_context, current_tasks)
+        if llm_assessment:
+            self.logger.info(f"LLM assessment: {llm_assessment.confidence:.1%} confidence")
+            return llm_assessment
+        
+        # NO FALLBACKS - Fail explicitly if LLM fails
+        raise RuntimeError(f"LLM evaluation failed for goal: {original_goal}. No fallback mechanisms available.")
     
     @traceable(name="llm_progress_evaluation")
     def _llm_evaluate_progress(
@@ -206,105 +170,6 @@ Be strict but fair - only mark as achieved if there's clear evidence the goal wa
             self.logger.error(f"LLM evaluation failed: {e}")
             return None
     
-    def _pattern_based_evaluation(
-        self,
-        original_goal: str,
-        execution_context: Dict[str, Any],
-        current_tasks: List[Task]
-    ) -> Optional[ProgressAssessment]:
-        """Fallback pattern-based evaluation when LLM fails."""
-        
-        goal_lower = original_goal.lower()
-        
-        # Detect goal type
-        goal_type = None
-        for pattern_type, pattern_config in self.evaluation_patterns.items():
-            indicators = pattern_config["completion_indicators"]
-            if any(indicator in goal_lower for indicator in indicators):
-                goal_type = pattern_type
-                break
-        
-        if not goal_type:
-            return None
-        
-        # Apply pattern-based evaluation
-        pattern_config = self.evaluation_patterns[goal_type]
-        
-        # Check task completion
-        completed_tasks = [task for task in current_tasks if task.status == TaskStatus.COMPLETED]
-        total_tasks = len(current_tasks)
-        completion_percentage = (len(completed_tasks) / total_tasks * 100) if total_tasks > 0 else 0
-        
-        # Check for required evidence
-        evidence_requirements = pattern_config["evidence_requirements"]
-        discovered_context = execution_context.get("discovered_context_summary", {})
-        
-        evidence_found = []
-        missing_evidence = []
-        
-        for requirement in evidence_requirements:
-            if requirement in str(discovered_context).lower():
-                evidence_found.append(f"Found {requirement} in execution context")
-            else:
-                missing_evidence.append(requirement)
-        
-        # Determine goal achievement
-        minimum_confidence = pattern_config["minimum_confidence"]
-        has_evidence = len(evidence_found) > 0
-        high_completion = completion_percentage >= 80
-        
-        goal_achieved = has_evidence and high_completion
-        confidence = min(minimum_confidence, completion_percentage / 100.0) if goal_achieved else 0.3
-        
-        reasoning = f"Pattern-based evaluation for {goal_type}: "
-        reasoning += f"{completion_percentage:.0f}% tasks completed, "
-        reasoning += f"evidence found: {len(evidence_found)}/{len(evidence_requirements)}"
-        
-        return ProgressAssessment(
-            goal_achieved=goal_achieved,
-            confidence=confidence,
-            reasoning=reasoning,
-            completion_percentage=completion_percentage,
-            missing_requirements=missing_evidence,
-            evidence_for_completion=evidence_found,
-            recommendations=["Continue with remaining tasks"] if not goal_achieved else ["Goal achieved"],
-            metadata={"method": "pattern_based", "goal_type": goal_type}
-        )
-    
-    def _conservative_assessment(
-        self,
-        original_goal: str,
-        execution_context: Dict[str, Any],
-        current_tasks: List[Task]
-    ) -> ProgressAssessment:
-        """Conservative fallback assessment when all other methods fail."""
-        
-        completed_tasks = [task for task in current_tasks if task.status == TaskStatus.COMPLETED]
-        total_tasks = len(current_tasks)
-        
-        completion_percentage = (len(completed_tasks) / total_tasks * 100) if total_tasks > 0 else 0
-        
-        # Conservative: only mark as achieved if ALL tasks are completed
-        goal_achieved = completion_percentage >= 100
-        confidence = 0.5 if goal_achieved else 0.2
-        
-        reasoning = f"Conservative evaluation: {len(completed_tasks)}/{total_tasks} tasks completed"
-        
-        missing_requirements = []
-        if not goal_achieved:
-            pending_tasks = [task for task in current_tasks if task.status != TaskStatus.COMPLETED]
-            missing_requirements = [f"Complete task: {task.name}" for task in pending_tasks[:3]]
-        
-        return ProgressAssessment(
-            goal_achieved=goal_achieved,
-            confidence=confidence,
-            reasoning=reasoning,
-            completion_percentage=completion_percentage,
-            missing_requirements=missing_requirements,
-            evidence_for_completion=[f"Completed {len(completed_tasks)} tasks"],
-            recommendations=["Complete remaining tasks"] if not goal_achieved else ["All tasks completed"],
-            metadata={"method": "conservative_fallback"}
-        )
     
     def _prepare_progress_context(self, execution_context: Dict[str, Any]) -> str:
         """Prepare execution context summary for progress evaluation."""
@@ -406,9 +271,6 @@ Be strict but fair - only mark as achieved if there's clear evidence the goal wa
         # Continue otherwise
         return True
     
-    def get_evaluation_patterns(self) -> Dict[str, Dict[str, Any]]:
-        """Get available evaluation patterns for different goal types."""
-        return self.evaluation_patterns.copy()
     
     def validate_assessment(self, assessment: ProgressAssessment) -> bool:
         """

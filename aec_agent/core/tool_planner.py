@@ -24,7 +24,7 @@ class ToolPlanner:
     """
     Maps tasks to optimal tool execution sequences.
     
-    Uses LLM-based reasoning with fallback to deterministic pattern matching.
+    Uses LLM-based reasoning only - no fallback mechanisms.
     """
     
     def __init__(self, llm=None):
@@ -111,26 +111,6 @@ class ToolPlanner:
             }
         }
         
-        # Common task patterns
-        self.task_patterns = {
-            "load": ["load_building_data"],
-            "identify": ["get_all_elements", "query_elements"],
-            "find": ["query_elements", "find_related_elements"],
-            "analyze": ["query_elements", "get_element_properties", "calculate_metrics"],
-            "calculate": ["calculate_metrics"],
-            "validate": ["search_compliance_documents", "validate_compliance_rule"],
-            "check": ["validate_compliance_rule"],
-            "retrieve": ["search_compliance_documents"],
-            "search": ["search_compliance_documents"],
-            "extract": ["get_all_elements"],
-            "extract requested information": ["get_all_elements"],
-            "present": ["get_all_elements"],
-            "present results": ["get_all_elements"],
-            "get": ["get_all_elements", "query_elements"],
-            "doors": ["get_all_elements", "query_elements"],
-            "get doors": ["get_all_elements"],
-            "get all": ["get_all_elements"]
-        }
     
     @traceable(name="tool_planning", metadata={"component": "tool_planner"})
     def plan_tools(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -163,7 +143,7 @@ class ToolPlanner:
                         "metadata": {"context_aware": True, "execution_history_used": True}
                     }
             
-            # First try standard LLM-based intelligent tool selection
+            # Use ONLY LLM-based intelligent tool selection - NO FALLBACKS
             llm_tools = self._llm_plan_tools(task, context)
             if llm_tools:
                 self.logger.info(f"Used LLM for tool planning: {task.name}")
@@ -174,34 +154,13 @@ class ToolPlanner:
                     "metadata": {"llm_planned": True}
                 }
             
-            # Fallback to pattern matching if LLM fails
-            pattern_tools = self._try_pattern_matching(task, context)
-            if pattern_tools:
-                self.logger.info(f"Used pattern matching fallback for {task.name}")
-                return {
-                    "success": True,
-                    "tool_sequence": pattern_tools,
-                    "method": "pattern_fallback",
-                    "metadata": {"pattern_matched": True}
-                }
-            
-            # No planning possible
-            self.logger.error(f"All planning methods failed for task: {task.name}")
-            return {
-                "success": False,
-                "tool_sequence": [],
-                "message": f"Tool planning failed for task: {task.name}",
-                "available_patterns": list(self._get_available_patterns())
-            }
+            # NO FALLBACKS - Fail explicitly if LLM planning fails
+            raise RuntimeError(f"LLM tool planning failed for task: {task.name}. No fallback mechanisms available.")
             
         except Exception as e:
             self.logger.error(f"Tool planning failed for {task.name}: {e}")
-            return {
-                "success": False,
-                "tool_sequence": [],
-                "message": f"Tool planning failed: {str(e)}",
-                "error": ReasoningUtils.extract_error_info(e)
-            }
+            # NO FALLBACKS - Re-raise the exception
+            raise RuntimeError(f"Tool planning failed for task: {task.name}. Error: {str(e)}")
     
     @traceable(name="context_aware_tool_planning")
     def plan_tools_with_execution_history(
@@ -240,8 +199,8 @@ class ToolPlanner:
                 }
             }
         
-        # Fallback to standard planning
-        return self.plan_tools(task, enhanced_context)
+        # NO FALLBACKS - Fail explicitly if context-aware planning fails
+        raise RuntimeError(f"Context-aware LLM planning failed for task: {task.name}. No fallback mechanisms available.")
     
     @traceable(name="llm_tool_planning")
     def _llm_plan_tools(self, task: Task, context: Dict[str, Any]) -> Optional[List[str]]:
@@ -321,69 +280,6 @@ Select the best tool:""")
             self.logger.error(f"LLM tool planning failed for {task.name}: {e}")
             return None
     
-    def _try_pattern_matching(self, task: Task, context: Dict[str, Any]) -> Optional[List[str]]:
-        """Try to match task against known patterns."""
-        task_name_lower = task.name.lower()
-        task_description_lower = task.description.lower()
-        
-        # Check for direct pattern matches
-        for pattern_key, tools in self.task_patterns.items():
-            if pattern_key in task_name_lower or pattern_key in task_description_lower:
-                # Filter tools based on context and dependencies
-                filtered_tools = self._filter_tools_by_context(tools, context)
-                if filtered_tools:
-                    return filtered_tools
-        
-        # Check for AEC-specific patterns
-        aec_tools = self._check_aec_patterns(task, context)
-        if aec_tools:
-            return aec_tools
-        
-        return None
-    
-    def _check_aec_patterns(self, task: Task, context: Dict[str, Any]) -> Optional[List[str]]:
-        """Check for AEC-specific task patterns."""
-        task_text = f"{task.name} {task.description}".lower()
-        
-        # Fire safety pattern
-        if any(term in task_text for term in ["fire", "emergency", "exit", "safety"]):
-            if "load" in task_text or "data" in task_text:
-                return ["load_building_data"]
-            elif "identify" in task_text or "find" in task_text:
-                return ["query_elements"]
-            elif "validate" in task_text or "check" in task_text:
-                return ["search_compliance_documents", "validate_compliance_rule"]
-        
-        # Accessibility pattern
-        if any(term in task_text for term in ["accessibility", "accessible", "disability", "ada"]):
-            if "identify" in task_text:
-                return ["query_elements"]
-            elif "validate" in task_text:
-                return ["search_compliance_documents", "validate_compliance_rule"]
-        
-        # Calculation pattern
-        if any(term in task_text for term in ["calculate", "compute", "measure", "area", "volume"]):
-            return ["calculate_metrics"]
-        
-        # Regulation pattern
-        if any(term in task_text for term in ["regulation", "standard", "code", "requirement"]):
-            return ["search_compliance_documents"]
-        
-        return None
-    
-    def _filter_tools_by_context(self, tools: List[str], context: Dict[str, Any]) -> List[str]:
-        """Filter tools based on current context and dependencies."""
-        # For deterministic behavior, return single best tool rather than sequences
-        # Prerequisites should be handled by proper context, not tool sequences
-        
-        for tool in tools:
-            # Check if prerequisites are met
-            if self._check_tool_prerequisites(tool, context):
-                return [tool]  # Return single tool if prerequisites met
-        
-        # If no tool has met prerequisites, return first tool and let execution handle it
-        # This will fail explicitly if prerequisites aren't met, which is desired behavior
-        return tools[:1] if tools else []
     
     def _check_tool_prerequisites(self, tool: str, context: Dict[str, Any]) -> bool:
         """Check if tool prerequisites are satisfied."""
@@ -419,13 +315,6 @@ Select the best tool:""")
         """Get list of all available tools."""
         return list(self.tool_capabilities.keys())
     
-    def _get_available_patterns(self) -> List[str]:
-        """Get list of available task patterns."""
-        patterns = []
-        # Extract patterns from task mapping
-        for pattern_list in self.task_patterns.values():
-            patterns.extend(pattern_list)
-        return sorted(set(patterns))
     
     @traceable(name="context_aware_llm_planning")
     def _context_aware_llm_planning(
@@ -702,11 +591,5 @@ Select the best tool considering execution history:""")
             
             if any(purpose in task_lower for purpose in good_for):
                 alternatives.append(alternative)
-        
-        # If no direct alternatives, suggest based on task patterns
-        if not alternatives:
-            for pattern_key, tools in self.task_patterns.items():
-                if pattern_key in task_lower and failed_tool not in tools:
-                    alternatives.extend(tools[:2])  # Add first 2 pattern tools
         
         return list(set(alternatives))[:3]  # Return top 3 unique alternatives

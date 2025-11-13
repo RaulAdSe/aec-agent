@@ -65,34 +65,6 @@ class Replanner:
         else:
             self.llm = llm
         
-        # Common replanning patterns for AEC domain
-        self.replanning_patterns = {
-            "validation_failure": [
-                "Verify prerequisites are met",
-                "Try alternative tool approach",
-                "Break task into smaller subtasks"
-            ],
-            "execution_error": [
-                "Check input parameters", 
-                "Ensure required data is loaded",
-                "Try fallback approach"
-            ],
-            "context_discovery": [
-                "Leverage newly discovered information",
-                "Optimize approach based on context",
-                "Add tasks to utilize new context"
-            ],
-            "low_confidence": [
-                "Add validation steps",
-                "Include verification tasks", 
-                "Use more reliable tools"
-            ],
-            "dependency_failure": [
-                "Reorder task dependencies",
-                "Add missing prerequisite tasks",
-                "Find alternative execution path"
-            ]
-        }
     
     @traceable(name="replan_execution", metadata={"component": "replanner"})
     def replan(
@@ -116,43 +88,14 @@ class Replanner:
         """
         self.logger.info(f"Replanning triggered by: {trigger.trigger_type}")
         
-        try:
-            # First try LLM-powered intelligent replanning
-            llm_result = self._llm_replan(current_goal, current_tasks, execution_context, trigger)
-            if llm_result and llm_result.success:
-                self.logger.info(f"LLM replanning successful: {len(llm_result.new_tasks)} tasks")
-                return llm_result
-            
-            # Fallback to pattern-based replanning
-            pattern_result = self._pattern_based_replan(current_goal, current_tasks, execution_context, trigger)
-            if pattern_result and pattern_result.success:
-                self.logger.info(f"Pattern-based replanning successful: {len(pattern_result.new_tasks)} tasks") 
-                return pattern_result
-            
-            # If all approaches fail, return failure result
-            return ReplanningResult(
-                success=False,
-                new_tasks=[],
-                removed_task_ids=[],
-                modified_task_ids=[],
-                reasoning=f"Unable to replan for trigger: {trigger.trigger_type}",
-                confidence=0.0,
-                trigger=trigger,
-                metadata={"fallback_used": True}
-            )
-            
-        except Exception as e:
-            self.logger.error(f"Replanning failed: {e}")
-            return ReplanningResult(
-                success=False,
-                new_tasks=[],
-                removed_task_ids=[],
-                modified_task_ids=[],
-                reasoning=f"Replanning error: {str(e)}",
-                confidence=0.0,
-                trigger=trigger,
-                metadata={"error": str(e)}
-            )
+        # Use ONLY LLM-powered intelligent replanning - NO FALLBACKS
+        llm_result = self._llm_replan(current_goal, current_tasks, execution_context, trigger)
+        if llm_result and llm_result.success:
+            self.logger.info(f"LLM replanning successful: {len(llm_result.new_tasks)} tasks")
+            return llm_result
+        
+        # NO FALLBACKS - Fail explicitly if LLM replanning fails
+        raise RuntimeError(f"LLM replanning failed for trigger: {trigger.trigger_type}. No fallback mechanisms available.")
     
     @traceable(name="llm_replanning")
     def _llm_replan(
@@ -293,75 +236,6 @@ Be pragmatic and focus on what will actually work given the execution context.""
             self.logger.error(f"LLM replanning failed: {e}")
             return None
     
-    def _pattern_based_replan(
-        self,
-        current_goal: str,
-        current_tasks: List[Task],
-        execution_context: Dict[str, Any],
-        trigger: ReplanningTrigger
-    ) -> Optional[ReplanningResult]:
-        """Fallback pattern-based replanning when LLM fails."""
-        
-        patterns = self.replanning_patterns.get(trigger.trigger_type, [])
-        if not patterns:
-            return None
-        
-        # Apply pattern-based replanning based on trigger type
-        new_tasks = []
-        removed_task_ids = []
-        modified_task_ids = []
-        
-        if trigger.trigger_type == "validation_failure":
-            # Add verification tasks before failed tasks
-            failed_task_info = trigger.details.get("failed_task", {})
-            if failed_task_info:
-                # Add prerequisite check task
-                prereq_task = Task(
-                    id=str(uuid.uuid4()),
-                    name=f"Verify prerequisites for {failed_task_info.get('name', 'failed task')}",
-                    description="Check that all prerequisites are met before proceeding",
-                    priority=Priority.HIGH,
-                    metadata={"pattern_based": True, "trigger_type": trigger.trigger_type}
-                )
-                new_tasks.append(prereq_task)
-        
-        elif trigger.trigger_type == "execution_error":
-            # Add error recovery task
-            error_task = Task(
-                id=str(uuid.uuid4()),
-                name="Diagnose and resolve execution error",
-                description="Investigate the execution error and apply appropriate fixes",
-                priority=Priority.HIGH,
-                metadata={"pattern_based": True, "trigger_type": trigger.trigger_type}
-            )
-            new_tasks.append(error_task)
-        
-        elif trigger.trigger_type == "context_discovery":
-            # Add task to leverage discovered context
-            discovery_info = trigger.details.get("discovered_context", {})
-            if discovery_info:
-                context_task = Task(
-                    id=str(uuid.uuid4()),
-                    name=f"Leverage discovered {discovery_info.get('type', 'context')}",
-                    description=f"Use newly discovered information: {discovery_info}",
-                    priority=Priority.MEDIUM,
-                    metadata={"pattern_based": True, "trigger_type": trigger.trigger_type}
-                )
-                new_tasks.append(context_task)
-        
-        if not new_tasks:
-            return None
-        
-        return ReplanningResult(
-            success=True,
-            new_tasks=new_tasks,
-            removed_task_ids=removed_task_ids,
-            modified_task_ids=modified_task_ids,
-            reasoning=f"Applied pattern-based replanning for {trigger.trigger_type}",
-            confidence=0.6,
-            trigger=trigger,
-            metadata={"method": "pattern_based", "patterns_applied": patterns}
-        )
     
     def _prepare_context_summary(self, execution_context: Dict[str, Any]) -> str:
         """Prepare a concise summary of execution context for the LLM."""
@@ -452,9 +326,6 @@ Be pragmatic and focus on what will actually work given the execution context.""
         
         return None
     
-    def get_replanning_patterns(self) -> Dict[str, List[str]]:
-        """Get available replanning patterns for different trigger types."""
-        return self.replanning_patterns.copy()
     
     def validate_replan_result(self, result: ReplanningResult, original_goal: str) -> bool:
         """
