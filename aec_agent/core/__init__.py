@@ -1,6 +1,6 @@
 """Core framework components for the AEC compliance agent."""
 
-from .config import AppConfig
+# Legacy config import removed - use aec_agent.config instead
 from .logger import get_logger
 from .registry import AgentRegistry
 
@@ -13,7 +13,6 @@ from .validator import ResultValidator
 from .reasoning_utils import ReasoningUtils, Task, TaskStatus, Priority, ExecutionResult
 
 __all__ = [
-    'AppConfig', 
     'get_logger', 
     'AgentRegistry',
     'ReasoningController',

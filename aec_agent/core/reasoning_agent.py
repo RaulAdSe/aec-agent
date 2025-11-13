@@ -6,7 +6,6 @@ that can break down complex AEC compliance goals into tasks and execute them
 intelligently using available tools.
 """
 
-import logging
 import os
 from typing import Dict, Any, Optional
 from pathlib import Path
@@ -17,15 +16,15 @@ from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.tracers import LangChainTracer
 
 # Import reasoning components
-from .core.reasoning_controller import ReasoningController
-from .core.goal_decomposer import GoalDecomposer
-from .core.tool_planner import ToolPlanner
-from .core.executor import ToolExecutor
-from .core.validator import ResultValidator
-from .core.reasoning_utils import ReasoningUtils
+from .reasoning_controller import ReasoningController
+from .goal_decomposer import GoalDecomposer
+from .tool_planner import ToolPlanner
+from .executor import ToolExecutor
+from .validator import ResultValidator
+from .reasoning_utils import ReasoningUtils
 
 # Import tool system
-from .tools.building_data_toolkit import (
+from ..tools.building_data_toolkit import (
     load_building_data,
     get_all_elements,
     get_all_properties,
@@ -34,10 +33,13 @@ from .tools.building_data_toolkit import (
     find_related,
     validate_rule
 )
-from .tools.compliance_search import search_compliance_docs
+from ..tools.compliance_search import search_compliance_docs
 
 # Import memory system (reuse existing)
-from .memory import MemoryManager, MemoryManagerConfig
+from ..memory import MemoryManager, MemoryManagerConfig
+
+# Import unified configuration
+from ..config import AgentConfig
 
 
 class ReasoningAgent:
@@ -54,34 +56,55 @@ class ReasoningAgent:
     
     def __init__(
         self,
-        model_name: str = "gpt-4o-mini",
-        temperature: float = 0.1,
+        config: Optional[AgentConfig] = None,
+        # Legacy parameters for backward compatibility
+        model_name: Optional[str] = None,
+        temperature: Optional[float] = None,
         verbose: bool = True,
-        enable_memory: bool = True,
+        enable_memory: Optional[bool] = None,
         memory_config: Optional[MemoryManagerConfig] = None,
         session_id: Optional[str] = None,
-        max_iterations: int = 20,
-        max_execution_time: float = 300.0
+        max_iterations: Optional[int] = None,
+        max_execution_time: Optional[float] = None
     ):
         """
         Initialize the reasoning agent.
         
         Args:
-            model_name: LLM model to use
-            temperature: LLM temperature
+            config: Unified agent configuration (preferred)
+            model_name: LLM model to use (legacy, overrides config)
+            temperature: LLM temperature (legacy, overrides config)
             verbose: Enable verbose logging
-            enable_memory: Enable memory system
+            enable_memory: Enable memory system (legacy, overrides config)
             memory_config: Memory system configuration
             session_id: Session identifier
-            max_iterations: Maximum reasoning iterations
-            max_execution_time: Maximum execution time in seconds
+            max_iterations: Maximum reasoning iterations (legacy, overrides config)
+            max_execution_time: Maximum execution time in seconds (legacy, overrides config)
         """
-        self.model_name = model_name
-        self.temperature = temperature
+        # Initialize configuration
+        self.config = config or AgentConfig.from_env()
+        
+        # Apply legacy parameter overrides if provided
+        if model_name is not None:
+            self.config.llm.model_name = model_name
+        if temperature is not None:
+            self.config.llm.temperature = temperature
+        if enable_memory is not None:
+            self.config.memory.enable_short_term_memory = enable_memory
+        if max_iterations is not None:
+            self.config.reasoning.max_iterations = max_iterations
+        if max_execution_time is not None:
+            self.config.reasoning.max_execution_time = max_execution_time
+        if session_id is not None:
+            self.config.session_id = session_id
+        
+        # Store commonly used values for convenience
+        self.model_name = self.config.llm.model_name
+        self.temperature = self.config.llm.temperature
         self.verbose = verbose
-        self.enable_memory = enable_memory
-        self.max_iterations = max_iterations
-        self.max_execution_time = max_execution_time
+        self.enable_memory = self.config.memory.enable_short_term_memory
+        self.max_iterations = self.config.reasoning.max_iterations
+        self.max_execution_time = self.config.reasoning.max_execution_time
         
         self.logger = ReasoningUtils.setup_logger(__name__)
         
@@ -165,13 +188,55 @@ class ReasoningAgent:
             "calculate_metrics": self._create_calculate_wrapper(),
             "find_related_elements": self._create_related_wrapper(),
             "validate_compliance_rule": self._create_validation_wrapper(),
-            "search_compliance_documents": search_compliance_docs
+            "search_compliance_documents": search_compliance_docs,
+            "document_findings": self._create_documentation_wrapper()
         }
     
     def _create_building_data_wrapper(self):
         """Create wrapper for building data loading that integrates with memory."""
-        def wrapper(path: str) -> Dict[str, Any]:
-            result = load_building_data(path)
+        def wrapper(input_param: str) -> Dict[str, Any]:
+            # Extract file path from input parameter or task description
+            import re
+            import os
+            
+            # If input_param looks like a file path, use it directly
+            if input_param and (input_param.endswith('.json') or os.path.exists(input_param)):
+                file_path = input_param
+            else:
+                # Try to extract file path from the input text
+                # Look for patterns like "data/out/FM-ARC_v2.json" or similar
+                path_patterns = [
+                    r'["\']?([^"\']*\.json)["\']?',  # JSON files in quotes or not
+                    r'data/[^"\s]*\.json',            # Paths starting with data/
+                    r'[^"\s]*FM-ARC[^"\s]*\.json'     # Specific file pattern
+                ]
+                
+                file_path = None
+                for pattern in path_patterns:
+                    matches = re.findall(pattern, input_param)
+                    if matches:
+                        file_path = matches[0]
+                        break
+                
+                # If no path found in input, try common default locations
+                if not file_path:
+                    default_paths = [
+                        "data/out/FM-ARC_v2.json",
+                        "data/blueprints/FM-ARC_v2.json",
+                        "data/FM-ARC_v2.json"
+                    ]
+                    for default_path in default_paths:
+                        if os.path.exists(default_path):
+                            file_path = default_path
+                            break
+                
+                if not file_path:
+                    return {
+                        "status": "error",
+                        "message": f"Could not extract file path from input: {input_param}. Please provide a valid file path."
+                    }
+            
+            result = load_building_data(file_path)
             
             # Track in memory if available
             if self.memory_manager and result.get("status") == "success":
@@ -317,6 +382,67 @@ class ReasoningAgent:
                 return {
                     "status": "error",
                     "message": f"Validation failed: {str(e)}"
+                }
+        
+        return wrapper
+    
+    def _create_documentation_wrapper(self):
+        """Create wrapper for documenting findings and results."""
+        def wrapper(input_str: str) -> Dict[str, Any]:
+            import json
+            from datetime import datetime
+            
+            try:
+                if isinstance(input_str, str):
+                    try:
+                        params = json.loads(input_str)
+                    except json.JSONDecodeError:
+                        # If not JSON, treat as plain text
+                        params = {"content": input_str}
+                else:
+                    params = input_str
+                
+                content = params.get("content", "")
+                document_type = params.get("type", "findings")
+                title = params.get("title", "Analysis Results")
+                
+                if not content:
+                    return {
+                        "status": "error",
+                        "message": "No content provided to document"
+                    }
+                
+                # Create structured documentation
+                documentation = {
+                    "title": title,
+                    "type": document_type,
+                    "timestamp": datetime.now().isoformat(),
+                    "content": content,
+                    "sections": params.get("sections", []),
+                    "summary": params.get("summary", ""),
+                    "recommendations": params.get("recommendations", [])
+                }
+                
+                # Store in memory if available
+                if self.memory_manager:
+                    self.memory_manager.record_tool_execution(
+                        tool_name="document_findings",
+                        arguments={"title": title, "type": document_type},
+                        success=True,
+                        result_summary=f"Documented {document_type}: {title}"
+                    )
+                
+                return {
+                    "status": "success",
+                    "message": f"Successfully documented {document_type}: {title}",
+                    "data": documentation,
+                    "document_id": f"{document_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                }
+                
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "message": f"Documentation failed: {str(e)}"
                 }
         
         return wrapper

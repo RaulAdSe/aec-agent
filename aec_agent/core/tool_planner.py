@@ -83,11 +83,11 @@ class ToolPlanner:
                 "good_for": ["filtering", "finding specific elements", "complex searches"]
             },
             "calculate_metrics": {
-                "purpose": "Perform calculations on building elements",
+                "purpose": "Perform calculations on building elements including distances, areas, volumes, counts",
                 "input": "Operation type and parameters (JSON)",
                 "output": "Calculated metrics and values",
                 "prerequisites": ["building data loaded"],
-                "good_for": ["measurements", "calculations", "quantitative analysis"]
+                "good_for": ["measurements", "calculations", "quantitative analysis", "distance calculations", "spatial metrics", "geometric analysis"]
             },
             "find_related_elements": {
                 "purpose": "Find elements related to a specific element",
@@ -109,6 +109,13 @@ class ToolPlanner:
                 "output": "Relevant compliance information",
                 "prerequisites": ["knowledge base available"],
                 "good_for": ["regulations", "standards", "compliance requirements"]
+            },
+            "document_findings": {
+                "purpose": "Document analysis results and findings",
+                "input": "Content to document (JSON with content, title, type, sections, summary, recommendations)",
+                "output": "Structured documentation with timestamp and document ID",
+                "prerequisites": [],
+                "good_for": ["documentation", "summarizing results", "creating reports", "recording findings", "formatting results", "presenting data", "final output"]
             }
         }
         
@@ -216,10 +223,11 @@ Available tools and their capabilities:
 - get_all_elements: Get all elements of a specific type like spaces, doors, walls, slabs, stairs (input: element_type)
 - get_element_properties: Get detailed properties of a specific element (input: element_id)
 - query_elements: Filter elements with specific criteria (input: JSON with element_type and filters)
-- calculate_metrics: Perform calculations like counts, areas, volumes (input: JSON with operation and parameters)
+- calculate_metrics: Perform calculations like counts, areas, volumes, distances between elements (input: JSON with operation and parameters)
 - find_related_elements: Find spatial relationships between elements (input: JSON with element_id and relationship_type)
 - validate_compliance_rule: Check elements against compliance rules (input: JSON with rule_type, element_id, criteria)
 - search_compliance_documents: Search building codes and regulations (input: query_string)
+- document_findings: Document analysis results and findings (input: JSON with content, title, type, sections, summary, recommendations)
 
 Context: {context}
 Task Dependencies: Building data must be loaded before other operations
@@ -240,6 +248,12 @@ Task: "Count spaces" → "calculate_metrics"
 Task: "Find fire doors" → "query_elements"
 Task: "Check compliance" → "validate_compliance_rule"
 Task: "Search regulations" → "search_compliance_documents"
+Task: "Document findings" → "document_findings"
+Task: "Create report" → "document_findings"
+Task: "Calculate distances" → "calculate_metrics"
+Task: "Calculate distance between doors" → "calculate_metrics"
+Task: "Format results" → "document_findings"
+Task: "Present data" → "document_findings"
 """),
             ("human", """Task: {task_name}
 Description: {task_description}
@@ -259,12 +273,13 @@ Select the best tool:""")
             })
             
             tool_name = response.strip().lower()
+            self.logger.info(f"LLM raw response for task '{task.name}': '{response}' -> tool_name: '{tool_name}'")
             
             # Validate the tool exists
             available_tools = [
                 "load_building_data", "get_all_elements", "get_element_properties",
                 "query_elements", "calculate_metrics", "find_related_elements", 
-                "validate_compliance_rule", "search_compliance_documents"
+                "validate_compliance_rule", "search_compliance_documents", "document_findings"
             ]
             
             if tool_name in available_tools:
@@ -343,10 +358,11 @@ Available tools and their capabilities:
 - get_all_elements: Get all elements of a specific type like spaces, doors, walls, slabs, stairs (input: element_type)
 - get_element_properties: Get detailed properties of a specific element (input: element_id)
 - query_elements: Filter elements with specific criteria (input: JSON with element_type and filters)
-- calculate_metrics: Perform calculations like counts, areas, volumes (input: JSON with operation and parameters)
+- calculate_metrics: Perform calculations like counts, areas, volumes, distances between elements (input: JSON with operation and parameters)
 - find_related_elements: Find spatial relationships between elements (input: JSON with element_id and relationship_type)
 - validate_compliance_rule: Check elements against compliance rules (input: JSON with rule_type, element_id, criteria)
 - search_compliance_documents: Search building codes and regulations (input: query_string)
+- document_findings: Document analysis results and findings (input: JSON with content, title, type, sections, summary, recommendations)
 
 Context: {context}
 Execution History: {execution_history}
@@ -395,7 +411,7 @@ Select the best tool considering execution history:""")
             available_tools = [
                 "load_building_data", "get_all_elements", "get_element_properties",
                 "query_elements", "calculate_metrics", "find_related_elements", 
-                "validate_compliance_rule", "search_compliance_documents"
+                "validate_compliance_rule", "search_compliance_documents", "document_findings"
             ]
             
             if tool_name in available_tools:

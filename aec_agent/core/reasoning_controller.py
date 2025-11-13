@@ -6,7 +6,7 @@ The controller coordinates the reasoning loop: ANALYZE → PLAN → EXECUTE → 
 
 import time
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .reasoning_utils import ReasoningUtils, Task, TaskStatus, ExecutionResult
 from .goal_decomposer import GoalDecomposer
@@ -14,6 +14,7 @@ from .tool_planner import ToolPlanner
 from .executor import ToolExecutor
 from .validator import ResultValidator
 from .llm_guardrails import GuardrailConfig, ExecutionGuardrail, GuardrailViolationError
+from ..config import AgentConfig
 
 # Import LangSmith tracing
 from langsmith import traceable
@@ -24,6 +25,7 @@ class ReasoningState:
     """Current state of the reasoning process."""
     goal: str
     tasks: List[Task]
+    context: Dict[str, Any] = field(default_factory=dict)
     current_task_id: Optional[str] = None
     iteration: int = 0
     total_execution_time: float = 0.0
@@ -49,8 +51,10 @@ class ReasoningController:
         tool_planner: ToolPlanner,
         executor: ToolExecutor,
         validator: ResultValidator,
-        max_iterations: int = 20,
-        max_execution_time: float = 300.0,  # 5 minutes
+        config: Optional[AgentConfig] = None,
+        # Legacy parameters for backward compatibility
+        max_iterations: Optional[int] = None,
+        max_execution_time: Optional[float] = None,
         llm: Optional[Any] = None,
         guardrail_config: Optional[GuardrailConfig] = None
     ):
@@ -59,12 +63,28 @@ class ReasoningController:
         self.tool_planner = tool_planner
         self.executor = executor
         self.validator = validator
-        self.max_iterations = max_iterations
-        self.max_execution_time = max_execution_time
+        
+        # Initialize configuration
+        self.config = config or AgentConfig.from_env()
+        
+        # Apply legacy parameter overrides if provided
+        if max_iterations is not None:
+            self.config.reasoning.max_iterations = max_iterations
+        if max_execution_time is not None:
+            self.config.reasoning.max_execution_time = max_execution_time
+        
+        # Store commonly used values for convenience
+        self.max_iterations = self.config.reasoning.max_iterations
+        self.max_execution_time = self.config.reasoning.max_execution_time
         
         # Initialize execution guardrails
-        config = guardrail_config or GuardrailConfig.from_env()
-        self.execution_guardrail = ExecutionGuardrail(config)
+        if guardrail_config is not None:
+            # Use legacy guardrail config if provided
+            self.execution_guardrail = ExecutionGuardrail(guardrail_config)
+        else:
+            # Use guardrail config from unified configuration
+            effective_guardrail_config = self.config.get_effective_guardrail_config()
+            self.execution_guardrail = ExecutionGuardrail(effective_guardrail_config)
         
         self.logger = ReasoningUtils.setup_logger(__name__)
         self.state: Optional[ReasoningState] = None
@@ -88,7 +108,7 @@ class ReasoningController:
         self.logger.info(f"Reasoning inputs - Goal: {goal}, Context keys: {list(context.keys()) if context else []}")
         
         # Initialize reasoning state and reset guardrails
-        self.state = ReasoningState(goal=goal, tasks=[])
+        self.state = ReasoningState(goal=goal, tasks=[], context=context or {})
         self.execution_guardrail.reset()
         self.logger.info("Execution guardrails reset for new reasoning session")
         
@@ -133,7 +153,7 @@ class ReasoningController:
         
         # Plan tool execution for each task
         for task in self.state.tasks:
-            planning_result = self.tool_planner.plan_tools(task, context)
+            planning_result = self.tool_planner.plan_tools(task, self.state.context)
             if planning_result.get("success", False):
                 task.tool_sequence = planning_result["tool_sequence"]
                 task.metadata.update(planning_result.get("metadata", {}))
@@ -252,11 +272,25 @@ class ReasoningController:
         # TODO: Support multi-tool sequences
         tool_name = task.tool_sequence[0]
         
-        return self.executor.execute_tool(
+        result = self.executor.execute_tool(
             tool_name=tool_name,
             task=task,
-            context={"goal": self.state.goal, "iteration": self.state.iteration}
+            context={
+                "goal": self.state.goal, 
+                "iteration": self.state.iteration,
+                **self.state.context
+            }
         )
+        
+        # Update context based on tool execution
+        if result.success and tool_name == "load_building_data":
+            self.state.context["building_data_loaded"] = True
+            self.logger.info("Updated context: building_data_loaded = True")
+            
+            # Re-plan tools for pending tasks now that building data is loaded
+            self._replan_dependent_tasks()
+        
+        return result
     
     def _is_goal_achieved(self) -> bool:
         """Check if the main goal has been achieved."""
@@ -306,6 +340,28 @@ class ReasoningController:
         # For now, just mark as failed without replanning
         self.logger.warning(f"Task failed without recovery: {task.name}")
         return False
+    
+    def _replan_dependent_tasks(self) -> None:
+        """Re-plan tools for tasks that depend on building data now that it's loaded."""
+        pending_tasks = [
+            task for task in self.state.tasks 
+            if task.status == TaskStatus.PENDING and task.tool_sequence == ["load_building_data"]
+        ]
+        
+        if pending_tasks:
+            self.logger.info(f"Re-planning {len(pending_tasks)} tasks after building data loaded")
+            
+            for task in pending_tasks:
+                try:
+                    planning_result = self.tool_planner.plan_tools(task, self.state.context)
+                    if planning_result.get("success", False):
+                        task.tool_sequence = planning_result["tool_sequence"]
+                        task.metadata.update(planning_result.get("metadata", {}))
+                        self.logger.info(f"Re-planned task '{task.name}' with tools: {task.tool_sequence}")
+                    else:
+                        self.logger.warning(f"Re-planning failed for task '{task.name}'")
+                except Exception as e:
+                    self.logger.error(f"Error re-planning task '{task.name}': {e}")
     
     def _finalize_results(self, execution_results: List[ExecutionResult]) -> Dict[str, Any]:
         """Create final results summary."""
