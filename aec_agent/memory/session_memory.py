@@ -90,6 +90,12 @@ class SessionState(BaseModel):
     compliance_rules: List[str] = Field(default_factory=list, description="Active compliance rules")
     analysis_results: Dict[str, Any] = Field(default_factory=dict, description="Recent analysis results")
     
+    # Reactive execution state tracking
+    current_reasoning_mode: str = Field(default="static", description="Current reasoning mode (static/reactive)")
+    active_execution_memory_id: Optional[str] = Field(default=None, description="ID of active execution memory session")
+    execution_summary: Dict[str, Any] = Field(default_factory=dict, description="Summary of reactive execution state")
+    accumulated_context: Dict[str, Any] = Field(default_factory=dict, description="Context accumulated during reactive execution")
+    
     def update_timestamp(self):
         """Update the last modified timestamp."""
         self.updated_at = datetime.now(timezone.utc)
@@ -289,6 +295,52 @@ class SessionMemory:
         self.state.analysis_results.update(results)
         self.state.update_timestamp()
     
+    # Execution State Management (for Reactive Reasoning)
+    def set_reasoning_mode(self, mode: str) -> None:
+        """Set the current reasoning mode (static/reactive)."""
+        self.state.current_reasoning_mode = mode
+        self.state.update_timestamp()
+        self.logger.debug(f"Reasoning mode set to: {mode}")
+    
+    def get_reasoning_mode(self) -> str:
+        """Get the current reasoning mode."""
+        return self.state.current_reasoning_mode
+    
+    def set_active_execution_memory(self, execution_memory_id: str) -> None:
+        """Set the active execution memory session ID."""
+        self.state.active_execution_memory_id = execution_memory_id
+        self.state.update_timestamp()
+        self.logger.debug(f"Active execution memory set: {execution_memory_id}")
+    
+    def get_active_execution_memory_id(self) -> Optional[str]:
+        """Get the active execution memory session ID."""
+        return self.state.active_execution_memory_id
+    
+    def update_execution_summary(self, summary: Dict[str, Any]) -> None:
+        """Update the execution summary with latest reactive execution state."""
+        self.state.execution_summary.update(summary)
+        self.state.update_timestamp()
+        self.logger.debug("Execution summary updated")
+    
+    def update_accumulated_context(self, context: Dict[str, Any]) -> None:
+        """Update accumulated context from reactive execution."""
+        self.state.accumulated_context.update(context)
+        self.state.update_timestamp()
+        self.logger.debug(f"Accumulated context updated with {len(context)} new entries")
+    
+    def get_accumulated_context(self) -> Dict[str, Any]:
+        """Get the accumulated context from reactive execution."""
+        return self.state.accumulated_context.copy()
+    
+    def clear_execution_state(self) -> None:
+        """Clear reactive execution state."""
+        self.state.current_reasoning_mode = "static"
+        self.state.active_execution_memory_id = None
+        self.state.execution_summary.clear()
+        self.state.accumulated_context.clear()
+        self.state.update_timestamp()
+        self.logger.info("Execution state cleared")
+    
     # Session Management
     def get_session_summary(self) -> Dict[str, Any]:
         """Get a summary of the current session state."""
@@ -303,6 +355,9 @@ class SessionMemory:
             "tool_executions": len(self.state.tool_history),
             "building_data_loaded": bool(self.state.loaded_building_data),
             "compliance_rules_active": len(self.state.compliance_rules),
+            "reasoning_mode": self.state.current_reasoning_mode,
+            "active_execution_memory": bool(self.state.active_execution_memory_id),
+            "accumulated_context_size": len(self.state.accumulated_context),
             "created_at": self.state.created_at,
             "updated_at": self.state.updated_at
         }
