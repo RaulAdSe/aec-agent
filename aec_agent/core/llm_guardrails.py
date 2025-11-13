@@ -8,7 +8,7 @@ infinite loops, and memory bloat through simple caps and limits.
 import logging
 import time
 import functools
-from typing import Any, Callable, Optional, Dict
+from typing import Any, Callable, Optional, Dict, List
 from dataclasses import dataclass
 
 
@@ -244,6 +244,166 @@ class MemoryGuardrail:
         return trimmed
 
 
+class GuardrailMonitor:
+    """Centralized monitoring and status reporting for all guardrails."""
+    
+    def __init__(self, execution_guardrail: ExecutionGuardrail, memory_guardrail: MemoryGuardrail):
+        self.execution_guardrail = execution_guardrail
+        self.memory_guardrail = memory_guardrail
+        self.start_time = time.time()
+        self.llm_retry_stats = {
+            "total_calls": 0,
+            "successful_calls": 0,
+            "failed_calls": 0,
+            "retry_attempts": 0,
+            "total_retry_time": 0.0
+        }
+    
+    def record_llm_call(self, success: bool, retry_attempts: int = 0, retry_time: float = 0.0):
+        """Record LLM call statistics."""
+        self.llm_retry_stats["total_calls"] += 1
+        if success:
+            self.llm_retry_stats["successful_calls"] += 1
+        else:
+            self.llm_retry_stats["failed_calls"] += 1
+        self.llm_retry_stats["retry_attempts"] += retry_attempts
+        self.llm_retry_stats["total_retry_time"] += retry_time
+    
+    def get_comprehensive_status(self) -> Dict[str, Any]:
+        """Get comprehensive status of all guardrails."""
+        uptime = time.time() - self.start_time
+        
+        execution_status = self.execution_guardrail.get_status()
+        
+        return {
+            "monitoring": {
+                "session_uptime": f"{uptime:.2f}s",
+                "start_time": time.ctime(self.start_time)
+            },
+            "llm_performance": {
+                "total_calls": self.llm_retry_stats["total_calls"],
+                "success_rate": (
+                    self.llm_retry_stats["successful_calls"] / self.llm_retry_stats["total_calls"]
+                    if self.llm_retry_stats["total_calls"] > 0 else 0.0
+                ),
+                "retry_attempts": self.llm_retry_stats["retry_attempts"],
+                "average_retry_time": (
+                    self.llm_retry_stats["total_retry_time"] / self.llm_retry_stats["retry_attempts"]
+                    if self.llm_retry_stats["retry_attempts"] > 0 else 0.0
+                )
+            },
+            "execution_guardrails": execution_status,
+            "memory_status": {
+                "cleanup_triggered": "N/A - tracked per session",
+                "context_trimming": "Active",
+                "max_memory_steps": self.memory_guardrail.config.max_execution_steps_memory,
+                "max_context_length": self.memory_guardrail.config.max_context_summary_length
+            },
+            "configuration": {
+                "max_replanning_events": self.execution_guardrail.config.max_replanning_events,
+                "max_task_attempts": self.execution_guardrail.config.max_same_task_attempts,
+                "max_execution_steps": self.execution_guardrail.config.max_total_execution_steps,
+                "llm_max_retries": self.execution_guardrail.config.llm_max_retries,
+                "llm_retry_delay": f"{self.execution_guardrail.config.llm_retry_delay}s",
+                "llm_timeout": f"{self.execution_guardrail.config.llm_timeout}s"
+            }
+        }
+    
+    def get_alerts(self) -> List[Dict[str, Any]]:
+        """Check for any guardrail alerts or warnings."""
+        alerts = []
+        
+        execution_status = self.execution_guardrail.get_status()
+        limits_hit = execution_status["limits_hit"]
+        
+        # Check for limits approaching
+        replanning_ratio = (
+            self.execution_guardrail.replanning_count / 
+            self.execution_guardrail.config.max_replanning_events
+        )
+        if replanning_ratio >= 0.8:
+            alerts.append({
+                "level": "warning",
+                "type": "replanning_limit_approaching", 
+                "message": f"Replanning events at {replanning_ratio:.1%} of limit"
+            })
+        
+        steps_ratio = (
+            self.execution_guardrail.total_steps /
+            self.execution_guardrail.config.max_total_execution_steps
+        )
+        if steps_ratio >= 0.8:
+            alerts.append({
+                "level": "warning",
+                "type": "execution_steps_approaching",
+                "message": f"Execution steps at {steps_ratio:.1%} of limit"
+            })
+        
+        # Check LLM performance
+        if self.llm_retry_stats["total_calls"] > 0:
+            failure_rate = (
+                self.llm_retry_stats["failed_calls"] / 
+                self.llm_retry_stats["total_calls"]
+            )
+            if failure_rate > 0.2:  # More than 20% failure rate
+                alerts.append({
+                    "level": "warning",
+                    "type": "high_llm_failure_rate",
+                    "message": f"LLM failure rate: {failure_rate:.1%}"
+                })
+        
+        return alerts
+
+
+# Enhanced retry decorator with monitoring
+def monitored_llm_retry(
+    monitor: Optional[GuardrailMonitor] = None,
+    max_retries: int = 3,
+    delay: float = 1.0,
+    timeout: float = 30.0
+) -> Callable:
+    """LLM retry decorator with monitoring integration."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            retry_attempts = 0
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    result = func(*args, **kwargs)
+                    
+                    # Record successful call
+                    if monitor:
+                        total_time = time.time() - start_time
+                        monitor.record_llm_call(True, retry_attempts, total_time)
+                    
+                    return result
+                    
+                except Exception as e:
+                    last_exception = e
+                    retry_attempts += 1
+                    
+                    if attempt == max_retries:
+                        break
+                    
+                    retry_delay = delay * (2 ** attempt)
+                    time.sleep(retry_delay)
+            
+            # Record failed call
+            if monitor:
+                total_time = time.time() - start_time
+                monitor.record_llm_call(False, retry_attempts, total_time)
+            
+            raise LLMRetryError(
+                f"LLM call failed after {max_retries + 1} attempts. Last error: {last_exception}"
+            ) from last_exception
+            
+        return wrapper
+    return decorator
+
+
 # Global default configuration (can be overridden)
 default_guardrail_config = GuardrailConfig.from_env()
 
@@ -256,3 +416,33 @@ def default_llm_retry(func: Callable) -> Callable:
         delay=config.llm_retry_delay,
         timeout=config.llm_timeout
     )(func)
+
+
+def create_guardrail_dashboard() -> str:
+    """Create a simple text-based dashboard of guardrail status."""
+    config = GuardrailConfig.from_env()
+    
+    dashboard = f"""
+╔══════════════════════════════════════════════════════════════╗
+║                    GUARDRAIL CONFIGURATION                   ║
+╠══════════════════════════════════════════════════════════════╣
+║ LLM Retry Settings:                                          ║
+║   Max Retries: {config.llm_max_retries:<3}   Delay: {config.llm_retry_delay:<4}s   Timeout: {config.llm_timeout:<4}s     ║
+║                                                              ║
+║ Execution Limits:                                            ║
+║   Max Replanning Events: {config.max_replanning_events:<3}                               ║
+║   Max Task Attempts: {config.max_same_task_attempts:<3}                                   ║
+║   Max Total Steps: {config.max_total_execution_steps:<3}                                 ║
+║                                                              ║
+║ Memory Limits:                                               ║
+║   Max Memory Steps: {config.max_execution_steps_memory:<3}                               ║
+║   Max Context Length: {config.max_context_summary_length:<4} chars                     ║
+║                                                              ║
+║ Environment Variables:                                       ║
+║   AEC_LLM_MAX_RETRIES, AEC_LLM_RETRY_DELAY                  ║
+║   AEC_LLM_TIMEOUT, AEC_MAX_REPLANNING                       ║  
+║   AEC_MAX_TASK_ATTEMPTS, AEC_MAX_EXECUTION_STEPS           ║
+║   AEC_MAX_MEMORY_STEPS, AEC_MAX_CONTEXT_LENGTH             ║
+╚══════════════════════════════════════════════════════════════╝
+"""
+    return dashboard.strip()
