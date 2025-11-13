@@ -125,17 +125,21 @@ class ToolPlanner:
             "extract": ["get_all_elements"],
             "extract requested information": ["get_all_elements"],
             "present": ["get_all_elements"],
-            "present results": ["get_all_elements"]
+            "present results": ["get_all_elements"],
+            "get": ["get_all_elements", "query_elements"],
+            "doors": ["get_all_elements", "query_elements"],
+            "get doors": ["get_all_elements"],
+            "get all": ["get_all_elements"]
         }
     
     @traceable(name="tool_planning", metadata={"component": "tool_planner"})
     def plan_tools(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Plan the optimal tool sequence for a task.
+        Plan the optimal tool sequence for a task with context-aware intelligence.
         
         Args:
             task: Task to plan tools for
-            context: Current execution context
+            context: Current execution context (includes execution memory if available)
             
         Returns:
             Dict containing success status, tool sequence, and metadata
@@ -143,7 +147,23 @@ class ToolPlanner:
         self.logger.info(f"Planning tools for task: {task.name}")
         
         try:
-            # First try LLM-based intelligent tool selection
+            # Check if we have execution history context for enhanced planning
+            execution_context = context.get("execution_context", {})
+            has_execution_history = bool(execution_context.get("recent_execution_steps", []))
+            
+            if has_execution_history:
+                # Try context-aware LLM planning first
+                context_aware_tools = self._context_aware_llm_planning(task, context, execution_context)
+                if context_aware_tools:
+                    self.logger.info(f"Used context-aware LLM planning: {task.name}")
+                    return {
+                        "success": True,
+                        "tool_sequence": context_aware_tools,
+                        "method": "context_aware_llm",
+                        "metadata": {"context_aware": True, "execution_history_used": True}
+                    }
+            
+            # First try standard LLM-based intelligent tool selection
             llm_tools = self._llm_plan_tools(task, context)
             if llm_tools:
                 self.logger.info(f"Used LLM for tool planning: {task.name}")
@@ -166,7 +186,7 @@ class ToolPlanner:
                 }
             
             # No planning possible
-            self.logger.error(f"Both LLM and pattern matching failed for task: {task.name}")
+            self.logger.error(f"All planning methods failed for task: {task.name}")
             return {
                 "success": False,
                 "tool_sequence": [],
@@ -182,6 +202,46 @@ class ToolPlanner:
                 "message": f"Tool planning failed: {str(e)}",
                 "error": ReasoningUtils.extract_error_info(e)
             }
+    
+    @traceable(name="context_aware_tool_planning")
+    def plan_tools_with_execution_history(
+        self, 
+        task: Task, 
+        context: Dict[str, Any], 
+        execution_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Enhanced tool planning that leverages execution history for better decisions.
+        
+        Args:
+            task: Task to plan tools for
+            context: Current execution context
+            execution_context: Rich execution context from execution memory
+            
+        Returns:
+            Dict containing success status, tool sequence, and metadata
+        """
+        self.logger.info(f"Context-aware planning for task: {task.name}")
+        
+        # Enhance context with execution history insights
+        enhanced_context = self._enhance_context_with_history(context, execution_context)
+        
+        # Try context-aware LLM planning
+        context_tools = self._context_aware_llm_planning(task, enhanced_context, execution_context)
+        if context_tools:
+            return {
+                "success": True,
+                "tool_sequence": context_tools,
+                "method": "context_aware_llm",
+                "metadata": {
+                    "context_aware": True,
+                    "execution_insights_used": True,
+                    "history_length": len(execution_context.get("recent_execution_steps", []))
+                }
+            }
+        
+        # Fallback to standard planning
+        return self.plan_tools(task, enhanced_context)
     
     @traceable(name="llm_tool_planning")
     def _llm_plan_tools(self, task: Task, context: Dict[str, Any]) -> Optional[List[str]]:
@@ -366,3 +426,287 @@ Select the best tool:""")
         for pattern_list in self.task_patterns.values():
             patterns.extend(pattern_list)
         return sorted(set(patterns))
+    
+    @traceable(name="context_aware_llm_planning")
+    def _context_aware_llm_planning(
+        self, 
+        task: Task, 
+        context: Dict[str, Any], 
+        execution_context: Dict[str, Any]
+    ) -> Optional[List[str]]:
+        """Use LLM with execution history for context-aware tool planning."""
+        
+        # Prepare execution history summary
+        history_summary = self._prepare_execution_history_summary(execution_context)
+        
+        # Create enhanced tool planning prompt
+        context_aware_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are an expert tool selection specialist for AEC compliance analysis with access to execution history.
+
+Available tools and their capabilities:
+- load_building_data: Load IFC JSON building data files (input: file_path)
+- get_all_elements: Get all elements of a specific type like spaces, doors, walls, slabs, stairs (input: element_type)
+- get_element_properties: Get detailed properties of a specific element (input: element_id)
+- query_elements: Filter elements with specific criteria (input: JSON with element_type and filters)
+- calculate_metrics: Perform calculations like counts, areas, volumes (input: JSON with operation and parameters)
+- find_related_elements: Find spatial relationships between elements (input: JSON with element_id and relationship_type)
+- validate_compliance_rule: Check elements against compliance rules (input: JSON with rule_type, element_id, criteria)
+- search_compliance_documents: Search building codes and regulations (input: query_string)
+
+Context: {context}
+Execution History: {execution_history}
+
+Based on the task requirements AND execution history, select the SINGLE BEST tool.
+
+Key insights from execution history:
+1. Which tools have been successful vs unsuccessful recently
+2. What patterns of failures suggest alternative approaches
+3. What context has been discovered that could inform tool choice
+4. Which tools might be redundant given recent successful executions
+
+Rules:
+1. Return ONLY the tool name (e.g., "get_all_elements")
+2. Learn from recent failures - avoid tools that have consistently failed for similar tasks
+3. Leverage successful patterns from execution history
+4. Consider discovered context (e.g., if building data is already loaded, don't reload)
+5. If execution history shows a clear successful path, prefer those tools
+6. If no clear pattern, return "uncertain" for fallback to standard planning
+
+Examples based on history:
+- If load_building_data recently succeeded → prefer tools that work with loaded data
+- If query_elements failed recently → try get_all_elements instead
+- If building context discovered → leverage that context in tool choice"""),
+            ("human", """Task: {task_name}
+Description: {task_description}
+Building data loaded: {building_data_loaded}
+
+Select the best tool considering execution history:""")
+        ])
+        
+        try:
+            # Execute context-aware LLM tool selection
+            chain = context_aware_prompt | self.llm | StrOutputParser()
+            response = chain.invoke({
+                "task_name": task.name,
+                "task_description": task.description,
+                "building_data_loaded": context.get("building_data_loaded", False),
+                "context": str(context) if context else "No additional context",
+                "execution_history": history_summary
+            })
+            
+            tool_name = response.strip().lower()
+            
+            # Validate the tool exists
+            available_tools = [
+                "load_building_data", "get_all_elements", "get_element_properties",
+                "query_elements", "calculate_metrics", "find_related_elements", 
+                "validate_compliance_rule", "search_compliance_documents"
+            ]
+            
+            if tool_name in available_tools:
+                self.logger.info(f"Context-aware LLM selected tool '{tool_name}' for task '{task.name}'")
+                return [tool_name]
+            elif tool_name == "uncertain":
+                self.logger.info(f"Context-aware LLM indicated uncertainty for task '{task.name}'")
+                return None
+            else:
+                self.logger.warning(f"Context-aware LLM selected invalid tool '{tool_name}' for task '{task.name}'")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Context-aware LLM tool planning failed for {task.name}: {e}")
+            return None
+    
+    def _enhance_context_with_history(self, context: Dict[str, Any], execution_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Enhance planning context with insights from execution history."""
+        
+        enhanced_context = context.copy()
+        
+        # Add execution insights
+        recent_steps = execution_context.get("recent_execution_steps", [])
+        if recent_steps:
+            # Identify successful vs failed tools
+            successful_tools = [step["tool"] for step in recent_steps if step.get("success", False)]
+            failed_tools = [step["tool"] for step in recent_steps if not step.get("success", False)]
+            
+            enhanced_context["recent_successful_tools"] = successful_tools
+            enhanced_context["recent_failed_tools"] = failed_tools
+            
+            # Add success rates
+            if successful_tools or failed_tools:
+                total_recent = len(recent_steps)
+                success_rate = len([s for s in recent_steps if s.get("success", False)]) / total_recent
+                enhanced_context["recent_success_rate"] = success_rate
+        
+        # Add discovered context insights
+        discovered_context = execution_context.get("discovered_context_summary", {})
+        if discovered_context:
+            enhanced_context["discovered_context"] = discovered_context
+            
+            # Check for specific context that affects tool choice
+            if "building_data_loaded" in str(discovered_context).lower():
+                enhanced_context["building_data_loaded"] = True
+            
+            if "total_elements" in discovered_context:
+                enhanced_context["elements_available"] = True
+                enhanced_context["element_count"] = discovered_context.get("total_elements", 0)
+        
+        # Add failure patterns
+        recent_failures = execution_context.get("recent_failures", [])
+        if recent_failures:
+            failure_tools = [failure.get("tool", "unknown") for failure in recent_failures]
+            enhanced_context["tools_to_avoid"] = list(set(failure_tools))
+            
+            # Extract common failure reasons
+            failure_reasons = [failure.get("error", "") for failure in recent_failures]
+            enhanced_context["recent_failure_patterns"] = failure_reasons
+        
+        return enhanced_context
+    
+    def _prepare_execution_history_summary(self, execution_context: Dict[str, Any]) -> str:
+        """Prepare a concise execution history summary for LLM context."""
+        
+        summary_parts = []
+        
+        # Recent execution steps
+        recent_steps = execution_context.get("recent_execution_steps", [])
+        if recent_steps:
+            summary_parts.append(f"Recent execution steps ({len(recent_steps)}):")
+            for step in recent_steps[-5:]:  # Last 5 steps
+                status = "✓" if step.get("success", False) else "✗"
+                confidence = step.get("confidence", 0.0)
+                summary_parts.append(f"  {status} {step.get('task', 'Unknown')} → {step.get('tool', 'unknown')} (conf: {confidence:.1%})")
+        
+        # Success patterns
+        successful_tools = [step["tool"] for step in recent_steps if step.get("success", False)]
+        if successful_tools:
+            tool_counts = {}
+            for tool in successful_tools:
+                tool_counts[tool] = tool_counts.get(tool, 0) + 1
+            summary_parts.append(f"Successful tool patterns: {dict(tool_counts)}")
+        
+        # Failure patterns
+        recent_failures = execution_context.get("recent_failures", [])
+        if recent_failures:
+            summary_parts.append(f"Recent failures ({len(recent_failures)}):")
+            for failure in recent_failures[-3:]:  # Last 3 failures
+                summary_parts.append(f"  • {failure.get('task', 'Unknown')}: {failure.get('error', 'Unknown error')[:50]}")
+        
+        # Discovered context
+        discovered_context = execution_context.get("discovered_context_summary", {})
+        if discovered_context:
+            summary_parts.append("Discovered context:")
+            for key, value in list(discovered_context.items())[:3]:  # Top 3 discoveries
+                summary_parts.append(f"  • {key}: {str(value)[:40]}")
+        
+        # Plan confidence
+        plan_confidence = execution_context.get("plan_confidence", 1.0)
+        summary_parts.append(f"Current plan confidence: {plan_confidence:.1%}")
+        
+        return "\n".join(summary_parts) if summary_parts else "No execution history available"
+    
+    def analyze_tool_performance(self, execution_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Analyze tool performance based on execution history.
+        
+        Args:
+            execution_context: Rich execution context from execution memory
+            
+        Returns:
+            Dict with tool performance analysis
+        """
+        recent_steps = execution_context.get("recent_execution_steps", [])
+        
+        if not recent_steps:
+            return {"message": "No execution history to analyze"}
+        
+        # Analyze tool success rates
+        tool_stats = {}
+        for step in recent_steps:
+            tool = step.get("tool", "unknown")
+            success = step.get("success", False)
+            confidence = step.get("confidence", 0.0)
+            
+            if tool not in tool_stats:
+                tool_stats[tool] = {"attempts": 0, "successes": 0, "total_confidence": 0.0}
+            
+            tool_stats[tool]["attempts"] += 1
+            if success:
+                tool_stats[tool]["successes"] += 1
+            tool_stats[tool]["total_confidence"] += confidence
+        
+        # Calculate metrics
+        performance_analysis = {}
+        for tool, stats in tool_stats.items():
+            attempts = stats["attempts"]
+            successes = stats["successes"]
+            success_rate = successes / attempts if attempts > 0 else 0.0
+            avg_confidence = stats["total_confidence"] / attempts if attempts > 0 else 0.0
+            
+            performance_analysis[tool] = {
+                "attempts": attempts,
+                "success_rate": success_rate,
+                "avg_confidence": avg_confidence,
+                "reliability_score": success_rate * avg_confidence  # Combined metric
+            }
+        
+        # Identify best and worst performing tools
+        if performance_analysis:
+            best_tool = max(performance_analysis.items(), key=lambda x: x[1]["reliability_score"])
+            worst_tool = min(performance_analysis.items(), key=lambda x: x[1]["reliability_score"])
+            
+            return {
+                "tool_performance": performance_analysis,
+                "best_performing_tool": best_tool[0],
+                "worst_performing_tool": worst_tool[0],
+                "total_executions": len(recent_steps),
+                "overall_success_rate": sum(1 for step in recent_steps if step.get("success", False)) / len(recent_steps)
+            }
+        
+        return {"message": "No tool performance data available"}
+    
+    def recommend_tool_alternatives(self, failed_tool: str, task_description: str) -> List[str]:
+        """
+        Recommend alternative tools when a specific tool has failed.
+        
+        Args:
+            failed_tool: Tool that failed
+            task_description: Description of what the task is trying to accomplish
+            
+        Returns:
+            List of recommended alternative tools
+        """
+        alternatives = []
+        task_lower = task_description.lower()
+        
+        # Tool-specific alternatives based on failure patterns
+        tool_alternatives = {
+            "query_elements": ["get_all_elements", "get_element_properties"],
+            "get_all_elements": ["query_elements", "calculate_metrics"],
+            "calculate_metrics": ["get_all_elements", "query_elements"],
+            "get_element_properties": ["query_elements", "get_all_elements"],
+            "load_building_data": [],  # No alternatives for data loading
+            "validate_compliance_rule": ["search_compliance_documents"],
+            "search_compliance_documents": ["validate_compliance_rule"],
+            "find_related_elements": ["query_elements", "get_element_properties"]
+        }
+        
+        # Get direct alternatives
+        direct_alternatives = tool_alternatives.get(failed_tool, [])
+        
+        # Filter based on task context
+        for alternative in direct_alternatives:
+            # Check if alternative matches task intent
+            tool_capabilities = self.tool_capabilities.get(alternative, {})
+            good_for = tool_capabilities.get("good_for", [])
+            
+            if any(purpose in task_lower for purpose in good_for):
+                alternatives.append(alternative)
+        
+        # If no direct alternatives, suggest based on task patterns
+        if not alternatives:
+            for pattern_key, tools in self.task_patterns.items():
+                if pattern_key in task_lower and failed_tool not in tools:
+                    alternatives.extend(tools[:2])  # Add first 2 pattern tools
+        
+        return list(set(alternatives))[:3]  # Return top 3 unique alternatives

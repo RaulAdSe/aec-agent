@@ -73,23 +73,60 @@ class ResultValidator:
         
         # 1. Basic execution check
         if not execution_result.success:
-            return {
+            validation_result = {
                 "success": False,
                 "message": f"Tool execution failed: {execution_result.error_message}",
                 "validation_level": "execution",
                 "method": "basic_check"
             }
+            # Add replanning trigger assessment for failures
+            validation_result.update(self._assess_replanning_trigger(task, execution_result, validation_result))
+            return validation_result
         
         # 2. LLM-based intelligent validation
         llm_validation = self._llm_validate_result(task, execution_result)
         if llm_validation is not None:
             self.logger.info(f"Used LLM for validation of {task.name}")
+            # Add replanning trigger assessment
+            llm_validation.update(self._assess_replanning_trigger(task, execution_result, llm_validation))
             return llm_validation
         
         # 3. Fallback to rule-based validation  
         fallback_validation = self._fallback_validate_result(task, execution_result)
         self.logger.info(f"Used fallback validation for {task.name}")
+        # Add replanning trigger assessment
+        fallback_validation.update(self._assess_replanning_trigger(task, execution_result, fallback_validation))
         return fallback_validation
+    
+    @traceable(name="replanning_trigger_assessment")
+    def validate_with_replanning_assessment(
+        self, 
+        task: Task, 
+        execution_result: ExecutionResult,
+        execution_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Enhanced validation that includes comprehensive replanning trigger assessment.
+        
+        Args:
+            task: Task that was executed
+            execution_result: Result of tool execution
+            execution_context: Optional execution context for enhanced assessment
+            
+        Returns:
+            Dict containing validation result with replanning recommendations
+        """
+        # Get basic validation result
+        validation_result = self.validate_execution(task, execution_result)
+        
+        # Enhanced replanning assessment with execution context
+        if execution_context:
+            enhanced_assessment = self._assess_replanning_with_context(
+                task, execution_result, validation_result, execution_context
+            )
+            validation_result.update(enhanced_assessment)
+        
+        return validation_result
     
     @traceable(name="llm_result_validation")
     def _llm_validate_result(self, task: Task, execution_result: ExecutionResult) -> Optional[Dict[str, Any]]:
@@ -422,3 +459,252 @@ Be strict but reasonable. If tool ran successfully and produced expected output 
             message=f"No specific progress validation defined for tool: {tool_name}",
             validation_level="progress"
         )
+    
+    def _assess_replanning_trigger(
+        self, 
+        task: Task, 
+        execution_result: ExecutionResult, 
+        validation_result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Assess whether validation results suggest replanning is needed.
+        
+        Args:
+            task: Task that was executed
+            execution_result: Result of tool execution
+            validation_result: Current validation result
+            
+        Returns:
+            Dict with replanning assessment fields
+        """
+        replanning_assessment = {
+            "suggests_replanning": False,
+            "replanning_confidence": 0.0,
+            "replanning_reason": "",
+            "replanning_trigger_type": None,
+            "replanning_details": {}
+        }
+        
+        # Check for execution failure
+        if not execution_result.success:
+            replanning_assessment.update({
+                "suggests_replanning": True,
+                "replanning_confidence": 0.8,
+                "replanning_reason": f"Tool execution failed: {execution_result.error_message}",
+                "replanning_trigger_type": "execution_error",
+                "replanning_details": {
+                    "tool_name": execution_result.tool_name,
+                    "error_message": execution_result.error_message,
+                    "task_name": task.name
+                }
+            })
+            return replanning_assessment
+        
+        # Check for validation failure
+        if not validation_result.get("success", False):
+            replanning_assessment.update({
+                "suggests_replanning": True,
+                "replanning_confidence": 0.7,
+                "replanning_reason": f"Validation failed: {validation_result.get('message', 'Unknown reason')}",
+                "replanning_trigger_type": "validation_failure",
+                "replanning_details": {
+                    "validation_message": validation_result.get("message", ""),
+                    "validation_method": validation_result.get("method", ""),
+                    "task_name": task.name
+                }
+            })
+            return replanning_assessment
+        
+        # Check for low confidence validation
+        confidence = validation_result.get("confidence", 1.0)
+        if confidence < 0.6:
+            replanning_assessment.update({
+                "suggests_replanning": True,
+                "replanning_confidence": 0.5,
+                "replanning_reason": f"Low validation confidence: {confidence:.1%}",
+                "replanning_trigger_type": "low_confidence",
+                "replanning_details": {
+                    "validation_confidence": confidence,
+                    "confidence_threshold": 0.6,
+                    "task_name": task.name
+                }
+            })
+            return replanning_assessment
+        
+        # Check for validation issues
+        issues = validation_result.get("issues", [])
+        if issues and len(issues) > 2:
+            replanning_assessment.update({
+                "suggests_replanning": True,
+                "replanning_confidence": 0.4,
+                "replanning_reason": f"Multiple validation issues: {len(issues)} issues found",
+                "replanning_trigger_type": "validation_issues",
+                "replanning_details": {
+                    "issues": issues[:3],  # Include first 3 issues
+                    "total_issues": len(issues),
+                    "task_name": task.name
+                }
+            })
+            return replanning_assessment
+        
+        return replanning_assessment
+    
+    def _assess_replanning_with_context(
+        self,
+        task: Task,
+        execution_result: ExecutionResult,
+        validation_result: Dict[str, Any],
+        execution_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Enhanced replanning assessment using execution context.
+        
+        Args:
+            task: Task that was executed
+            execution_result: Result of tool execution
+            validation_result: Current validation result
+            execution_context: Rich execution context from memory
+            
+        Returns:
+            Dict with enhanced replanning assessment
+        """
+        enhanced_assessment = {
+            "context_suggests_replanning": False,
+            "context_confidence": 0.0,
+            "context_reason": "",
+            "context_trigger_type": None,
+            "context_details": {}
+        }
+        
+        # Check for patterns in recent failures
+        recent_failures = execution_context.get("recent_failures", [])
+        if len(recent_failures) >= 2:
+            # Multiple recent failures suggest systematic issue
+            enhanced_assessment.update({
+                "context_suggests_replanning": True,
+                "context_confidence": 0.8,
+                "context_reason": f"Pattern of recent failures: {len(recent_failures)} failures",
+                "context_trigger_type": "failure_pattern",
+                "context_details": {
+                    "recent_failures": recent_failures,
+                    "failure_count": len(recent_failures)
+                }
+            })
+            return enhanced_assessment
+        
+        # Check for low plan confidence
+        plan_confidence = execution_context.get("plan_confidence", 1.0)
+        if plan_confidence < 0.5:
+            enhanced_assessment.update({
+                "context_suggests_replanning": True,
+                "context_confidence": 0.7,
+                "context_reason": f"Low plan confidence: {plan_confidence:.1%}",
+                "context_trigger_type": "low_plan_confidence",
+                "context_details": {
+                    "plan_confidence": plan_confidence,
+                    "threshold": 0.5
+                }
+            })
+            return enhanced_assessment
+        
+        # Check for significant context discoveries
+        recent_discoveries = execution_context.get("recent_context_discoveries", [])
+        high_confidence_discoveries = [d for d in recent_discoveries if d.get("confidence", 0) > 0.8]
+        
+        if len(high_confidence_discoveries) >= 2:
+            enhanced_assessment.update({
+                "context_suggests_replanning": True,
+                "context_confidence": 0.6,
+                "context_reason": f"New context discovered: {len(high_confidence_discoveries)} high-confidence discoveries",
+                "context_trigger_type": "context_discovery",
+                "context_details": {
+                    "discoveries": high_confidence_discoveries,
+                    "discovery_count": len(high_confidence_discoveries)
+                }
+            })
+            return enhanced_assessment
+        
+        # Check for stagnation (no progress over multiple steps)
+        recent_steps = execution_context.get("recent_execution_steps", [])
+        if len(recent_steps) >= 3:
+            # Check if recent steps are all on the same failing task
+            task_names = [step.get("task", "") for step in recent_steps]
+            if len(set(task_names)) == 1 and not any(step.get("success", False) for step in recent_steps):
+                enhanced_assessment.update({
+                    "context_suggests_replanning": True,
+                    "context_confidence": 0.6,
+                    "context_reason": "Stagnation: Multiple attempts at same task failing",
+                    "context_trigger_type": "task_stagnation",
+                    "context_details": {
+                        "stagnant_task": task_names[0],
+                        "failed_attempts": len(recent_steps)
+                    }
+                })
+                return enhanced_assessment
+        
+        return enhanced_assessment
+    
+    def should_trigger_replanning(self, validation_result: Dict[str, Any]) -> bool:
+        """
+        Determine if validation result suggests replanning should be triggered.
+        
+        Args:
+            validation_result: Complete validation result with replanning assessment
+            
+        Returns:
+            True if replanning should be triggered
+        """
+        # Check basic replanning suggestion
+        basic_suggestion = validation_result.get("suggests_replanning", False)
+        basic_confidence = validation_result.get("replanning_confidence", 0.0)
+        
+        # Check context-based replanning suggestion
+        context_suggestion = validation_result.get("context_suggests_replanning", False)
+        context_confidence = validation_result.get("context_confidence", 0.0)
+        
+        # Trigger replanning if either basic or context assessment suggests it with sufficient confidence
+        should_replan = (
+            (basic_suggestion and basic_confidence >= 0.6) or
+            (context_suggestion and context_confidence >= 0.6)
+        )
+        
+        if should_replan:
+            trigger_type = validation_result.get("replanning_trigger_type") or validation_result.get("context_trigger_type")
+            self.logger.info(f"Validation suggests replanning: {trigger_type}")
+        
+        return should_replan
+    
+    def get_replanning_trigger_details(self, validation_result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Extract detailed replanning trigger information from validation result.
+        
+        Args:
+            validation_result: Complete validation result with replanning assessment
+            
+        Returns:
+            Trigger details if replanning is suggested, None otherwise
+        """
+        if not self.should_trigger_replanning(validation_result):
+            return None
+        
+        # Prefer context-based trigger if available and confident
+        if (validation_result.get("context_suggests_replanning", False) and 
+            validation_result.get("context_confidence", 0.0) >= 0.6):
+            return {
+                "trigger_type": validation_result.get("context_trigger_type"),
+                "confidence": validation_result.get("context_confidence"),
+                "reason": validation_result.get("context_reason"),
+                "details": validation_result.get("context_details", {})
+            }
+        
+        # Fall back to basic trigger
+        if (validation_result.get("suggests_replanning", False) and 
+            validation_result.get("replanning_confidence", 0.0) >= 0.6):
+            return {
+                "trigger_type": validation_result.get("replanning_trigger_type"),
+                "confidence": validation_result.get("replanning_confidence"),
+                "reason": validation_result.get("replanning_reason"),
+                "details": validation_result.get("replanning_details", {})
+            }
+        
+        return None

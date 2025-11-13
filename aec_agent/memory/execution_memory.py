@@ -30,6 +30,7 @@ class ExecutionStatus(str, Enum):
 
 class ValidationLevel(str, Enum):
     """Level of validation assessment."""
+    EXECUTION = "execution"
     BASIC = "basic"
     LOGICAL = "logical"
     PROGRESS = "progress"
