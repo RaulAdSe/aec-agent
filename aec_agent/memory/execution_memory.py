@@ -15,6 +15,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from ..core.llm_guardrails import GuardrailConfig, ExecutionGuardrail, GuardrailViolationError
+
 
 logger = logging.getLogger(__name__)
 
@@ -131,17 +133,22 @@ class ExecutionMemory:
     replanning and adaptive behavior.
     """
     
-    def __init__(self, session_id: str, goal: str):
+    def __init__(self, session_id: str, goal: str, guardrail_config: Optional[GuardrailConfig] = None):
         """
         Initialize execution memory for a reasoning session.
         
         Args:
             session_id: ID of the reasoning session
             goal: Primary goal being pursued
+            guardrail_config: Optional configuration for execution guardrails
         """
         self.session_id = session_id
         self.goal = goal
         self.logger = logging.getLogger(__name__)
+        
+        # Initialize execution guardrails
+        config = guardrail_config or GuardrailConfig.from_env()
+        self.execution_guardrail = ExecutionGuardrail(config)
         
         # Execution tracking
         self.execution_steps: List[ExecutionStep] = []
@@ -192,7 +199,14 @@ class ExecutionMemory:
             
         Returns:
             ID of the created execution step
+            
+        Raises:
+            GuardrailViolationError: If execution guardrails are violated
         """
+        # Check execution guardrails before recording
+        self.execution_guardrail.record_execution_step()
+        self.execution_guardrail.record_task_attempt(task_id)
+        
         step = ExecutionStep(
             iteration=self.current_iteration,
             task_name=task_name,
@@ -287,7 +301,13 @@ class ExecutionMemory:
             
         Returns:
             ID of the plan modification record
+            
+        Raises:
+            GuardrailViolationError: If replanning guardrails are violated
         """
+        # Check replanning guardrails before recording
+        self.execution_guardrail.record_replanning_event()
+        
         modification = PlanModification(
             iteration=self.current_iteration,
             trigger_type=trigger_type,
@@ -424,7 +444,8 @@ class ExecutionMemory:
                 for disc in recent_discoveries
             ],
             "plan_confidence": self.current_plan_confidence,
-            "accumulated_context": self.current_context
+            "accumulated_context": self.current_context,
+            "guardrails_status": self.execution_guardrail.get_status()
         }
     
     def get_context_for_progress_evaluation(self) -> Dict[str, Any]:

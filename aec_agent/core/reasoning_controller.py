@@ -13,6 +13,7 @@ from .goal_decomposer import GoalDecomposer
 from .tool_planner import ToolPlanner
 from .executor import ToolExecutor
 from .validator import ResultValidator
+from .llm_guardrails import GuardrailConfig, ExecutionGuardrail, GuardrailViolationError
 
 # Import LangSmith tracing
 from langsmith import traceable
@@ -50,7 +51,8 @@ class ReasoningController:
         validator: ResultValidator,
         max_iterations: int = 20,
         max_execution_time: float = 300.0,  # 5 minutes
-        llm: Optional[Any] = None
+        llm: Optional[Any] = None,
+        guardrail_config: Optional[GuardrailConfig] = None
     ):
         """Initialize the reasoning controller."""
         self.goal_decomposer = goal_decomposer
@@ -59,6 +61,10 @@ class ReasoningController:
         self.validator = validator
         self.max_iterations = max_iterations
         self.max_execution_time = max_execution_time
+        
+        # Initialize execution guardrails
+        config = guardrail_config or GuardrailConfig.from_env()
+        self.execution_guardrail = ExecutionGuardrail(config)
         
         self.logger = ReasoningUtils.setup_logger(__name__)
         self.state: Optional[ReasoningState] = None
@@ -81,8 +87,10 @@ class ReasoningController:
         # Log inputs for tracing
         self.logger.info(f"Reasoning inputs - Goal: {goal}, Context keys: {list(context.keys()) if context else []}")
         
-        # Initialize reasoning state
+        # Initialize reasoning state and reset guardrails
         self.state = ReasoningState(goal=goal, tasks=[])
+        self.execution_guardrail.reset()
+        self.logger.info("Execution guardrails reset for new reasoning session")
         
         try:
             # PHASE 1: ANALYZE & PLAN
@@ -151,6 +159,13 @@ class ReasoningController:
             
             self.logger.info(f"Iteration {self.state.iteration}")
             
+            try:
+                # Check execution guardrails before proceeding
+                self.execution_guardrail.record_execution_step()
+            except GuardrailViolationError as e:
+                self.logger.error(f"Execution guardrail violation: {e}")
+                break
+            
             # Find next ready task
             ready_tasks = ReasoningUtils.find_ready_tasks(self.state.tasks)
             if not ready_tasks:
@@ -167,6 +182,14 @@ class ReasoningController:
             current_task.status = TaskStatus.IN_PROGRESS
             
             self.logger.info(f"Executing task: {current_task.name}")
+            
+            # Check task attempt guardrail
+            try:
+                self.execution_guardrail.record_task_attempt(current_task.id)
+            except GuardrailViolationError as e:
+                self.logger.error(f"Task attempt guardrail violation: {e}")
+                current_task.status = TaskStatus.FAILED
+                continue
             
             try:
                 # Execute tools for this task
@@ -269,8 +292,18 @@ class ReasoningController:
     
     def _handle_task_failure(self, task: Task, validation_result: Dict[str, Any]) -> bool:
         """Try to handle task failure and recover."""
-        # For now, just mark as failed
-        # TODO: Implement retry strategies, alternative approaches
+        # Check if replanning is recommended and allowed by guardrails
+        if validation_result.get("should_replan", False):
+            try:
+                self.execution_guardrail.record_replanning_event()
+                self.logger.info(f"Triggering replanning for failed task: {task.name}")
+                # TODO: Implement actual replanning logic using Replanner component
+                return True
+            except GuardrailViolationError as e:
+                self.logger.error(f"Replanning guardrail violation: {e}")
+                return False
+        
+        # For now, just mark as failed without replanning
         self.logger.warning(f"Task failed without recovery: {task.name}")
         return False
     
@@ -296,7 +329,8 @@ class ReasoningController:
             "failed_tasks": self.state.failed_tasks,
             "iterations": self.state.iteration,
             "execution_time": self.state.total_execution_time,
-            "progress_percentage": ReasoningUtils.calculate_task_progress(self.state.tasks)
+            "progress_percentage": ReasoningUtils.calculate_task_progress(self.state.tasks),
+            "guardrails": self.execution_guardrail.get_status()
         }
         
         return {
