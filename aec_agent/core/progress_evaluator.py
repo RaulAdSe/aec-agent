@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
 from .reasoning_utils import ReasoningUtils, Task, TaskStatus
+from .llm_guardrails import default_llm_retry
 
 # Import LangSmith tracing
 from langsmith import traceable
@@ -137,9 +138,9 @@ Be strict but fair - only mark as achieved if there's clear evidence the goal wa
         ])
         
         try:
-            # Execute LLM evaluation
+            # Execute LLM evaluation with retry guardrail
             chain = evaluation_prompt | self.llm | StrOutputParser()
-            response = chain.invoke({
+            response = self._invoke_llm_with_retry(chain, {
                 "goal": original_goal,
                 "execution_context": context_summary,
                 "task_summary": task_summary
@@ -170,6 +171,10 @@ Be strict but fair - only mark as achieved if there's clear evidence the goal wa
             self.logger.error(f"LLM evaluation failed: {e}")
             return None
     
+    @default_llm_retry
+    def _invoke_llm_with_retry(self, chain, inputs: Dict[str, Any]) -> str:
+        """Invoke LLM chain with retry guardrail."""
+        return chain.invoke(inputs)
     
     def _prepare_progress_context(self, execution_context: Dict[str, Any]) -> str:
         """Prepare execution context summary for progress evaluation."""

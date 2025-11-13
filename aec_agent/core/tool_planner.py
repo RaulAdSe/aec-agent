@@ -9,6 +9,7 @@ deterministic pattern matching.
 from typing import Dict, Any, List, Optional
 
 from .reasoning_utils import ReasoningUtils, Task
+from .llm_guardrails import default_llm_retry
 
 # Import LangSmith tracing
 from langsmith import traceable
@@ -248,9 +249,9 @@ Select the best tool:""")
         ])
         
         try:
-            # Execute LLM tool selection
+            # Execute LLM tool selection with retry guardrail
             chain = tool_planning_prompt | self.llm | StrOutputParser()
-            response = chain.invoke({
+            response = self._invoke_llm_with_retry(chain, {
                 "task_name": task.name,
                 "task_description": task.description,
                 "building_data_loaded": context.get("building_data_loaded", False),
@@ -306,6 +307,11 @@ Select the best tool:""")
             # Add other dependency checks as needed
         
         return missing
+    
+    @default_llm_retry
+    def _invoke_llm_with_retry(self, chain, inputs: Dict[str, Any]) -> str:
+        """Invoke LLM chain with retry guardrail."""
+        return chain.invoke(inputs)
     
     def get_tool_info(self, tool_name: str) -> Dict[str, Any]:
         """Get detailed information about a specific tool."""
@@ -373,9 +379,9 @@ Select the best tool considering execution history:""")
         ])
         
         try:
-            # Execute context-aware LLM tool selection
+            # Execute context-aware LLM tool selection with retry guardrail
             chain = context_aware_prompt | self.llm | StrOutputParser()
-            response = chain.invoke({
+            response = self._invoke_llm_with_retry(chain, {
                 "task_name": task.name,
                 "task_description": task.description,
                 "building_data_loaded": context.get("building_data_loaded", False),

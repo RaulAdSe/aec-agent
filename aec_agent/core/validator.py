@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
 from .reasoning_utils import ReasoningUtils, Task, TaskStatus, ExecutionResult
+from .llm_guardrails import default_llm_retry
 
 # Import LangSmith tracing
 from langsmith import traceable
@@ -174,9 +175,9 @@ Be strict but reasonable. If tool ran successfully and produced expected output 
                 output_status = "unknown"
                 has_output_data = output is not None
             
-            # Execute LLM validation
+            # Execute LLM validation with retry guardrail
             chain = validation_prompt | self.llm | StrOutputParser()
-            response = chain.invoke({
+            response = self._invoke_llm_with_retry(chain, {
                 "tool_name": execution_result.tool_name,
                 "task_name": task.name,
                 "task_description": task.description,
@@ -210,6 +211,10 @@ Be strict but reasonable. If tool ran successfully and produced expected output 
             self.logger.error(f"LLM validation failed for {task.name}: {e}")
             return None
     
+    @default_llm_retry
+    def _invoke_llm_with_retry(self, chain, inputs: Dict[str, Any]) -> str:
+        """Invoke LLM chain with retry guardrail."""
+        return chain.invoke(inputs)
     
     def _validate_output_format(self, execution_result: ExecutionResult) -> ValidationResult:
         """Validate the format and structure of tool output."""

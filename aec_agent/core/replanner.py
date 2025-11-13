@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
 from .reasoning_utils import ReasoningUtils, Task, TaskStatus, Priority
+from .llm_guardrails import default_llm_retry
 
 # Import LangSmith tracing
 from langsmith import traceable
@@ -171,9 +172,9 @@ Be pragmatic and focus on what will actually work given the execution context.""
                     "priority": task.priority.name
                 })
             
-            # Execute LLM replanning
+            # Execute LLM replanning with retry guardrail
             chain = replanning_prompt | self.llm | StrOutputParser()
-            response = chain.invoke({
+            response = self._invoke_llm_with_retry(chain, {
                 "goal": current_goal,
                 "current_tasks": json.dumps(tasks_for_llm, indent=2),
                 "execution_context": context_summary,
@@ -236,6 +237,10 @@ Be pragmatic and focus on what will actually work given the execution context.""
             self.logger.error(f"LLM replanning failed: {e}")
             return None
     
+    @default_llm_retry
+    def _invoke_llm_with_retry(self, chain, inputs: Dict[str, Any]) -> str:
+        """Invoke LLM chain with retry guardrail."""
+        return chain.invoke(inputs)
     
     def _prepare_context_summary(self, execution_context: Dict[str, Any]) -> str:
         """Prepare a concise summary of execution context for the LLM."""
