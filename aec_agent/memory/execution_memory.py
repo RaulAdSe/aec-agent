@@ -15,7 +15,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from ..core.llm_guardrails import GuardrailConfig, ExecutionGuardrail, GuardrailViolationError
+from ..core.llm_guardrails import GuardrailConfig, ExecutionGuardrail, MemoryGuardrail, GuardrailViolationError
 
 
 logger = logging.getLogger(__name__)
@@ -146,9 +146,10 @@ class ExecutionMemory:
         self.goal = goal
         self.logger = logging.getLogger(__name__)
         
-        # Initialize execution guardrails
+        # Initialize execution and memory guardrails
         config = guardrail_config or GuardrailConfig.from_env()
         self.execution_guardrail = ExecutionGuardrail(config)
+        self.memory_guardrail = MemoryGuardrail(config)
         
         # Execution tracking
         self.execution_steps: List[ExecutionStep] = []
@@ -220,6 +221,11 @@ class ExecutionMemory:
         
         step.mark_completed(tool_success, error_message)
         self.execution_steps.append(step)
+        
+        # Check if memory cleanup is needed
+        if self.memory_guardrail.should_cleanup_memory(len(self.execution_steps)):
+            self.logger.info(f"Triggering memory cleanup - {len(self.execution_steps)} execution steps")
+            self.execution_steps = self.memory_guardrail.cleanup_execution_steps(self.execution_steps)
         
         self.logger.debug(f"Recorded execution step: {tool_name} for task {task_name}")
         return step.id
@@ -411,7 +417,7 @@ class ExecutionMemory:
         recent_failures = [step for step in recent_steps if not step.tool_success or not step.validation_success]
         recent_discoveries = self.discovered_context[-10:] if len(self.discovered_context) > 10 else self.discovered_context
         
-        return {
+        context = {
             "goal": self.goal,
             "current_iteration": self.current_iteration,
             "recent_execution_steps": [
@@ -447,6 +453,34 @@ class ExecutionMemory:
             "accumulated_context": self.current_context,
             "guardrails_status": self.execution_guardrail.get_status()
         }
+        
+        return context
+        
+    def get_trimmed_context_for_llm(self, context_type: str = "replanning") -> str:
+        """
+        Get context trimmed to safe length for LLM consumption.
+        
+        Args:
+            context_type: Type of context ("replanning", "progress_evaluation")
+            
+        Returns:
+            Context as trimmed JSON string safe for LLM input
+        """
+        if context_type == "replanning":
+            context = self.get_context_for_replanning()
+        elif context_type == "progress_evaluation":
+            context = self.get_context_for_progress_evaluation()
+        else:
+            context = self.get_current_context()
+        
+        # Convert to string and apply memory trimming
+        import json
+        context_str = json.dumps(context, indent=2, default=str)
+        
+        # Apply memory guardrail trimming
+        trimmed_context = self.memory_guardrail.trim_context_summary(context_str)
+        
+        return trimmed_context
     
     def get_context_for_progress_evaluation(self) -> Dict[str, Any]:
         """
