@@ -185,7 +185,8 @@ class ReasoningAgent:
             "get_all_elements": get_all_elements,
             "get_element_properties": get_all_properties,
             "query_elements": self._create_query_wrapper(),
-            "calculate_metrics": self._create_calculate_wrapper(),
+            "calculate_distances": self._create_distances_wrapper(),
+            "calculate_areas": self._create_areas_wrapper(),
             "find_related_elements": self._create_related_wrapper(),
             "validate_compliance_rule": self._create_validation_wrapper(),
             "search_compliance_documents": search_compliance_docs,
@@ -323,6 +324,70 @@ class ReasoningAgent:
                 return {
                     "status": "error",
                     "message": f"Calculation failed: {str(e)}"
+                }
+        
+        return wrapper
+    
+    def _create_distances_wrapper(self):
+        """Create wrapper for distance calculations only."""
+        def wrapper(input_str: str) -> Dict[str, Any]:
+            import json
+            try:
+                if isinstance(input_str, str):
+                    params = json.loads(input_str)
+                else:
+                    params = input_str
+                
+                # For distance calculations, determine the operation based on parameters
+                if "element1_id" in params and "element2_id" in params:
+                    operation = "distance_between_elements"
+                elif "point1" in params and "point2" in params:
+                    # Check if 3D or 2D based on point dimensions
+                    point1 = params.get("point1", [])
+                    if len(point1) >= 3:
+                        operation = "distance_3d"
+                    else:
+                        operation = "distance_2d"
+                else:
+                    return {
+                        "status": "error",
+                        "message": "Distance calculation requires either element IDs (element1_id, element2_id) or coordinates (point1, point2)"
+                    }
+                
+                return calculate(operation, **params)
+                
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "message": f"Distance calculation failed: {str(e)}"
+                }
+        
+        return wrapper
+    
+    def _create_areas_wrapper(self):
+        """Create wrapper for area/volume calculations only."""
+        def wrapper(input_str: str) -> Dict[str, Any]:
+            import json
+            try:
+                if isinstance(input_str, str):
+                    params = json.loads(input_str)
+                else:
+                    params = input_str
+                
+                # Determine operation based on request
+                calculation_type = params.pop("calculation_type", "area")
+                
+                if calculation_type in ["volume", "volumes"]:
+                    operation = "volume_sum"
+                else:
+                    operation = "area_sum"  # Default to area calculation
+                
+                return calculate(operation, **params)
+                
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "message": f"Area/volume calculation failed: {str(e)}"
                 }
         
         return wrapper

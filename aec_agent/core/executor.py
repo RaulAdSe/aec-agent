@@ -144,8 +144,13 @@ class ToolExecutor:
         elif tool_name == "query_elements":
             return self._prepare_query_input(task, context)
             
-        elif tool_name == "calculate_metrics":
-            return self._prepare_calculation_input(task, context)
+        elif tool_name == "calculate_distances":
+            distance_params = self._prepare_distance_input(task, context)
+            return json.dumps(distance_params)
+            
+        elif tool_name == "calculate_areas":
+            area_params = self._prepare_area_input(task, context)
+            return json.dumps(area_params)
             
         elif tool_name == "find_related_elements":
             return self._prepare_relationship_input(task, context)
@@ -155,6 +160,10 @@ class ToolExecutor:
             
         elif tool_name == "search_compliance_documents":
             return self._extract_search_query(task)
+            
+        elif tool_name == "document_findings":
+            doc_params = self._prepare_documentation_input(task, context)
+            return json.dumps(doc_params)
             
         else:
             # No generic fallback - fail explicitly for unknown tools
@@ -234,27 +243,211 @@ class ToolExecutor:
             "filters": filters
         })
     
-    def _prepare_calculation_input(self, task: Task, context: Dict[str, Any]) -> str:
-        """Prepare JSON input for calculate_metrics tool."""
+    def _prepare_calculation_input(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare input for calculate_metrics tool with proper parameter handling."""
         desc = task.description.lower()
         
-        if any(term in desc for term in ["area", "floor area", "surface"]):
-            operation = "total_area"
-            params = {"element_type": "spaces"}
-        elif any(term in desc for term in ["volume", "cubic"]):
-            operation = "total_volume"
-            params = {"element_type": "spaces"}
-        elif any(term in desc for term in ["count", "number", "how many"]):
-            operation = "count"
-            params = {"element_type": self._extract_element_type(task)}
-        else:
-            operation = "total_area"
-            params = {"element_type": "spaces"}
+        # DISTANCE CALCULATIONS
+        if any(term in desc for term in ["distance", "distances", "between", "from", "to", "apart"]):
+            return self._prepare_distance_calculation(task, context, desc)
         
-        return json.dumps({
-            "operation": operation,
-            **params
-        })
+        # AREA CALCULATIONS
+        elif any(term in desc for term in ["area", "floor area", "surface"]):
+            return {"operation": "total_area", "element_type": "spaces"}
+            
+        # VOLUME CALCULATIONS  
+        elif any(term in desc for term in ["volume", "cubic"]):
+            return {"operation": "total_volume", "element_type": "spaces"}
+            
+        # COUNT CALCULATIONS
+        elif any(term in desc for term in ["count", "number", "how many"]):
+            return {"operation": "count", "element_type": self._extract_element_type(task)}
+            
+        # STATISTICS
+        elif any(term in desc for term in ["statistics", "average", "min", "max", "sum"]):
+            return {"operation": "statistics", "values": []}  # Values will need to be provided by agent
+            
+        # DEFAULT - Let the agent figure out what's needed
+        else:
+            raise ValueError(f"Cannot determine calculation operation from task description: {desc}")
+    
+    def _prepare_distance_calculation(self, task: Task, context: Dict[str, Any], desc: str) -> Dict[str, Any]:
+        """Prepare distance calculation parameters based on task description and context."""
+        
+        # Check if we need to calculate distances between all doors (multiple distances)
+        if any(phrase in desc for phrase in [
+            "between all doors", "all doors", "distance between doors", 
+            "distances between doors", "all distances", "door distances",
+            "between all", "all door distances"
+        ]):
+            # This is a complex distance analysis requiring multiple element IDs
+            # The agent will need to first get all doors, then calculate pairwise distances
+            
+            # Check if we have door data in context from previous operations  
+            doors_data = context.get("doors_data", [])
+            if doors_data and len(doors_data) >= 2:
+                # We have door data - set up pairwise distance calculation for first two doors as example
+                door_ids = [door.get("id") for door in doors_data if door.get("id")]
+                if len(door_ids) >= 2:
+                    return {
+                        "operation": "distance_between_elements",
+                        "element1_id": door_ids[0],
+                        "element2_id": door_ids[1]
+                    }
+            
+            # No door data yet - indicate that door IDs are needed
+            return {
+                "operation": "distance_between_elements",
+                "element1_id": "DOOR_ID_REQUIRED",  # Signal that door IDs need to be obtained first
+                "element2_id": "DOOR_ID_REQUIRED",
+                "note": "Door IDs must be obtained from get_all_elements('doors') first"
+            }
+        
+        # Check for distance between specific elements (if IDs are mentioned)
+        elif "distance between" in desc:
+            # Try to extract element IDs from description
+            words = desc.split()
+            possible_ids = []
+            for word in words:
+                # Look for ID-like patterns (containing letters and numbers)
+                if any(char.isdigit() for char in word) and any(char.isalpha() for char in word):
+                    possible_ids.append(word.strip(',.'))
+            
+            if len(possible_ids) >= 2:
+                return {
+                    "operation": "distance_between_elements",
+                    "element1_id": possible_ids[0],
+                    "element2_id": possible_ids[1]
+                }
+            else:
+                # Generic distance calculation - IDs need to be determined
+                return {
+                    "operation": "distance_between_elements", 
+                    "element1_id": "ELEMENT_ID_REQUIRED",
+                    "element2_id": "ELEMENT_ID_REQUIRED",
+                    "note": "Element IDs must be obtained from get_all_elements or query_elements first"
+                }
+        
+        # Distance from point to point (if coordinates are mentioned)
+        elif any(term in desc for term in ["point", "coordinate", "location"]):
+            return {
+                "operation": "distance_2d",  # Default to 2D unless 3D is specified
+                "point1": [0, 0],  # Default coordinates - will need to be updated
+                "point2": [0, 0],
+                "note": "Coordinates need to be extracted from context or element geometry"
+            }
+        
+        # Generic distance calculation
+        else:
+            return {
+                "operation": "distance_between_elements",
+                "element1_id": "ELEMENT_ID_REQUIRED",
+                "element2_id": "ELEMENT_ID_REQUIRED", 
+                "note": "Element IDs must be obtained first using get_all_elements or query_elements"
+            }
+    
+    def _prepare_documentation_input(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare input for document_findings tool."""
+        desc = task.description
+        
+        # Extract title from task description
+        title = desc if len(desc) < 50 else f"{desc[:47]}..."
+        
+        # Determine document type based on task content
+        desc_lower = desc.lower()
+        if "distance" in desc_lower or "calculation" in desc_lower:
+            doc_type = "distance_analysis"
+        elif "compliance" in desc_lower or "rule" in desc_lower:
+            doc_type = "compliance_report"
+        elif "analysis" in desc_lower:
+            doc_type = "analysis_report"
+        else:
+            doc_type = "general_report"
+        
+        # Get analysis results from context if available
+        analysis_results = context.get("analysis_results", [])
+        building_data = context.get("building_data_loaded", False)
+        
+        # Create basic document structure
+        content = {
+            "title": title,
+            "type": doc_type,
+            "sections": ["Overview", "Analysis Results", "Summary"],
+            "summary": f"Analysis completed for: {desc}",
+            "recommendations": ["Analysis completed successfully"]
+        }
+        
+        # Enhance content with available context
+        if analysis_results:
+            content["sections"].append("Detailed Results")
+            content["recommendations"] = ["Review detailed results", "Consider next steps"]
+        
+        if building_data:
+            content["sections"].insert(1, "Building Data Overview")
+            
+        return content
+    
+    def _prepare_distance_input(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare input for calculate_distances tool - focused on distance calculations only."""
+        desc = task.description.lower()
+        
+        # Check if we have door data in context from previous operations  
+        doors_data = context.get("doors_data", [])
+        if doors_data and len(doors_data) >= 2:
+            # We have door data - set up pairwise distance calculation for first two doors
+            door_ids = [door.get("id") for door in doors_data if door.get("id")]
+            if len(door_ids) >= 2:
+                return {
+                    "element1_id": door_ids[0],
+                    "element2_id": door_ids[1]
+                }
+        
+        # Try to extract element IDs from description
+        words = desc.split()
+        possible_ids = []
+        for word in words:
+            # Look for ID-like patterns (containing letters and numbers)
+            if any(char.isdigit() for char in word) and any(char.isalpha() for char in word):
+                possible_ids.append(word.strip(',.'))
+        
+        if len(possible_ids) >= 2:
+            return {
+                "element1_id": possible_ids[0],
+                "element2_id": possible_ids[1]
+            }
+        
+        # Default - indicate that element IDs are needed
+        return {
+            "element1_id": "ELEMENT_ID_REQUIRED",
+            "element2_id": "ELEMENT_ID_REQUIRED",
+            "note": "Element IDs must be obtained from get_all_elements first"
+        }
+    
+    def _prepare_area_input(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare input for calculate_areas tool - focused on area/volume calculations only."""
+        desc = task.description.lower()
+        
+        # Determine if this is area or volume calculation
+        calculation_type = "area"  # Default
+        if any(term in desc for term in ["volume", "cubic", "m3", "cubic meters"]):
+            calculation_type = "volume"
+        
+        # Try to get element data from context
+        spaces_data = context.get("spaces_data", [])
+        if spaces_data:
+            element_ids = [space.get("id") for space in spaces_data if space.get("id")]
+            if element_ids:
+                return {
+                    "element_ids": element_ids,
+                    "calculation_type": calculation_type
+                }
+        
+        # Default - indicate that element IDs are needed
+        return {
+            "element_ids": ["ELEMENT_IDS_REQUIRED"],
+            "calculation_type": calculation_type,
+            "note": "Element IDs must be obtained from get_all_elements first"
+        }
     
     def _prepare_relationship_input(self, task: Task, context: Dict[str, Any]) -> str:
         """Prepare JSON input for find_related_elements tool."""

@@ -151,16 +151,9 @@ class ReasoningController:
         self.state.tasks = decomposition_result["tasks"]
         self.logger.info(f"Decomposed goal into {len(self.state.tasks)} tasks")
         
-        # Plan tool execution for each task
-        for task in self.state.tasks:
-            planning_result = self.tool_planner.plan_tools(task, self.state.context)
-            if planning_result.get("success", False):
-                task.tool_sequence = planning_result["tool_sequence"]
-                task.metadata.update(planning_result.get("metadata", {}))
-            else:
-                self.logger.warning(f"Tool planning failed for task {task.name}: {planning_result.get('message')}")
-        
-        self.logger.info(f"Task breakdown: {ReasoningUtils.format_task_summary(self.state.tasks)}")
+        # Don't plan tools upfront - use just-in-time planning with full context
+        # This allows each task to be planned with complete context from previously executed tasks
+        self.logger.info(f"Task breakdown: Tasks: {len([t for t in self.state.tasks if t.status == TaskStatus.PENDING])} pending (total: {len(self.state.tasks)})")
     
     @traceable(name="execute_reasoning_loop")
     def _execute_reasoning_loop(self) -> List[ExecutionResult]:
@@ -210,6 +203,24 @@ class ReasoningController:
                 self.logger.error(f"Task attempt guardrail violation: {e}")
                 current_task.status = TaskStatus.FAILED
                 continue
+            
+            # JUST-IN-TIME PLANNING: Plan tools for this task with full context
+            if not current_task.tool_sequence:
+                self.logger.info(f"Planning tools for task '{current_task.name}' with current context")
+                try:
+                    planning_result = self.tool_planner.plan_tools(current_task, self.state.context)
+                    if planning_result.get("success", False):
+                        current_task.tool_sequence = planning_result["tool_sequence"]
+                        current_task.metadata.update(planning_result.get("metadata", {}))
+                        self.logger.info(f"Planned tools for '{current_task.name}': {current_task.tool_sequence}")
+                    else:
+                        self.logger.error(f"Tool planning failed for task '{current_task.name}': {planning_result.get('message')}")
+                        current_task.status = TaskStatus.FAILED
+                        continue
+                except Exception as e:
+                    self.logger.error(f"Error planning tools for task '{current_task.name}': {e}")
+                    current_task.status = TaskStatus.FAILED
+                    continue
             
             try:
                 # Execute tools for this task
@@ -282,13 +293,41 @@ class ReasoningController:
             }
         )
         
-        # Update context based on tool execution
-        if result.success and tool_name == "load_building_data":
-            self.state.context["building_data_loaded"] = True
-            self.logger.info("Updated context: building_data_loaded = True")
-            
-            # Re-plan tools for pending tasks now that building data is loaded
-            self._replan_dependent_tasks()
+        # Update context based on tool execution results
+        if result.success:
+            if tool_name == "load_building_data":
+                self.state.context["building_data_loaded"] = True
+                self.logger.info("Updated context: building_data_loaded = True")
+                
+                # No need to re-plan - just-in-time planning will handle this
+                
+            elif tool_name == "get_all_elements" and result.output:
+                # Store element data in context for future tasks
+                try:
+                    # Extract element type from task description or metadata
+                    element_type = None
+                    if "door" in task.description.lower():
+                        element_type = "doors"
+                    elif "space" in task.description.lower():
+                        element_type = "spaces"
+                    elif "wall" in task.description.lower():
+                        element_type = "walls"
+                    
+                    if element_type and result.output.get("data"):
+                        self.state.context[f"{element_type}_data"] = result.output["data"]
+                        self.logger.info(f"Updated context: {element_type}_data with {len(result.output['data'])} elements")
+                        
+                except Exception as e:
+                    self.logger.warning(f"Could not update context from get_all_elements: {e}")
+                    
+            elif tool_name in ["calculate_distances", "calculate_areas"]:
+                # Store calculation results in context if needed
+                if result.output and result.output.get("data"):
+                    calculation_key = f"last_{tool_name}_result"
+                    self.state.context[calculation_key] = result.output["data"]
+                    self.logger.info(f"Updated context: {calculation_key}")
+                    
+        self.logger.debug(f"Context after {tool_name}: {list(self.state.context.keys())}")
         
         return result
     
@@ -340,28 +379,6 @@ class ReasoningController:
         # For now, just mark as failed without replanning
         self.logger.warning(f"Task failed without recovery: {task.name}")
         return False
-    
-    def _replan_dependent_tasks(self) -> None:
-        """Re-plan tools for tasks that depend on building data now that it's loaded."""
-        pending_tasks = [
-            task for task in self.state.tasks 
-            if task.status == TaskStatus.PENDING and task.tool_sequence == ["load_building_data"]
-        ]
-        
-        if pending_tasks:
-            self.logger.info(f"Re-planning {len(pending_tasks)} tasks after building data loaded")
-            
-            for task in pending_tasks:
-                try:
-                    planning_result = self.tool_planner.plan_tools(task, self.state.context)
-                    if planning_result.get("success", False):
-                        task.tool_sequence = planning_result["tool_sequence"]
-                        task.metadata.update(planning_result.get("metadata", {}))
-                        self.logger.info(f"Re-planned task '{task.name}' with tools: {task.tool_sequence}")
-                    else:
-                        self.logger.warning(f"Re-planning failed for task '{task.name}'")
-                except Exception as e:
-                    self.logger.error(f"Error re-planning task '{task.name}': {e}")
     
     def _finalize_results(self, execution_results: List[ExecutionResult]) -> Dict[str, Any]:
         """Create final results summary."""
