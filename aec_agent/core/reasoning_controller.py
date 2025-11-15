@@ -14,6 +14,7 @@ from .tool_planner import ToolPlanner
 from .executor import ToolExecutor
 from .validator import ResultValidator
 from .llm_guardrails import GuardrailConfig, ExecutionGuardrail, GuardrailViolationError
+from .task_graph import TaskGraph
 from ..config import AgentConfig
 
 # Import LangSmith tracing
@@ -24,7 +25,7 @@ from langsmith import traceable
 class ReasoningState:
     """Current state of the reasoning process."""
     goal: str
-    tasks: List[Task]
+    task_graph: TaskGraph
     context: Dict[str, Any] = field(default_factory=dict)
     current_task_id: Optional[str] = None
     iteration: int = 0
@@ -108,7 +109,7 @@ class ReasoningController:
         self.logger.info(f"Reasoning inputs - Goal: {goal}, Context keys: {list(context.keys()) if context else []}")
         
         # Initialize reasoning state and reset guardrails
-        self.state = ReasoningState(goal=goal, tasks=[], context=context or {})
+        self.state = ReasoningState(goal=goal, task_graph=TaskGraph(), context=context or {})
         self.execution_guardrail.reset()
         self.logger.info("Execution guardrails reset for new reasoning session")
         
@@ -148,12 +149,29 @@ class ReasoningController:
         if not decomposition_result.get("success", False):
             raise ValueError(f"Goal decomposition failed: {decomposition_result.get('message')}")
         
-        self.state.tasks = decomposition_result["tasks"]
-        self.logger.info(f"Decomposed goal into {len(self.state.tasks)} tasks")
+        tasks = decomposition_result["tasks"]
+        
+        # Add tasks to graph and validate dependencies
+        successful_count, failed_task_ids = self.state.task_graph.add_tasks(tasks)
+        self.logger.info(f"Added {successful_count}/{len(tasks)} tasks to task graph")
+        
+        if failed_task_ids:
+            self.logger.warning(f"Failed to add tasks due to dependency issues: {failed_task_ids}")
+        
+        # Validate graph integrity
+        issues = self.state.task_graph.validate_graph()
+        if issues:
+            self.logger.warning(f"Task graph validation issues: {issues}")
+        
+        # Log graph metrics
+        metrics = self.state.task_graph.get_graph_metrics()
+        self.logger.info(f"Task graph initialized: {metrics.total_tasks} tasks, {metrics.dependency_edges} dependencies")
+        self.logger.info(f"Critical path length: {metrics.longest_path}")
         
         # Don't plan tools upfront - use just-in-time planning with full context
         # This allows each task to be planned with complete context from previously executed tasks
-        self.logger.info(f"Task breakdown: Tasks: {len([t for t in self.state.tasks if t.status == TaskStatus.PENDING])} pending (total: {len(self.state.tasks)})")
+        ready_count = len(self.state.task_graph.get_ready_tasks())
+        self.logger.info(f"Ready to execute: {ready_count} tasks")
     
     @traceable(name="execute_reasoning_loop")
     def _execute_reasoning_loop(self) -> List[ExecutionResult]:
@@ -179,8 +197,8 @@ class ReasoningController:
                 self.logger.error(f"Execution guardrail violation: {e}")
                 break
             
-            # Find next ready task
-            ready_tasks = ReasoningUtils.find_ready_tasks(self.state.tasks)
+            # Find next ready task using task graph
+            ready_tasks = self.state.task_graph.get_ready_tasks()
             if not ready_tasks:
                 self.logger.info("No ready tasks - checking for blocked tasks")
                 if self._handle_blocked_tasks():
@@ -192,7 +210,7 @@ class ReasoningController:
             # Execute next task
             current_task = ready_tasks[0]
             self.state.current_task_id = current_task.id
-            current_task.status = TaskStatus.IN_PROGRESS
+            self.state.task_graph.update_task_status(current_task.id, TaskStatus.IN_PROGRESS)
             
             self.logger.info(f"Executing task: {current_task.name}")
             
@@ -201,7 +219,7 @@ class ReasoningController:
                 self.execution_guardrail.record_task_attempt(current_task.id)
             except GuardrailViolationError as e:
                 self.logger.error(f"Task attempt guardrail violation: {e}")
-                current_task.status = TaskStatus.FAILED
+                self.state.task_graph.update_task_status(current_task.id, TaskStatus.FAILED)
                 continue
             
             # JUST-IN-TIME PLANNING: Plan tools for this task with full context
@@ -215,11 +233,11 @@ class ReasoningController:
                         self.logger.info(f"Planned tools for '{current_task.name}': {current_task.tool_sequence}")
                     else:
                         self.logger.error(f"Tool planning failed for task '{current_task.name}': {planning_result.get('message')}")
-                        current_task.status = TaskStatus.FAILED
+                        self.state.task_graph.update_task_status(current_task.id, TaskStatus.FAILED)
                         continue
                 except Exception as e:
                     self.logger.error(f"Error planning tools for task '{current_task.name}': {e}")
-                    current_task.status = TaskStatus.FAILED
+                    self.state.task_graph.update_task_status(current_task.id, TaskStatus.FAILED)
                     continue
             
             try:
@@ -233,11 +251,11 @@ class ReasoningController:
                 )
                 
                 if validation_result.get("success", False):
-                    current_task.status = TaskStatus.COMPLETED
+                    self.state.task_graph.update_task_status(current_task.id, TaskStatus.COMPLETED)
                     self.state.completed_tasks += 1
                     self.logger.info(f"Task completed successfully: {current_task.name}")
                 else:
-                    current_task.status = TaskStatus.FAILED
+                    self.state.task_graph.update_task_status(current_task.id, TaskStatus.FAILED)
                     self.state.failed_tasks += 1
                     self.logger.warning(f"Task validation failed: {validation_result.get('message')}")
                     
@@ -246,7 +264,7 @@ class ReasoningController:
                         self.logger.error(f"Could not recover from task failure: {current_task.name}")
                 
             except Exception as e:
-                current_task.status = TaskStatus.FAILED
+                self.state.task_graph.update_task_status(current_task.id, TaskStatus.FAILED)
                 self.state.failed_tasks += 1
                 self.logger.error(f"Task execution failed: {current_task.name} - {e}")
                 
@@ -263,8 +281,9 @@ class ReasoningController:
             self.state.total_execution_time += iteration_time
             
             # Check if we should continue
-            progress = ReasoningUtils.calculate_task_progress(self.state.tasks)
-            self.logger.info(f"Progress: {progress:.1f}% ({self.state.completed_tasks}/{len(self.state.tasks)} tasks)")
+            task_list = list(self.state.task_graph.tasks.values())
+            progress = ReasoningUtils.calculate_task_progress(task_list)
+            self.logger.info(f"Progress: {progress:.1f}% ({self.state.completed_tasks}/{len(task_list)} tasks)")
         
         return all_results
     
@@ -308,6 +327,8 @@ class ReasoningController:
                     element_type = None
                     if "door" in task.description.lower():
                         element_type = "doors"
+                    elif "exit" in task.description.lower():
+                        element_type = "exits"
                     elif "space" in task.description.lower():
                         element_type = "spaces"
                     elif "wall" in task.description.lower():
@@ -333,23 +354,20 @@ class ReasoningController:
     
     def _is_goal_achieved(self) -> bool:
         """Check if the main goal has been achieved."""
-        if not self.state.tasks:
+        if not self.state.task_graph.tasks:
             return False
         
         # Goal is achieved when all tasks are completed
         completed_tasks = [
-            task for task in self.state.tasks 
+            task for task in self.state.task_graph.tasks.values()
             if task.status == TaskStatus.COMPLETED
         ]
         
-        return len(completed_tasks) == len(self.state.tasks)
+        return len(completed_tasks) == len(self.state.task_graph.tasks)
     
     def _handle_blocked_tasks(self) -> bool:
         """Try to unblock tasks that are waiting for dependencies."""
-        blocked_tasks = [
-            task for task in self.state.tasks 
-            if task.status == TaskStatus.BLOCKED
-        ]
+        blocked_tasks = self.state.task_graph.get_blocked_tasks()
         
         if not blocked_tasks:
             return False
@@ -357,7 +375,7 @@ class ReasoningController:
         # For now, just convert blocked to pending and retry
         # TODO: More sophisticated dependency resolution
         for task in blocked_tasks[:1]:  # Try one at a time
-            task.status = TaskStatus.PENDING
+            self.state.task_graph.update_task_status(task.id, TaskStatus.PENDING)
             self.logger.info(f"Retrying blocked task: {task.name}")
             return True
         
@@ -394,16 +412,24 @@ class ReasoningController:
                     "execution_time": result.execution_time
                 })
         
-        # Create summary
+        # Create summary using task graph metrics
+        graph_metrics = self.state.task_graph.get_graph_metrics()
+        task_list = list(self.state.task_graph.tasks.values())
+        
         summary = {
             "goal_achieved": success,
-            "total_tasks": len(self.state.tasks),
-            "completed_tasks": self.state.completed_tasks,
-            "failed_tasks": self.state.failed_tasks,
+            "total_tasks": graph_metrics.total_tasks,
+            "completed_tasks": graph_metrics.completed_tasks,
+            "failed_tasks": graph_metrics.failed_tasks,
             "iterations": self.state.iteration,
             "execution_time": self.state.total_execution_time,
-            "progress_percentage": ReasoningUtils.calculate_task_progress(self.state.tasks),
-            "guardrails": self.execution_guardrail.get_status()
+            "progress_percentage": ReasoningUtils.calculate_task_progress(task_list),
+            "guardrails": self.execution_guardrail.get_status(),
+            "graph_metrics": {
+                "dependency_edges": graph_metrics.dependency_edges,
+                "critical_path_length": graph_metrics.longest_path,
+                "blocked_tasks": graph_metrics.blocked_tasks
+            }
         }
         
         return {
@@ -418,7 +444,7 @@ class ReasoningController:
                     "status": task.status.value,
                     "tools": task.tool_sequence
                 }
-                for task in self.state.tasks
+                for task in self.state.task_graph.tasks.values()
             ],
             "execution_results": [
                 {
