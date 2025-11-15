@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .short_term_memory import ShortTermMemory, ShortTermMemoryConfig
-from .session_memory import SessionMemory, TaskStatus, SubTask, ToolExecution
+from .session_memory import SessionMemory, TaskStatus, SubTask, ToolExecution, GoalStatus, Goal
 from .execution_memory import ExecutionMemory
 
 
@@ -90,17 +90,32 @@ class MemoryManager:
         return self.short_term.get_conversation_context()
     
     # Session Management (Intermediate Memory)
-    def set_session_goal(self, goal: str, context: str = "") -> None:
+    def set_session_goal(self, goal: str, context: str = "") -> str:
         """
         Set the main goal for this session.
         
         Args:
             goal: Primary goal description
             context: Additional context information
+            
+        Returns:
+            ID of the new goal
         """
-        self.session.set_goal(goal, context)
+        goal_id = self.session.set_goal(goal, context)
         self._increment_operation_count()
-        self.logger.info(f"Session goal set: {goal[:50]}...")
+        self.logger.info(f"Session goal set: {goal[:50]}... (goal_id: {goal_id})")
+        return goal_id
+    
+    def complete_current_goal(self, success: bool = True) -> None:
+        """
+        Mark the current goal as completed and archive it.
+        
+        Args:
+            success: Whether the goal was completed successfully
+        """
+        self.session.complete_current_goal(success)
+        self._increment_operation_count()
+        self.logger.info(f"Current goal marked as {'completed' if success else 'failed'}")
     
     def add_subtask(self, name: str, dependencies: Optional[List[str]] = None) -> str:
         """
@@ -541,8 +556,19 @@ class MemoryManager:
             self.logger.debug(f"Auto-saved session after {self._operation_count} operations")
     
     def _increment_operation_count(self) -> None:
-        """Increment operation counter and trigger auto-save if needed."""
+        """Increment operation counter and trigger auto-save/compaction if needed."""
         self._operation_count += 1
+        
+        # Token-based automatic compaction (primary trigger)
+        # Check every 5 operations to avoid too much overhead
+        if self._operation_count % 5 == 0:
+            compaction_triggered = self.session.check_and_trigger_compaction()
+            
+            # If token-based didn't trigger, check periodic backup
+            if not compaction_triggered and self._operation_count % 50 == 0:
+                # Periodic maintenance compaction
+                self.session.compact_session_memory()
+        
         self._auto_save_if_needed()
     
     # Memory Management
