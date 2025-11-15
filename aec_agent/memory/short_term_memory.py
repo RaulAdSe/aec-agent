@@ -27,6 +27,15 @@ class ShortTermMemoryConfig(BaseModel):
     max_token_limit: int = Field(default=2000, description="Maximum tokens for summary memory")
     model_name: str = Field(default="gpt-4o-mini", description="Model for summarization")
     temperature: float = Field(default=0.1, description="Temperature for summarization")
+    
+    # Summarization settings
+    enable_summarization: bool = Field(default=True, description="Enable conversation summarization")
+    summarization_strategy: str = Field(default="async", description="Summarization strategy: sync, async, background")
+    summarization_batch_size: int = Field(default=5, description="Batch size for summarization")
+    
+    # Token-based automatic triggers
+    short_term_token_cap: int = Field(default=4000, description="Trigger summarization when conversation exceeds this token count")
+    short_term_token_warning_threshold: int = Field(default=3000, description="Warning level before token cap")
 
 
 class ShortTermMemory:
@@ -161,7 +170,9 @@ class ShortTermMemory:
         """Clear all memory components."""
         try:
             self.buffer_memory.clear()
-            self.summary_memory.clear()
+            # Only clear summary_memory if it exists
+            if hasattr(self, 'summary_memory'):
+                self.summary_memory.clear()
             self.logger.info("Short-term memory cleared")
         except Exception as e:
             self.logger.error(f"Failed to clear memory: {e}")
