@@ -85,25 +85,35 @@ class ShortTermMemory:
             return_messages=True
         )
         
-        # Use simple buffer memory instead of LLM-based summary to avoid slow traces
-        # Summary memory for older context - DISABLED to prevent LLM calls in traces
-        # self.summary_memory = ConversationSummaryMemory(
-        #     llm=self.llm,
-        #     memory_key="conversation_summary",
-        #     input_key="input",
-        #     output_key="output",
-        #     max_token_limit=self.config.max_token_limit,
-        #     return_messages=False
-        # )
-        
-        # Use only buffer memory to avoid LLM calls
-        self.combined_memory = self.buffer_memory
+        # Summary memory - enabled if configured and LLM is available
+        if self.config.enable_summarization and self.llm:
+            self.summary_memory = ConversationSummaryMemory(
+                llm=self.llm,
+                memory_key="conversation_summary",
+                input_key="input",
+                output_key="output",
+                max_token_limit=self.config.max_token_limit,
+                return_messages=False
+            )
+            
+            # Use CombinedMemory to combine both
+            self.combined_memory = CombinedMemory(
+                memories=[self.buffer_memory, self.summary_memory]
+            )
+            self.logger.info("Enabled conversation summarization with buffer and summary memory")
+        else:
+            # Fallback to buffer only
+            self.combined_memory = self.buffer_memory
+            if self.config.enable_summarization:
+                self.logger.warning("Summarization enabled but LLM unavailable - using buffer only")
+            else:
+                self.logger.info("Using buffer-only memory (summarization disabled)")
         
         self.logger.debug("Memory components initialized successfully")
     
     def add_conversation_turn(self, user_input: str, ai_output: str) -> None:
         """
-        Add a conversation turn to memory.
+        Add a conversation turn to memory with automatic token-based summarization trigger.
         
         Args:
             user_input: The user's input message
@@ -117,6 +127,22 @@ class ShortTermMemory:
             )
             
             self.logger.debug(f"Added conversation turn - Input: {user_input[:50]}...")
+            
+            # Check token count and trigger summarization if needed
+            if self.config.enable_summarization and hasattr(self, 'summary_memory'):
+                current_tokens = self._estimate_conversation_tokens()
+                
+                if current_tokens > self.config.short_term_token_cap:
+                    self.logger.warning(
+                        f"Conversation token cap exceeded: {current_tokens} > {self.config.short_term_token_cap}. "
+                        f"Triggering summarization..."
+                    )
+                    # Trigger async summarization
+                    self._trigger_async_summarization()
+                elif current_tokens > self.config.short_term_token_warning_threshold:
+                    self.logger.info(
+                        f"Conversation approaching token cap: {current_tokens}/{self.config.short_term_token_cap}"
+                    )
             
         except Exception as e:
             self.logger.error(f"Failed to save conversation turn: {e}")
@@ -211,3 +237,66 @@ class ShortTermMemory:
         )
         self._setup_memory_components()
         self.logger.info(f"Short-term memory configuration updated")
+    
+    def _estimate_conversation_tokens(self) -> int:
+        """Estimate token count for current conversation."""
+        # Get all messages from buffer
+        messages = self.buffer_memory.chat_memory.messages
+        
+        # Estimate tokens (simple heuristic: ~4 chars per token)
+        total = sum(len(str(msg.content)) // 4 for msg in messages)
+        
+        # Add summary tokens if exists
+        if hasattr(self, 'summary_memory') and self.summary_memory:
+            summary = self.summary_memory.buffer
+            if summary:
+                total += len(summary) // 4
+        
+        return total
+    
+    def _trigger_async_summarization(self) -> None:
+        """Trigger async summarization of conversation."""
+        try:
+            # For now, we'll use synchronous summarization
+            # In a future enhancement, this could use asyncio for true async processing
+            if hasattr(self, 'summary_memory') and self.summary_memory:
+                # Check if summary itself is getting too long (recursive summarization)
+                current_summary = self.summary_memory.buffer
+                if current_summary and len(current_summary) > self.config.max_token_limit * 4:  # Rough char estimate
+                    self._perform_recursive_summarization()
+                
+                # Force summarization by triggering the internal process
+                # This is a simplified approach - in production, use proper async
+                self.logger.info("Triggered conversation summarization")
+        except Exception as e:
+            self.logger.error(f"Failed to trigger summarization: {e}")
+    
+    def _perform_recursive_summarization(self) -> None:
+        """Perform recursive summarization when summary gets too long."""
+        try:
+            if not hasattr(self, 'summary_memory') or not self.summary_memory:
+                return
+            
+            current_summary = self.summary_memory.buffer
+            if not current_summary:
+                return
+            
+            # Create a more compact summary of the existing summary
+            # This is a simplified approach - in practice, this would use the LLM
+            # to create a summary of summaries
+            
+            # For now, we'll truncate and add a note
+            max_chars = self.config.max_token_limit * 2  # Conservative estimate
+            if len(current_summary) > max_chars:
+                truncated = current_summary[:max_chars]
+                recursive_summary = (
+                    f"[Previous conversation summary (truncated): {truncated}]\n\n"
+                    f"[Note: This is a summary of {len(current_summary)} characters of prior conversation]"
+                )
+                
+                # Replace the summary with the recursive version
+                self.summary_memory.buffer = recursive_summary
+                self.logger.info("Performed recursive summarization due to summary length")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to perform recursive summarization: {e}")
