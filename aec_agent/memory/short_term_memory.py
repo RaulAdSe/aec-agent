@@ -8,11 +8,8 @@ handling recent messages, conversation summaries, and context windowing.
 import logging
 from typing import Any, Dict, List, Optional
 
-from langchain.memory import (
-    ConversationBufferWindowMemory,
-    ConversationSummaryMemory,
-    CombinedMemory
-)
+# Simple memory implementation without deprecated LangChain memory classes
+from collections import deque
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
@@ -27,6 +24,15 @@ class ShortTermMemoryConfig(BaseModel):
     max_token_limit: int = Field(default=2000, description="Maximum tokens for summary memory")
     model_name: str = Field(default="gpt-4o-mini", description="Model for summarization")
     temperature: float = Field(default=0.1, description="Temperature for summarization")
+    
+    # Summarization settings
+    enable_summarization: bool = Field(default=True, description="Enable conversation summarization")
+    summarization_strategy: str = Field(default="async", description="Summarization strategy: sync, async, background")
+    summarization_batch_size: int = Field(default=5, description="Batch size for summarization")
+    
+    # Token-based automatic triggers
+    short_term_token_cap: int = Field(default=4000, description="Trigger summarization when conversation exceeds this token count")
+    short_term_token_warning_threshold: int = Field(default=3000, description="Warning level before token cap")
 
 
 class ShortTermMemory:
@@ -65,51 +71,50 @@ class ShortTermMemory:
         self.logger.info(f"ShortTermMemory initialized with window_size={self.config.window_size}")
     
     def _setup_memory_components(self):
-        """Setup the combined memory system with buffer and summary components."""
+        """Setup simple memory components without deprecated LangChain classes."""
         
-        # Buffer memory for recent messages
-        self.buffer_memory = ConversationBufferWindowMemory(
-            k=self.config.window_size,
-            memory_key="recent_conversation",
-            input_key="input",
-            output_key="output",
-            return_messages=True
-        )
+        # Simple conversation buffer using deque
+        self.conversation_buffer = deque(maxlen=self.config.window_size)
+        self.conversation_summary = ""
         
-        # Summary memory for older context
-        self.summary_memory = ConversationSummaryMemory(
-            llm=self.llm,
-            memory_key="conversation_summary",
-            input_key="input",
-            output_key="output",
-            max_token_limit=self.config.max_token_limit,
-            return_messages=False
-        )
-        
-        # Combined memory
-        self.combined_memory = CombinedMemory(memories=[
-            self.buffer_memory,
-            self.summary_memory
-        ])
-        
+        self.logger.info(f"Memory components initialized with window_size={self.config.window_size}")
         self.logger.debug("Memory components initialized successfully")
     
     def add_conversation_turn(self, user_input: str, ai_output: str) -> None:
         """
-        Add a conversation turn to memory.
+        Add a conversation turn to memory with automatic token-based summarization trigger.
         
         Args:
             user_input: The user's input message
             ai_output: The AI agent's response
         """
         try:
-            # Add to combined memory
-            self.combined_memory.save_context(
-                inputs={"input": user_input},
-                outputs={"output": ai_output}
-            )
+            from datetime import datetime
+            
+            # Add to simple conversation buffer
+            turn = {
+                "user": user_input,
+                "assistant": ai_output,
+                "timestamp": datetime.now().isoformat()
+            }
+            self.conversation_buffer.append(turn)
             
             self.logger.debug(f"Added conversation turn - Input: {user_input[:50]}...")
+            
+            # Check token count and trigger summarization if needed
+            if self.config.enable_summarization and self.llm:
+                current_tokens = self._estimate_conversation_tokens()
+                
+                if current_tokens > self.config.short_term_token_cap:
+                    self.logger.warning(
+                        f"Conversation token cap exceeded: {current_tokens} > {self.config.short_term_token_cap}. "
+                        f"Triggering summarization..."
+                    )
+                    self._trigger_summarization()
+                elif current_tokens > self.config.short_term_token_warning_threshold:
+                    self.logger.info(
+                        f"Conversation approaching token cap: {current_tokens}/{self.config.short_term_token_cap}"
+                    )
             
         except Exception as e:
             self.logger.error(f"Failed to save conversation turn: {e}")
@@ -123,7 +128,16 @@ class ShortTermMemory:
             Dictionary with recent_conversation and conversation_summary
         """
         try:
-            return self.combined_memory.load_memory_variables({})
+            # Format recent conversation as list of messages
+            recent_messages = []
+            for turn in self.conversation_buffer:
+                recent_messages.append(f"User: {turn['user']}")
+                recent_messages.append(f"Assistant: {turn['assistant']}")
+            
+            return {
+                "recent_conversation": recent_messages,
+                "conversation_summary": self.conversation_summary
+            }
         except Exception as e:
             self.logger.error(f"Failed to load memory variables: {e}")
             return {"recent_conversation": [], "conversation_summary": ""}
@@ -162,8 +176,8 @@ class ShortTermMemory:
     def clear_memory(self) -> None:
         """Clear all memory components."""
         try:
-            self.buffer_memory.clear()
-            self.summary_memory.clear()
+            self.conversation_buffer.clear()
+            self.conversation_summary = ""
             self.logger.info("Short-term memory cleared")
         except Exception as e:
             self.logger.error(f"Failed to clear memory: {e}")
@@ -202,3 +216,85 @@ class ShortTermMemory:
         )
         self._setup_memory_components()
         self.logger.info(f"Short-term memory configuration updated")
+    
+    def _estimate_conversation_tokens(self) -> int:
+        """Estimate token count for current conversation."""
+        # Get all content from conversation buffer
+        total_chars = 0
+        for turn in self.conversation_buffer:
+            total_chars += len(turn['user']) + len(turn['assistant'])
+        
+        # Add summary if exists
+        if self.conversation_summary:
+            total_chars += len(self.conversation_summary)
+        
+        # Estimate tokens (simple heuristic: ~4 chars per token)
+        return total_chars // 4
+    
+    def _trigger_summarization(self) -> None:
+        """Trigger summarization of conversation."""
+        if not self.llm:
+            self.logger.warning("Cannot summarize: no LLM available")
+            return
+        
+        try:
+            # Get conversation for summarization
+            conversation_text = []
+            for turn in self.conversation_buffer:
+                conversation_text.append(f"User: {turn['user']}")
+                conversation_text.append(f"Assistant: {turn['assistant']}")
+            
+            if not conversation_text:
+                return
+            
+            # Create summarization prompt
+            content = "\n".join(conversation_text)
+            prompt = f"""Please provide a concise summary of this conversation, focusing on key decisions, 
+            important information, and any ongoing context that would be useful for future interactions:
+
+            {content}
+
+            Summary:"""
+            
+            # Generate summary
+            result = self.llm.invoke(prompt)
+            new_summary = result.content.strip()
+            
+            # Update summary
+            if self.conversation_summary:
+                self.conversation_summary = f"{self.conversation_summary}\n\nAdditional context: {new_summary}"
+            else:
+                self.conversation_summary = new_summary
+            
+            # Clear buffer to make room
+            self.conversation_buffer.clear()
+            
+            self.logger.info("Conversation summarization completed")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to trigger summarization: {e}")
+    
+    def update_config(self, new_config: ShortTermMemoryConfig) -> None:
+        """
+        Update memory configuration and reinitialize components.
+        
+        Args:
+            new_config: New configuration settings
+        """
+        self.config = new_config
+        
+        # Update buffer size
+        new_buffer = deque(self.conversation_buffer, maxlen=new_config.window_size)
+        self.conversation_buffer = new_buffer
+        
+        # Reinitialize LLM if needed
+        if new_config.enable_summarization and not self.llm:
+            try:
+                self.llm = ChatOpenAI(
+                    model=new_config.model_name,
+                    temperature=new_config.temperature
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize LLM: {e}")
+        
+        self.logger.info("Short-term memory configuration updated")

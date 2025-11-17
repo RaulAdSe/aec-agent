@@ -54,10 +54,10 @@ def analyze(building_data_file: str, output: Optional[str], analysis_type: str):
     logger.info(f"Starting {analysis_type} analysis of {building_data_file}")
     
     try:
-        from .agent import create_agent
+        from .reasoning_agent import create_reasoning_agent
         
         # Create LangChain agent
-        agent = create_agent(verbose=config.log_level == "DEBUG", temperature=0.1)
+        agent = create_reasoning_agent(verbose=config.log_level == "DEBUG", temperature=0.1)
         
         # Prepare query based on analysis type and file
         if analysis_type == 'fire_safety':
@@ -68,16 +68,16 @@ def analyze(building_data_file: str, output: Optional[str], analysis_type: str):
             query = f"Load building data from {building_data_file} and perform a general compliance analysis"
         
         # Perform analysis
-        result = agent.process({"query": query})
+        result = agent.process_goal(query)
         
-        if result['status'] == 'success':
+        if result['status'] == 'success' or result['status'] == 'partial':
             # Prepare results for output
             results = {
                 "analysis_type": analysis_type,
                 "building_data_file": building_data_file,
-                "status": "success",
-                "analysis": result['response'],
-                "tools_used": [],
+                "status": result['status'],
+                "analysis": result['message'],
+                "reasoning_result": result.get('reasoning_result', {}),
                 "timestamp": "2024-01-01T00:00:00"  # TODO: Use actual timestamp
             }
             
@@ -106,43 +106,21 @@ def status():
     click.echo("=" * 30)
     click.echo(f"Environment: {config.environment}")
     click.echo(f"Default Model: {config.default_model}")
-    click.echo(f"TOON Enabled: {config.use_toon}")
+    click.echo(f"TOON Enabled: {config.use_toon} (disabled)")
     click.echo(f"Data Directory: {config.data_dir}")
     click.echo(f"Log Level: {config.log_level}")
     
     # Check API key availability
     openai_status = "✓ Available" if config.openai_api_key else "✗ Not configured"
     click.echo(f"OpenAI API Key: {openai_status}")
+    
+    # Check LangSmith tracing
+    langsmith_status = "✓ Enabled" if config.langchain_tracing_v2 and config.langchain_api_key else "✗ Disabled"
+    click.echo(f"LangSmith Tracing: {langsmith_status}")
+    click.echo(f"LangSmith Project: {config.langchain_project}")
 
 
-@cli.command()
-@click.option('--host', default="127.0.0.1", help='Host to bind the server')
-@click.option('--port', default=8000, help='Port to bind the server')
-@click.option('--reload', is_flag=True, help='Enable auto-reload')
-def serve(host: str, port: int, reload: bool):
-    """Start the LangChain agent API server."""
-    
-    click.echo(f"🚀 Starting AEC Compliance Agent API server on {host}:{port}")
-    click.echo(f"📖 API docs: http://{host}:{port}/docs")
-    click.echo(f"🔧 Agent endpoint: http://{host}:{port}/compliance")
-    
-    try:
-        import uvicorn
-        from .services.langchain_service import create_app
-        
-        app = create_app()
-        
-        uvicorn.run(
-            app,
-            host=host,
-            port=port,
-            reload=reload
-        )
-    except ImportError as e:
-        click.echo(f"❌ Missing dependencies for API server: {e}")
-        click.echo("Install with: pip install uvicorn fastapi langserve")
-    except Exception as e:
-        click.echo(f"❌ Failed to start server: {e}")
+# API server functionality removed - use reasoning agent directly
 
 
 @cli.command()
@@ -157,12 +135,12 @@ def query(query: str, building_data: Optional[str], verbose: bool):
         return
     
     try:
-        from .agent import create_agent
+        from .reasoning_agent import create_reasoning_agent
         
         if verbose:
             click.echo("🔧 Creating LangChain agent...")
         
-        agent = create_agent(verbose=verbose, temperature=0.1)
+        agent = create_reasoning_agent(verbose=verbose, temperature=0.1)
         
         # Prepare query with optional building data
         query_text = query
@@ -174,11 +152,19 @@ def query(query: str, building_data: Optional[str], verbose: bool):
         if building_data:
             click.echo(f"📊 Building data: {building_data}")
         
-        result = agent.process(query_text)
+        result = agent.process_goal(query_text)
         
         if result['status'] == 'success':
             click.echo(f"\n✅ Result:")
-            click.echo(result['response'])
+            click.echo(result['message'])
+            # Show reasoning details
+            reasoning_result = result.get('reasoning_result', {})
+            summary = reasoning_result.get('summary', {})
+            if summary:
+                click.echo(f"Tasks completed: {summary.get('completed_tasks', 0)}/{summary.get('total_tasks', 0)}")
+        elif result['status'] == 'partial':
+            click.echo(f"\n⚠️ Partial result:")
+            click.echo(result['message'])
             
             # Note: tools_used not available in simplified version
         else:
@@ -200,13 +186,13 @@ def chat():
         return
         
     try:
-        from .agent import create_agent
+        from .reasoning_agent import create_reasoning_agent
         
         click.echo("🏗️ AEC Compliance Agent - Interactive Chat")
         click.echo("Enter natural language queries about building compliance")
         click.echo("Type 'exit' to quit")
         
-        agent = create_agent(verbose=False, temperature=0.1)
+        agent = create_reasoning_agent(verbose=False, temperature=0.1)
         click.echo(f"✅ Agent ready: {agent.get_status()['name']}")
         
         while True:
@@ -236,12 +222,19 @@ Example queries:
                 else:
                     # Process with LangChain agent
                     click.echo("🔄 Processing...")
-                    result = agent.process(user_input)
+                    result = agent.process_goal(user_input)
                     
                     if result['status'] == 'success':
                         click.echo(f"\n💬 Response:")
-                        click.echo(result['response'])
-                        # Note: tools_used not available in simplified version
+                        click.echo(result['message'])
+                        # Show task summary
+                        reasoning_result = result.get('reasoning_result', {})
+                        summary = reasoning_result.get('summary', {})
+                        if summary:
+                            click.echo(f"Tasks completed: {summary.get('completed_tasks', 0)}/{summary.get('total_tasks', 0)}")
+                    elif result['status'] == 'partial':
+                        click.echo(f"\n⚠️ Partial response:")
+                        click.echo(result['message'])
                     else:
                         click.echo(f"❌ Error: {result.get('message', 'Unknown error')}")
                         
@@ -277,7 +270,7 @@ def init_project(project_name: str):
         "created_at": "2024-01-01T00:00:00",  # TODO: Use actual timestamp
         "compliance_codes": ["CTE DB-SI", "CTE DB-SUA"],
         "analysis_settings": {
-            "use_toon": True,
+            "use_toon": False,
             "confidence_threshold": 0.8
         }
     }
@@ -325,6 +318,91 @@ def output_results(results: Dict[str, Any], output_file: Optional[str] = None):
         click.echo("Analysis Results:")
         click.echo("=" * 40)
         click.echo(json.dumps(results, indent=2, ensure_ascii=False))
+
+
+@cli.command()
+@click.argument('goal')
+@click.option('--session-id', help='Session ID for memory continuity')
+@click.option('--max-iterations', default=20, help='Maximum reasoning iterations')
+@click.option('--verbose', is_flag=True, help='Enable verbose output')
+def reason(goal: str, session_id: Optional[str] = None, max_iterations: int = 20, verbose: bool = False):
+    """
+    Process a goal using autonomous reasoning.
+    
+    Example: aec_agent reason "Analyze fire safety compliance"
+    """
+    try:
+        from .reasoning_agent import create_reasoning_agent
+        
+        click.echo(f"🤖 Starting autonomous reasoning for goal: {goal}")
+        click.echo("=" * 60)
+        
+        # Create reasoning agent
+        agent = create_reasoning_agent(
+            model_name=config.default_model,
+            temperature=config.temperature,
+            verbose=verbose,
+            enable_memory=True,
+            session_id=session_id,
+            max_iterations=max_iterations
+        )
+        
+        # Process the goal
+        result = agent.process_goal(goal)
+        
+        # Display results
+        click.echo("\n📊 Reasoning Results:")
+        click.echo("=" * 40)
+        click.echo(f"Status: {result.get('status')}")
+        click.echo(f"Message: {result.get('message')}")
+        
+        reasoning_result = result.get('reasoning_result', {})
+        summary = reasoning_result.get('summary', {})
+        
+        if summary:
+            click.echo(f"\n📈 Summary:")
+            click.echo(f"  Goal Achieved: {summary.get('goal_achieved', False)}")
+            click.echo(f"  Tasks Completed: {summary.get('completed_tasks', 0)}/{summary.get('total_tasks', 0)}")
+            click.echo(f"  Execution Time: {summary.get('execution_time', 0):.2f}s")
+            click.echo(f"  Iterations: {summary.get('iterations', 0)}")
+        
+        # Display task breakdown
+        tasks = reasoning_result.get('tasks', [])
+        if tasks:
+            click.echo(f"\n📋 Task Breakdown:")
+            for i, task in enumerate(tasks, 1):
+                status_icon = "✅" if task['status'] == 'completed' else "❌" if task['status'] == 'failed' else "⏳"
+                click.echo(f"  {i}. {status_icon} {task['name']} ({task['status']})")
+                if task.get('tools'):
+                    click.echo(f"     Tools: {', '.join(task['tools'])}")
+        
+        # Display session info if available
+        session_summary = result.get('session_summary')
+        if session_summary:
+            click.echo(f"\n💾 Session Info:")
+            click.echo(f"  Session ID: {session_summary.get('session_id')}")
+            memory_stats = session_summary.get('memory_stats', {})
+            if memory_stats:
+                total_turns = memory_stats.get('total_turns', 'unknown')
+                click.echo(f"  Memory Stats: {total_turns} conversation turns")
+        
+        if verbose and reasoning_result.get('outputs'):
+            click.echo(f"\n🔍 Detailed Outputs:")
+            for output in reasoning_result['outputs']:
+                click.echo(f"  Tool: {output['tool']}")
+                click.echo(f"  Time: {output['execution_time']:.2f}s")
+                click.echo(f"  Output: {str(output['output'])[:200]}...")
+                click.echo()
+        
+        click.echo(f"\n🎉 Reasoning completed!")
+        
+    except ImportError as e:
+        click.echo(f"❌ Error: Reasoning agent not available. {e}")
+    except Exception as e:
+        click.echo(f"❌ Error: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == '__main__':
