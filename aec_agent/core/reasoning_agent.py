@@ -12,8 +12,8 @@ from pathlib import Path
 
 from langchain_openai import ChatOpenAI
 from langsmith import traceable
-from langchain.callbacks.manager import CallbackManager
-from langchain.callbacks.tracers import LangChainTracer
+from langchain_core.callbacks.manager import CallbackManager
+from langchain_core.tracers.langchain import LangChainTracer
 
 # Import reasoning components
 from .reasoning_controller import ReasoningController
