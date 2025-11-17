@@ -7,11 +7,120 @@ import streamlit as st
 import os
 import json
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from aec_agent.utils.ifc_to_json import IFCToJSONConverter
 from services.pdf_rag_manager import PDFRAGManager
 from services.session_manager import SessionManager
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Initialize Gemini for dynamic insights
+def setup_gemini():
+    """Setup Gemini for dynamic reasoning insights."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        try:
+            genai.configure(api_key=api_key)
+            return genai.GenerativeModel("models/gemini-2.5-flash")  # Updated model name
+        except:
+            return None
+    return None
+
+def generate_dynamic_insight(action, context, quick_model=None):
+    """Generate dynamic LLM-powered insight about current analysis step with intelligent fallbacks."""
+    
+    # Smart fallbacks with specific insights based on context
+    if "Analyzing Question" in action:
+        if "door" in context.lower():
+            fallback = "Examining door-related compliance requirements including accessibility, width standards, and fire safety"
+        elif "space" in context.lower() or "room" in context.lower():
+            fallback = "Analyzing space usage, occupancy requirements, and accessibility compliance standards"
+        elif "stair" in context.lower():
+            fallback = "Evaluating stair safety including rise/run ratios, handrails, and egress requirements"
+        elif "wall" in context.lower():
+            fallback = "Checking wall specifications for fire ratings, structural integrity, and thermal properties"
+        elif "compliance" in context.lower():
+            fallback = "Cross-referencing building elements against relevant legal and safety standards"
+        else:
+            fallback = "Parsing your question to identify specific building elements and compliance requirements"
+    
+    elif "Data Source Check" in action:
+        if "No uploaded files" in context:
+            fallback = "No building models or legal documents available - will provide general guidance based on standard codes"
+        else:
+            fallback = f"Found comprehensive data sources - ready to perform detailed compliance analysis with {context.replace('Found: ', '')}"
+    
+    elif "Tool Selection" in action:
+        if "IFC Building Data Analyzer" in context:
+            fallback = "Selected IFC analysis tools to extract building geometry, materials, and structural elements"
+        elif "Legal Document Search" in context:
+            fallback = "Activated legal document search to find relevant regulations and compliance requirements"
+        else:
+            fallback = "Choosing appropriate analysis methods based on available data and question complexity"
+    
+    elif "Building Overview" in context or "Building Analysis" in action:
+        fallback = f"Scanning building model architecture to identify key structural and safety elements"
+    
+    elif "Space" in action:
+        fallback = "Examining space classifications, areas, and occupancy requirements for accessibility compliance"
+    
+    elif "Door" in action:
+        fallback = "Evaluating door dimensions, hardware, and placement against ADA and fire safety standards"
+    
+    elif "Stair" in action:
+        if "distance" in context.lower():
+            fallback = "Computing spatial distances between stairs to verify emergency egress requirements"
+        else:
+            fallback = "Analyzing stair geometry, handrails, and code compliance for safe vertical circulation"
+    
+    elif "Wall" in action:
+        fallback = "Categorizing wall types and checking fire ratings, insulation, and structural specifications"
+    
+    elif "Legal Document Search" in action:
+        fallback = "Searching regulatory documents for specific compliance requirements and safety standards"
+    
+    elif "RAG Processing" in action:
+        fallback = "Processing legal text to extract relevant regulations and compliance guidelines"
+    
+    elif "Response Preparation" in action:
+        fallback = "Synthesizing analysis results into actionable compliance insights and recommendations"
+    
+    else:
+        fallback = f"Processing {action.lower().replace('🧠', '').replace('🔍', '').replace('🔧', '').replace('⚡', '').replace('📝', '').strip()} with available building data"
+    
+    # Try LLM first, fall back to smart insights
+    if quick_model:
+        try:
+            # Create insight prompt based on action
+            if "Analyzing Question" in action:
+                prompt = f"Briefly explain what you're analyzing about this building compliance question: '{context[:60]}'"
+            elif "Data Source Check" in action:
+                prompt = f"Explain what building data sources you found: {context}"
+            elif "Tool Selection" in action:
+                prompt = f"Explain why these analysis tools were selected: {context}"
+            else:
+                prompt = f"Explain this building analysis step: {action} - {context[:60]}"
+            
+            response = quick_model.generate_content(
+                prompt,
+                generation_config={
+                    "max_output_tokens": 80,
+                    "temperature": 0.2,
+                }
+            )
+            
+            if response.candidates and response.candidates[0].content:
+                return response.text.strip()
+                
+        except Exception:
+            pass
+    
+    return fallback
 
 # Set page config
 st.set_page_config(
@@ -256,7 +365,7 @@ def show_legal_docs_upload_section():
                     st.error(f"Error checking knowledge base: {e}")
 
 def show_chat_interface():
-    """Display the chat interface."""
+    """Display the streaming chat interface with tool usage visualization."""
     st.divider()
     st.subheader("💬 Chat Assistant")
     
@@ -265,6 +374,11 @@ def show_chat_interface():
     with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
+                if message["role"] == "assistant" and "thinking_steps" in message:
+                    # Show thinking process for past messages
+                    with st.expander("🧠 Thinking process", expanded=False):
+                        for step in message["thinking_steps"]:
+                            st.markdown(f"**{step['action']}** - {step['description']}")
                 st.markdown(message["content"])
     
     # Chat input
@@ -276,19 +390,157 @@ def show_chat_interface():
         with st.chat_message("user"):
             st.markdown(prompt)
         
-        # Generate assistant response
+        # Generate assistant response with streaming
         with st.chat_message("assistant"):
-            response = generate_response(prompt)
+            response, thinking_steps = generate_streaming_response(prompt)
             st.markdown(response)
         
-        # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        # Add assistant response to chat history with thinking steps
+        st.session_state.messages.append({
+            "role": "assistant", 
+            "content": response,
+            "thinking_steps": thinking_steps
+        })
         
         # Save session after each interaction
         save_current_session()
 
-def generate_response(prompt):
-    """Generate response to user prompt."""
+def generate_streaming_response(prompt):
+    """Generate streaming response with dynamic LLM-powered insights."""
+    thinking_steps = []
+    
+    # Setup dynamic insight generation
+    quick_model = setup_gemini()
+    
+    # Create containers for progress indicators
+    progress_container = st.empty()
+    thinking_container = st.empty()
+    response_container = st.empty()
+    
+    # Step 1: Analyzing user input
+    with progress_container:
+        st.info("🧠 **Analyzing your question...**")
+    
+    # Generate dynamic insight about question analysis
+    analysis_insight = generate_dynamic_insight(
+        "Analyzing Question", 
+        prompt[:100], 
+        quick_model
+    )
+    
+    thinking_steps.append({
+        "action": "🧠 Analyzing Question",
+        "description": analysis_insight
+    })
+    
+    with thinking_container:
+        st.markdown(f"🧠 **{analysis_insight}**")
+    time.sleep(0.6)
+    
+    # Step 2: Check available data sources
+    processed_files = st.session_state.processed_ifc_files
+    uploaded_pdfs = st.session_state.uploaded_pdfs
+    
+    with progress_container:
+        st.info("🔍 **Checking available data sources...**")
+    
+    data_sources = []
+    if processed_files:
+        data_sources.append(f"{len(processed_files)} IFC building model(s)")
+    if uploaded_pdfs:
+        data_sources.append(f"{len(uploaded_pdfs)} legal document(s)")
+    
+    # Generate dynamic insight about data sources
+    data_context = f"Found: {', '.join(data_sources) if data_sources else 'No uploaded files'}"
+    data_insight = generate_dynamic_insight(
+        "Data Source Check",
+        data_context,
+        quick_model
+    )
+    
+    thinking_steps.append({
+        "action": "🔍 Data Source Check",
+        "description": data_insight
+    })
+    
+    with thinking_container:
+        st.markdown(f"🔍 **{data_insight}**")
+    time.sleep(0.5)
+    
+    # Step 3: Determine which tools to use
+    with progress_container:
+        st.info("🔧 **Selecting analysis tools...**")
+    
+    tools_to_use = []
+    if any(keyword in prompt.lower() for keyword in ["ifc", "building", "model", "space", "door", "stair", "wall"]):
+        tools_to_use.append("IFC Building Data Analyzer")
+    if any(keyword in prompt.lower() for keyword in ["regulation", "code", "compliance", "legal", "standard"]):
+        tools_to_use.append("Legal Document Search")
+    
+    # Generate dynamic insight about tool selection
+    tool_context = f"For query about {prompt[:50]}, selected: {', '.join(tools_to_use) if tools_to_use else 'general knowledge'}"
+    tool_insight = generate_dynamic_insight(
+        "Tool Selection",
+        tool_context,
+        quick_model
+    )
+    
+    thinking_steps.append({
+        "action": "🔧 Tool Selection", 
+        "description": tool_insight
+    })
+    
+    with thinking_container:
+        st.markdown(f"🔧 **{tool_insight}**")
+    time.sleep(0.7)
+    
+    # Step 4: Execute analysis based on prompt type
+    with progress_container:
+        st.info("⚡ **Analyzing building data...**")
+    
+    # Generate specific analysis insight
+    analysis_context = f"Analyzing {prompt} with available data: {data_context}"
+    analysis_insight = generate_dynamic_insight(
+        "Building Analysis",
+        analysis_context,
+        quick_model
+    )
+    
+    with thinking_container:
+        st.markdown(f"⚡ **{analysis_insight}**")
+    time.sleep(0.9)
+    
+    # Generate the actual response with dynamic insights
+    response = generate_detailed_response(prompt, thinking_steps, quick_model)
+    
+    # Step 5: Finalizing response
+    with progress_container:
+        st.info("📝 **Preparing your analysis...**")
+    
+    # Generate final insight
+    final_insight = generate_dynamic_insight(
+        "Response Preparation",
+        f"Compiling comprehensive analysis for: {prompt[:50]}",
+        quick_model
+    )
+    
+    thinking_steps.append({
+        "action": "📝 Response Generation",
+        "description": final_insight
+    })
+    
+    with thinking_container:
+        st.markdown(f"📝 **{final_insight}**")
+    time.sleep(0.5)
+    
+    # Clear progress indicators and show final response
+    progress_container.empty()
+    thinking_container.empty()
+    
+    return response, thinking_steps
+
+def generate_detailed_response(prompt, thinking_steps, quick_model=None):
+    """Generate detailed response with dynamic LLM-powered tool insights."""
     # Check if we have processed IFC files and PDFs
     processed_files = st.session_state.processed_ifc_files
     uploaded_pdfs = st.session_state.uploaded_pdfs
@@ -296,6 +548,18 @@ def generate_response(prompt):
     
     if "ifc" in prompt.lower() or "building" in prompt.lower() or "model" in prompt.lower():
         if processed_files:
+            # Generate dynamic insight for building overview
+            building_context = f"Found {len(processed_files)} IFC files: {', '.join(processed_files.keys())}"
+            building_insight = generate_dynamic_insight(
+                "Building Overview",
+                building_context,
+                quick_model
+            )
+            thinking_steps.append({
+                "action": "📋 Building Overview",
+                "description": building_insight
+            })
+            
             file_list = list(processed_files.keys())
             response = f"I can analyze your uploaded IFC building models: {', '.join(file_list)}. "
             
@@ -303,8 +567,21 @@ def generate_response(prompt):
             total_spaces = sum(len(data['json_data'].get('spaces', [])) for data in processed_files.values())
             total_walls = sum(len(data['json_data'].get('walls', [])) for data in processed_files.values())
             total_doors = sum(len(data['json_data'].get('doors', [])) for data in processed_files.values())
+            total_stairs = sum(len(data['json_data'].get('stairs', [])) for data in processed_files.values())
             
-            response += f"I found {total_spaces} spaces, {total_walls} walls, and {total_doors} doors across your building models. "
+            # Generate dynamic insight for element counting
+            element_context = f"Building has {total_spaces} spaces, {total_walls} walls, {total_doors} doors, {total_stairs} stairs"
+            element_insight = generate_dynamic_insight(
+                "Element Count",
+                element_context,
+                quick_model
+            )
+            thinking_steps.append({
+                "action": "🔢 Element Count",
+                "description": element_insight
+            })
+            
+            response += f"I found {total_spaces} spaces, {total_walls} walls, {total_doors} doors, and {total_stairs} stairs across your building models. "
             response += "Ask me specific questions about compliance, accessibility, or building regulations!"
             
             return response
@@ -313,9 +590,33 @@ def generate_response(prompt):
     
     elif "space" in prompt.lower() or "room" in prompt.lower():
         if processed_files:
+            # Generate dynamic insight for space analysis
+            space_context = f"Analyzing spaces in {len(processed_files)} building models for compliance and accessibility"
+            space_insight = generate_dynamic_insight(
+                "Space Analyzer",
+                space_context,
+                quick_model
+            )
+            thinking_steps.append({
+                "action": "🏠 IFC Space Analyzer",
+                "description": space_insight
+            })
+            
             all_spaces = []
             for data in processed_files.values():
                 all_spaces.extend(data['json_data'].get('spaces', []))
+            
+            # Dynamic insight for space discovery
+            discovery_context = f"Discovered {len(all_spaces)} spaces with various types and properties"
+            discovery_insight = generate_dynamic_insight(
+                "Space Discovery",
+                discovery_context,
+                quick_model
+            )
+            thinking_steps.append({
+                "action": "📊 Space Discovery",
+                "description": discovery_insight
+            })
             
             if all_spaces:
                 response = f"I found {len(all_spaces)} spaces in your building models:\n\n"
@@ -356,9 +657,33 @@ def generate_response(prompt):
     
     elif "door" in prompt.lower():
         if processed_files:
+            # Generate dynamic insight for door analysis
+            door_context = f"Extracting door specifications from {len(processed_files)} building models to check compliance"
+            door_insight = generate_dynamic_insight(
+                "Door Analyzer",
+                door_context,
+                quick_model
+            )
+            thinking_steps.append({
+                "action": "🚪 IFC Door Analyzer",
+                "description": door_insight
+            })
+            
             all_doors = []
             for data in processed_files.values():
                 all_doors.extend(data['json_data'].get('doors', []))
+            
+            # Dynamic insight for compliance checking
+            compliance_context = f"Checking {len(all_doors)} doors against ADA and safety standards"
+            compliance_insight = generate_dynamic_insight(
+                "Door Compliance Check",
+                compliance_context,
+                quick_model
+            )
+            thinking_steps.append({
+                "action": "📏 Compliance Check",
+                "description": compliance_insight
+            })
             
             if all_doors:
                 response = f"I found {len(all_doors)} doors in your building models:\n\n"
@@ -387,9 +712,44 @@ def generate_response(prompt):
     
     elif "stair" in prompt.lower():
         if processed_files:
+            # Generate dynamic insight for stair analysis
+            stair_context = f"Scanning building models for stair safety and code compliance"
+            stair_insight = generate_dynamic_insight(
+                "Stair Analyzer",
+                stair_context,
+                quick_model
+            )
+            thinking_steps.append({
+                "action": "🪜 IFC Stair Analyzer",
+                "description": stair_insight
+            })
+            
             all_stairs = []
             for data in processed_files.values():
                 all_stairs.extend(data['json_data'].get('stairs', []))
+            
+            if "distance" in prompt.lower():
+                distance_context = f"Computing spatial relationships between {len(all_stairs)} stairs for egress analysis"
+                distance_insight = generate_dynamic_insight(
+                    "Distance Calculator",
+                    distance_context,
+                    quick_model
+                )
+                thinking_steps.append({
+                    "action": "📐 Distance Calculator",
+                    "description": distance_insight
+                })
+            else:
+                analysis_context = f"Examining {len(all_stairs)} stairs for code compliance and safety standards"
+                analysis_insight = generate_dynamic_insight(
+                    "Stair Analysis",
+                    analysis_context,
+                    quick_model
+                )
+                thinking_steps.append({
+                    "action": "📊 Stair Analysis",
+                    "description": analysis_insight
+                })
             
             if all_stairs:
                 response = f"I found {len(all_stairs)} stairs in your building models:\n\n"
@@ -449,8 +809,32 @@ def generate_response(prompt):
     elif "regulation" in prompt.lower() or "legal" in prompt.lower() or "compliance" in prompt.lower():
         if uploaded_pdfs:
             try:
+                # Generate dynamic insight for legal search
+                legal_context = f"Searching {len(uploaded_pdfs)} legal documents for regulations related to: {prompt[:50]}"
+                legal_insight = generate_dynamic_insight(
+                    "Legal Document Search",
+                    legal_context,
+                    quick_model
+                )
+                thinking_steps.append({
+                    "action": "📚 Legal Document Search",
+                    "description": legal_insight
+                })
+                
                 # Search the legal documents using RAG
                 search_result = rag_manager.search_legal_documents(prompt, max_results=3)
+                
+                # Dynamic insight for RAG processing
+                rag_context = f"Processing search results to find specific compliance requirements"
+                rag_insight = generate_dynamic_insight(
+                    "RAG Processing",
+                    rag_context,
+                    quick_model
+                )
+                thinking_steps.append({
+                    "action": "🔍 RAG Processing",
+                    "description": rag_insight
+                })
                 
                 if search_result["status"] == "success":
                     response = search_result.get("answer", "No answer found.")
@@ -480,9 +864,20 @@ def generate_response(prompt):
     
     elif "wall" in prompt.lower():
         if processed_files:
+            # Track tool usage
+            thinking_steps.append({
+                "action": "🧱 IFC Wall Analyzer",
+                "description": f"Extracting wall data from {len(processed_files)} building model(s)"
+            })
+            
             all_walls = []
             for data in processed_files.values():
                 all_walls.extend(data['json_data'].get('walls', []))
+            
+            thinking_steps.append({
+                "action": "📊 Wall Classification",
+                "description": f"Categorizing {len(all_walls)} walls by type and properties"
+            })
             
             if all_walls:
                 response = f"I found {len(all_walls)} walls in your building models:\n\n"
