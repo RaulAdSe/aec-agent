@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .config import config
+try:
+    from ..config import AgentConfig
+    config = AgentConfig()
+except ImportError:
+    # Fallback if config is not available
+    config = None
 
 
 def get_logger(name: str, level: Optional[str] = None) -> logging.Logger:
@@ -26,7 +31,10 @@ def get_logger(name: str, level: Optional[str] = None) -> logging.Logger:
         return logger
     
     # Set level
-    log_level = level or config.log_level
+    if config and hasattr(config, 'logging'):
+        log_level = level or config.logging.log_level
+    else:
+        log_level = level or "INFO"
     logger.setLevel(getattr(logging, log_level.upper()))
     
     # Create formatter
@@ -41,8 +49,8 @@ def get_logger(name: str, level: Optional[str] = None) -> logging.Logger:
     logger.addHandler(console_handler)
     
     # File handler (if configured)
-    if config.log_file:
-        log_path = Path(config.log_file)
+    if config and hasattr(config, 'logging') and config.logging.log_file:
+        log_path = Path(config.logging.log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         
         file_handler = logging.FileHandler(log_path)

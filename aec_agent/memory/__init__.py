@@ -9,6 +9,14 @@ from .session_memory import (
     TaskStatus, 
     ToolExecution
 )
+from .execution_memory import (
+    ExecutionMemory,
+    ExecutionStep,
+    ExecutionStatus,
+    ValidationLevel,
+    PlanModification,
+    DiscoveredContext
+)
 
 __all__ = [
     "MemoryManager",
@@ -19,5 +27,11 @@ __all__ = [
     "SessionState",
     "SubTask",
     "TaskStatus",
-    "ToolExecution"
+    "ToolExecution",
+    "ExecutionMemory",
+    "ExecutionStep", 
+    "ExecutionStatus",
+    "ValidationLevel",
+    "PlanModification",
+    "DiscoveredContext"
 ]
