@@ -16,9 +16,13 @@ click==8.1.7
 # Testing
 pytest==7.4.4
 
-# Optional: Add back if needed
-# langchain==0.2.16        # For advanced LLM workflows
-# langsmith==0.0.87        # For tracing and monitoring
+# LangChain for agent development
+langchain==0.2.16        # For advanced LLM workflows
+langsmith>=0.1.17        # For tracing and monitoring (compatible version)
+langchain-openai==0.1.25 # OpenAI integration for LangChain
+langserve>=0.0.50        # LangChain server framework
+uvicorn>=0.24.0          # ASGI server
+fastapi>=0.104.1         # Web framework for APIs
 # streamlit-authenticator==0.2.3  # For authentication
 # python-toon==0.1.3       # TOON format support
 # numpy==1.26.4            # Numerical calculations

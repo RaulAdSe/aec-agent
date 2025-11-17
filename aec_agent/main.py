@@ -8,13 +8,15 @@ import sys
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional
+from dotenv import load_dotenv
 
 import click
 
+# Load environment variables
+load_dotenv()
+
 from .core.config import config
 from .core.logger import get_logger
-from .core.registry import registry
-from .agents.compliance_agent import ComplianceAgent, ComplianceAgentConfig
 
 
 # Initialize logging
@@ -42,36 +44,57 @@ def cli(verbose: bool, config_file: Optional[str]):
               type=click.Choice(['general', 'fire_safety', 'accessibility']),
               default='general',
               help='Type of compliance analysis to perform')
-@click.option('--use-toon/--no-toon', default=True, help='Use TOON format for data processing')
-def analyze(building_data_file: str, output: Optional[str], analysis_type: str, use_toon: bool):
-    """Analyze building data for compliance."""
+def analyze(building_data_file: str, output: Optional[str], analysis_type: str):
+    """Analyze building data for compliance using LangChain agent."""
+    
+    if not config.openai_api_key:
+        click.echo("❌ OpenAI API key required. Set OPENAI_API_KEY environment variable.")
+        return
     
     logger.info(f"Starting {analysis_type} analysis of {building_data_file}")
     
     try:
-        # Load building data
-        building_data = load_building_data(building_data_file)
+        from .reasoning_agent import create_reasoning_agent
         
-        # Create and configure agent
-        agent_config = ComplianceAgentConfig(
-            use_toon=use_toon,
-            verbose=config.log_level == "DEBUG"
-        )
-        agent = ComplianceAgent(agent_config)
+        # Create LangChain agent
+        agent = create_reasoning_agent(verbose=config.log_level == "DEBUG", temperature=0.1)
+        
+        # Prepare query based on analysis type and file
+        if analysis_type == 'fire_safety':
+            query = f"Load building data from {building_data_file} and perform a comprehensive fire safety compliance analysis"
+        elif analysis_type == 'accessibility':
+            query = f"Load building data from {building_data_file} and analyze accessibility compliance requirements"
+        else:
+            query = f"Load building data from {building_data_file} and perform a general compliance analysis"
         
         # Perform analysis
-        if analysis_type == 'general':
-            results = agent.process(building_data)
+        result = agent.process_goal(query)
+        
+        if result['status'] == 'success' or result['status'] == 'partial':
+            # Prepare results for output
+            results = {
+                "analysis_type": analysis_type,
+                "building_data_file": building_data_file,
+                "status": result['status'],
+                "analysis": result['message'],
+                "reasoning_result": result.get('reasoning_result', {}),
+                "timestamp": "2024-01-01T00:00:00"  # TODO: Use actual timestamp
+            }
+            
+            # Output results
+            output_results(results, output)
+            logger.info("Analysis completed successfully")
         else:
-            results = agent.analyze_specific_compliance(building_data, analysis_type)
+            click.echo(f"❌ Analysis failed: {result.get('message', 'Unknown error')}")
+            sys.exit(1)
         
-        # Output results
-        output_results(results, output)
-        
-        logger.info("Analysis completed successfully")
-        
+    except ImportError as e:
+        click.echo(f"❌ Missing LangChain dependencies: {e}")
+        click.echo("Install with: pip install langchain langchain-openai")
+        sys.exit(1)
     except Exception as e:
         logger.error(f"Analysis failed: {e}")
+        click.echo(f"❌ Analysis failed: {e}")
         sys.exit(1)
 
 
@@ -83,13 +106,149 @@ def status():
     click.echo("=" * 30)
     click.echo(f"Environment: {config.environment}")
     click.echo(f"Default Model: {config.default_model}")
-    click.echo(f"TOON Enabled: {config.use_toon}")
+    click.echo(f"TOON Enabled: {config.use_toon} (disabled)")
     click.echo(f"Data Directory: {config.data_dir}")
     click.echo(f"Log Level: {config.log_level}")
     
     # Check API key availability
     openai_status = "✓ Available" if config.openai_api_key else "✗ Not configured"
     click.echo(f"OpenAI API Key: {openai_status}")
+    
+    # Check LangSmith tracing
+    langsmith_status = "✓ Enabled" if config.langchain_tracing_v2 and config.langchain_api_key else "✗ Disabled"
+    click.echo(f"LangSmith Tracing: {langsmith_status}")
+    click.echo(f"LangSmith Project: {config.langchain_project}")
+
+
+# API server functionality removed - use reasoning agent directly
+
+
+@cli.command()
+@click.argument('query')
+@click.option('--building-data', help='Path to building data JSON file')
+@click.option('--verbose', is_flag=True, help='Show detailed output')
+def query(query: str, building_data: Optional[str], verbose: bool):
+    """Run a natural language query against the LangChain agent."""
+    
+    if not config.openai_api_key:
+        click.echo("❌ OpenAI API key required. Set OPENAI_API_KEY environment variable.")
+        return
+    
+    try:
+        from .reasoning_agent import create_reasoning_agent
+        
+        if verbose:
+            click.echo("🔧 Creating LangChain agent...")
+        
+        agent = create_reasoning_agent(verbose=verbose, temperature=0.1)
+        
+        # Prepare query with optional building data
+        query_text = query
+        if building_data:
+            query_text = f"First load building data from {building_data}, then: {query}"
+        
+        # Execute query
+        click.echo(f"🔍 Query: {query}")
+        if building_data:
+            click.echo(f"📊 Building data: {building_data}")
+        
+        result = agent.process_goal(query_text)
+        
+        if result['status'] == 'success':
+            click.echo(f"\n✅ Result:")
+            click.echo(result['message'])
+            # Show reasoning details
+            reasoning_result = result.get('reasoning_result', {})
+            summary = reasoning_result.get('summary', {})
+            if summary:
+                click.echo(f"Tasks completed: {summary.get('completed_tasks', 0)}/{summary.get('total_tasks', 0)}")
+        elif result['status'] == 'partial':
+            click.echo(f"\n⚠️ Partial result:")
+            click.echo(result['message'])
+            
+            # Note: tools_used not available in simplified version
+        else:
+            click.echo(f"\n❌ Error: {result.get('message', 'Unknown error')}")
+            
+    except ImportError as e:
+        click.echo(f"❌ Missing LangChain dependencies: {e}")
+        click.echo("Install with: pip install langchain langchain-openai")
+    except Exception as e:
+        click.echo(f"❌ Query failed: {e}")
+
+
+@cli.command()
+def chat():
+    """Start an interactive chat session with the LangChain agent."""
+    
+    if not config.openai_api_key:
+        click.echo("❌ OpenAI API key required. Set OPENAI_API_KEY environment variable.")
+        return
+        
+    try:
+        from .reasoning_agent import create_reasoning_agent
+        
+        click.echo("🏗️ AEC Compliance Agent - Interactive Chat")
+        click.echo("Enter natural language queries about building compliance")
+        click.echo("Type 'exit' to quit")
+        
+        agent = create_reasoning_agent(verbose=False, temperature=0.1)
+        click.echo(f"✅ Agent ready: {agent.get_status()['name']}")
+        
+        while True:
+            try:
+                user_input = click.prompt("\n🔍 Query", type=str).strip()
+                
+                if user_input.lower() in ['exit', 'quit']:
+                    break
+                elif user_input.lower() == 'help':
+                    click.echo("""
+Available commands:
+- Ask natural language questions about building compliance
+- 'status' - Show agent status  
+- 'exit' - Quit
+
+Example queries:
+- "What is the status of the compliance knowledge base?"
+- "Load building data from data/out/FM-ARC_v2.json and analyze it"
+- "What are the fire safety requirements for emergency exits?"
+                    """)
+                elif user_input.lower() == 'status':
+                    status = agent.get_status()
+                    click.echo(f"Status: {status['status']}")
+                    click.echo(f"Tools: {len(status['available_tools'])}")
+                    for tool in status['available_tools']:
+                        click.echo(f"  - {tool}")
+                else:
+                    # Process with LangChain agent
+                    click.echo("🔄 Processing...")
+                    result = agent.process_goal(user_input)
+                    
+                    if result['status'] == 'success':
+                        click.echo(f"\n💬 Response:")
+                        click.echo(result['message'])
+                        # Show task summary
+                        reasoning_result = result.get('reasoning_result', {})
+                        summary = reasoning_result.get('summary', {})
+                        if summary:
+                            click.echo(f"Tasks completed: {summary.get('completed_tasks', 0)}/{summary.get('total_tasks', 0)}")
+                    elif result['status'] == 'partial':
+                        click.echo(f"\n⚠️ Partial response:")
+                        click.echo(result['message'])
+                    else:
+                        click.echo(f"❌ Error: {result.get('message', 'Unknown error')}")
+                        
+            except click.Abort:
+                click.echo("\nGoodbye! 👋")
+                break
+            except Exception as e:
+                click.echo(f"❌ Error: {e}")
+                
+    except ImportError as e:
+        click.echo(f"❌ Missing LangChain dependencies: {e}")
+        click.echo("Install with: pip install langchain langchain-openai")
+    except Exception as e:
+        click.echo(f"❌ Failed to create agent: {e}")
 
 
 @cli.command()
@@ -111,7 +270,7 @@ def init_project(project_name: str):
         "created_at": "2024-01-01T00:00:00",  # TODO: Use actual timestamp
         "compliance_codes": ["CTE DB-SI", "CTE DB-SUA"],
         "analysis_settings": {
-            "use_toon": True,
+            "use_toon": False,
             "confidence_threshold": 0.8
         }
     }
@@ -159,6 +318,91 @@ def output_results(results: Dict[str, Any], output_file: Optional[str] = None):
         click.echo("Analysis Results:")
         click.echo("=" * 40)
         click.echo(json.dumps(results, indent=2, ensure_ascii=False))
+
+
+@cli.command()
+@click.argument('goal')
+@click.option('--session-id', help='Session ID for memory continuity')
+@click.option('--max-iterations', default=20, help='Maximum reasoning iterations')
+@click.option('--verbose', is_flag=True, help='Enable verbose output')
+def reason(goal: str, session_id: Optional[str] = None, max_iterations: int = 20, verbose: bool = False):
+    """
+    Process a goal using autonomous reasoning.
+    
+    Example: aec_agent reason "Analyze fire safety compliance"
+    """
+    try:
+        from .reasoning_agent import create_reasoning_agent
+        
+        click.echo(f"🤖 Starting autonomous reasoning for goal: {goal}")
+        click.echo("=" * 60)
+        
+        # Create reasoning agent
+        agent = create_reasoning_agent(
+            model_name=config.default_model,
+            temperature=config.temperature,
+            verbose=verbose,
+            enable_memory=True,
+            session_id=session_id,
+            max_iterations=max_iterations
+        )
+        
+        # Process the goal
+        result = agent.process_goal(goal)
+        
+        # Display results
+        click.echo("\n📊 Reasoning Results:")
+        click.echo("=" * 40)
+        click.echo(f"Status: {result.get('status')}")
+        click.echo(f"Message: {result.get('message')}")
+        
+        reasoning_result = result.get('reasoning_result', {})
+        summary = reasoning_result.get('summary', {})
+        
+        if summary:
+            click.echo(f"\n📈 Summary:")
+            click.echo(f"  Goal Achieved: {summary.get('goal_achieved', False)}")
+            click.echo(f"  Tasks Completed: {summary.get('completed_tasks', 0)}/{summary.get('total_tasks', 0)}")
+            click.echo(f"  Execution Time: {summary.get('execution_time', 0):.2f}s")
+            click.echo(f"  Iterations: {summary.get('iterations', 0)}")
+        
+        # Display task breakdown
+        tasks = reasoning_result.get('tasks', [])
+        if tasks:
+            click.echo(f"\n📋 Task Breakdown:")
+            for i, task in enumerate(tasks, 1):
+                status_icon = "✅" if task['status'] == 'completed' else "❌" if task['status'] == 'failed' else "⏳"
+                click.echo(f"  {i}. {status_icon} {task['name']} ({task['status']})")
+                if task.get('tools'):
+                    click.echo(f"     Tools: {', '.join(task['tools'])}")
+        
+        # Display session info if available
+        session_summary = result.get('session_summary')
+        if session_summary:
+            click.echo(f"\n💾 Session Info:")
+            click.echo(f"  Session ID: {session_summary.get('session_id')}")
+            memory_stats = session_summary.get('memory_stats', {})
+            if memory_stats:
+                total_turns = memory_stats.get('total_turns', 'unknown')
+                click.echo(f"  Memory Stats: {total_turns} conversation turns")
+        
+        if verbose and reasoning_result.get('outputs'):
+            click.echo(f"\n🔍 Detailed Outputs:")
+            for output in reasoning_result['outputs']:
+                click.echo(f"  Tool: {output['tool']}")
+                click.echo(f"  Time: {output['execution_time']:.2f}s")
+                click.echo(f"  Output: {str(output['output'])[:200]}...")
+                click.echo()
+        
+        click.echo(f"\n🎉 Reasoning completed!")
+        
+    except ImportError as e:
+        click.echo(f"❌ Error: Reasoning agent not available. {e}")
+    except Exception as e:
+        click.echo(f"❌ Error: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == '__main__':
