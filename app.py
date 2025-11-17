@@ -318,9 +318,37 @@ def generate_response(prompt):
                 all_spaces.extend(data['json_data'].get('spaces', []))
             
             if all_spaces:
-                space_names = [space.get('name', 'Unnamed') for space in all_spaces[:5]]
-                response = f"I found {len(all_spaces)} spaces in your building models. "
-                response += f"Some examples: {', '.join(space_names)}. "
+                response = f"I found {len(all_spaces)} spaces in your building models:\n\n"
+                
+                # Show detailed space information
+                for i, space in enumerate(all_spaces[:8], 1):  # Show first 8 spaces
+                    space_name = space.get('name', f'Space {i}')
+                    space_id = space.get('id', 'Unknown ID')
+                    space_type = space.get('type', 'Unknown type')
+                    
+                    response += f"**{space_name}** (ID: {space_id})\n"
+                    response += f"  - Type: {space_type}\n"
+                    
+                    # Add area if available
+                    if 'area' in space:
+                        response += f"  - Area: {space['area']} m²\n"
+                    
+                    # Add height if available
+                    if 'height' in space:
+                        response += f"  - Height: {space['height']} m\n"
+                    
+                    # Add position if available
+                    position = space.get('position', {})
+                    if position:
+                        x = position.get('x', 'N/A')
+                        y = position.get('y', 'N/A')
+                        response += f"  - Position: X={x}, Y={y}\n"
+                    
+                    response += "\n"
+                
+                if len(all_spaces) > 8:
+                    response += f"...and {len(all_spaces) - 8} more spaces.\n\n"
+                
                 response += "I can help analyze space compliance, accessibility requirements, or specific room regulations."
                 return response
         
@@ -333,11 +361,90 @@ def generate_response(prompt):
                 all_doors.extend(data['json_data'].get('doors', []))
             
             if all_doors:
-                response = f"I found {len(all_doors)} doors in your building models. "
+                response = f"I found {len(all_doors)} doors in your building models:\n\n"
+                
+                # Show detailed door information
+                for i, door in enumerate(all_doors[:5], 1):  # Show first 5 doors
+                    door_name = door.get('name', f'Door {i}')
+                    door_id = door.get('id', 'Unknown ID')
+                    door_width = door.get('width', 'Unknown width')
+                    door_height = door.get('height', 'Unknown height')
+                    
+                    response += f"**{door_name}** (ID: {door_id})\n"
+                    if door_width != 'Unknown width':
+                        response += f"  - Width: {door_width}\n"
+                    if door_height != 'Unknown height':
+                        response += f"  - Height: {door_height}\n"
+                    response += "\n"
+                
+                if len(all_doors) > 5:
+                    response += f"...and {len(all_doors) - 5} more doors.\n\n"
+                
                 response += "I can help check door compliance including width requirements, accessibility standards, and fire safety regulations."
                 return response
         
         return "Upload your IFC building models first, then I can analyze doors for compliance requirements."
+    
+    elif "stair" in prompt.lower():
+        if processed_files:
+            all_stairs = []
+            for data in processed_files.values():
+                all_stairs.extend(data['json_data'].get('stairs', []))
+            
+            if all_stairs:
+                response = f"I found {len(all_stairs)} stairs in your building models:\n\n"
+                
+                # Show detailed stair information and analyze distances
+                stair_positions = []
+                for i, stair in enumerate(all_stairs, 1):
+                    stair_name = stair.get('name', f'Stair {i}')
+                    stair_id = stair.get('id', 'Unknown ID')
+                    
+                    # Get position if available
+                    position = stair.get('position', {})
+                    if position:
+                        x = position.get('x', 'N/A')
+                        y = position.get('y', 'N/A')
+                        z = position.get('z', 'N/A')
+                        stair_positions.append((stair_name, x, y, z))
+                        response += f"**{stair_name}** (ID: {stair_id})\n"
+                        response += f"  - Position: X={x}, Y={y}, Z={z}\n"
+                    else:
+                        response += f"**{stair_name}** (ID: {stair_id})\n"
+                        response += "  - Position: Not available\n"
+                    
+                    # Add other stair properties
+                    if 'width' in stair:
+                        response += f"  - Width: {stair['width']}\n"
+                    if 'height' in stair:
+                        response += f"  - Height: {stair['height']}\n"
+                    response += "\n"
+                
+                # Calculate distances between stairs if positions are available
+                if len(stair_positions) > 1 and "distance" in prompt.lower():
+                    response += "**Distances between stairs:**\n"
+                    import math
+                    
+                    for i in range(len(stair_positions)):
+                        for j in range(i + 1, len(stair_positions)):
+                            name1, x1, y1, z1 = stair_positions[i]
+                            name2, x2, y2, z2 = stair_positions[j]
+                            
+                            try:
+                                # Calculate 3D distance
+                                distance = math.sqrt((float(x2) - float(x1))**2 + 
+                                                   (float(y2) - float(y1))**2 + 
+                                                   (float(z2) - float(z1))**2)
+                                response += f"- {name1} ↔ {name2}: {distance:.2f} meters\n"
+                            except (ValueError, TypeError):
+                                response += f"- {name1} ↔ {name2}: Cannot calculate (position data incomplete)\n"
+                
+                response += "\nI can help analyze stair compliance including width, rise/run ratios, and accessibility requirements."
+                return response
+            else:
+                return "No stairs found in your building models. Upload IFC files that contain stair elements."
+        
+        return "Upload your IFC building models first, then I can analyze stairs and their positions."
     
     elif "regulation" in prompt.lower() or "legal" in prompt.lower() or "compliance" in prompt.lower():
         if uploaded_pdfs:
@@ -371,6 +478,42 @@ def generate_response(prompt):
     elif "hello" in prompt.lower() or "hi" in prompt.lower():
         return "Hello! I'm your AEC Compliance Assistant. Upload your IFC building models and legal documents, then ask me about compliance, regulations, accessibility, or safety requirements."
     
+    elif "wall" in prompt.lower():
+        if processed_files:
+            all_walls = []
+            for data in processed_files.values():
+                all_walls.extend(data['json_data'].get('walls', []))
+            
+            if all_walls:
+                response = f"I found {len(all_walls)} walls in your building models:\n\n"
+                
+                # Group walls by type or show first few with details
+                wall_types = {}
+                for wall in all_walls:
+                    wall_type = wall.get('type', 'Unknown type')
+                    if wall_type not in wall_types:
+                        wall_types[wall_type] = []
+                    wall_types[wall_type].append(wall)
+                
+                # Show wall types summary
+                for wall_type, walls in wall_types.items():
+                    response += f"**{wall_type}:** {len(walls)} walls\n"
+                    
+                    # Show first wall of each type with details
+                    if walls:
+                        wall = walls[0]
+                        wall_name = wall.get('name', 'Unnamed wall')
+                        if 'thickness' in wall:
+                            response += f"  - Example: {wall_name} (Thickness: {wall['thickness']})\n"
+                        else:
+                            response += f"  - Example: {wall_name}\n"
+                    response += "\n"
+                
+                response += "I can help analyze wall compliance including fire ratings, structural requirements, and thermal properties."
+                return response
+        
+        return "Upload your IFC building models first, then I can analyze walls and their properties."
+    
     else:
         # Try to search both IFC data and legal documents for general queries
         if uploaded_pdfs and ("requirement" in prompt.lower() or "standard" in prompt.lower() or "code" in prompt.lower()):
@@ -388,6 +531,32 @@ def generate_response(prompt):
                     return response
             except:
                 pass  # Fall through to default response
+        
+        # Check for specific building element queries even if not exact matches
+        if processed_files:
+            # Look for any building element mentioned
+            prompt_lower = prompt.lower()
+            if any(word in prompt_lower for word in ["distance", "location", "position", "where", "far"]):
+                # Try to provide general building analysis
+                response = "Based on your building models, I can analyze:\n\n"
+                
+                # Count all elements
+                total_spaces = sum(len(data['json_data'].get('spaces', [])) for data in processed_files.values())
+                total_walls = sum(len(data['json_data'].get('walls', [])) for data in processed_files.values())
+                total_doors = sum(len(data['json_data'].get('doors', [])) for data in processed_files.values())
+                total_stairs = sum(len(data['json_data'].get('stairs', [])) for data in processed_files.values())
+                
+                if total_spaces > 0:
+                    response += f"- **{total_spaces} Spaces** - Ask about specific rooms or space layouts\n"
+                if total_doors > 0:
+                    response += f"- **{total_doors} Doors** - Ask about door widths, positions, or compliance\n"
+                if total_walls > 0:
+                    response += f"- **{total_walls} Walls** - Ask about wall types, thicknesses, or properties\n"
+                if total_stairs > 0:
+                    response += f"- **{total_stairs} Stairs** - Ask about stair positions, distances, or compliance\n"
+                
+                response += "\nTry asking: 'Tell me about the stairs' or 'Show me the doors' for detailed information."
+                return response
         
         # Default response based on available data
         resources = []
