@@ -18,78 +18,36 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Initialize OpenAI for dynamic insights  
-def setup_openai():
-    """Setup OpenAI for dynamic reasoning insights."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if api_key:
-        try:
-            return True
-        except:
-            return False
-    return False
-
-def generate_dynamic_insight(action, context, openai_available=False):
-    """Generate dynamic LLM-powered insight about current analysis step."""
-    
-    # If OpenAI is available, generate real insights
-    if openai_available:
-        try:
-            # Create specific prompts based on action type
-            if "Analyzing Question" in action:
-                prompt = f"In 1 sentence, explain what an AEC compliance agent is analyzing when a user asks: '{context[:80]}'. Focus on building safety and code compliance."
-            elif "Data Source Check" in action:
-                prompt = f"In 1 sentence, explain what it means for a building compliance system to find: {context}"
-            elif "Tool Selection" in action:
-                prompt = f"In 1 sentence, explain why a building compliance agent would select these tools: {context}"
-            elif "Building Overview" in action or "Building Analysis" in action:
-                prompt = f"In 1 sentence, explain what a building compliance expert examines when analyzing: {context}"
-            elif "Space" in action:
-                prompt = f"In 1 sentence, explain what analyzing building spaces means for AEC compliance: {context}"
-            elif "Door" in action:
-                prompt = f"In 1 sentence, explain what door compliance analysis involves in building safety: {context}"
-            elif "Stair" in action:
-                prompt = f"In 1 sentence, explain what stair safety analysis means for building compliance: {context}"
-            elif "Wall" in action:
-                prompt = f"In 1 sentence, explain what wall analysis involves for building compliance: {context}"
-            elif "Legal Document Search" in action:
-                prompt = f"In 1 sentence, explain what searching legal documents for building compliance means: {context}"
-            elif "RAG Processing" in action:
-                prompt = f"In 1 sentence, explain what processing legal regulations for building compliance involves."
-            elif "Response Preparation" in action:
-                prompt = f"In 1 sentence, explain what preparing a building compliance analysis report involves."
-            else:
-                prompt = f"In 1 sentence, explain this building compliance analysis step: {action}"
-            
-            # Use OpenAI to generate insight
-            from openai import OpenAI
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": "You are an expert in AEC (Architecture, Engineering, Construction) compliance. Provide concise, professional insights about building analysis steps. Keep responses under 120 characters and focus on safety, codes, and regulations."
-                    },
-                    {
-                        "role": "user", 
-                        "content": prompt
-                    }
-                ],
-                max_tokens=50,
-                temperature=0.3
-            )
-            
-            insight = response.choices[0].message.content.strip()
-            return insight
-            
-        except Exception as e:
-            # If OpenAI fails, we'll use a simple fallback
-            pass
-    
-    # Minimal fallback for when LLM is not available
-    return f"Analyzing {action.replace('🧠', '').replace('🔍', '').replace('🔧', '').replace('⚡', '').replace('📝', '').strip().lower()}"
+def get_llm_insight(action, context):
+    """Get LLM-generated insight about what the agent is doing."""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        # Simple prompt to explain what's happening
+        prompt = f"In 3-4 words, what is an AI agent doing when: {action} with context: {context[:50]}"
+        
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "Explain what an AI agent is doing in 3-4 simple words. Be direct and clear."
+                },
+                {
+                    "role": "user", 
+                    "content": prompt
+                }
+            ],
+            max_tokens=8,
+            temperature=0.1
+        )
+        
+        return response.choices[0].message.content.strip()
+        
+    except Exception:
+        # If LLM fails, return minimal fallback
+        return f"Processing {action.split()[-1].lower()}"
 
 # Set page config
 st.set_page_config(
@@ -375,11 +333,8 @@ def show_chat_interface():
         save_current_session()
 
 def generate_streaming_response(prompt):
-    """Generate streaming response with dynamic LLM-powered insights."""
+    """Generate streaming response with LLM-powered insights."""
     thinking_steps = []
-    
-    # Setup dynamic insight generation
-    openai_available = setup_openai()
     
     # Create containers for progress indicators
     progress_container = st.empty()
@@ -391,10 +346,9 @@ def generate_streaming_response(prompt):
         st.info("🧠 **Analyzing your question...**")
     
     # Generate dynamic insight about question analysis
-    analysis_insight = generate_dynamic_insight(
+    analysis_insight = get_llm_insight(
         "Analyzing Question", 
         prompt[:100], 
-        openai_available
     )
     
     thinking_steps.append({
@@ -421,10 +375,9 @@ def generate_streaming_response(prompt):
     
     # Generate dynamic insight about data sources
     data_context = f"Found: {', '.join(data_sources) if data_sources else 'No uploaded files'}"
-    data_insight = generate_dynamic_insight(
+    data_insight = get_llm_insight(
         "Data Source Check",
         data_context,
-        openai_available
     )
     
     thinking_steps.append({
@@ -448,10 +401,9 @@ def generate_streaming_response(prompt):
     
     # Generate dynamic insight about tool selection
     tool_context = f"For query about {prompt[:50]}, selected: {', '.join(tools_to_use) if tools_to_use else 'general knowledge'}"
-    tool_insight = generate_dynamic_insight(
+    tool_insight = get_llm_insight(
         "Tool Selection",
         tool_context,
-        openai_available
     )
     
     thinking_steps.append({
@@ -469,10 +421,9 @@ def generate_streaming_response(prompt):
     
     # Generate specific analysis insight
     analysis_context = f"Analyzing {prompt} with available data: {data_context}"
-    analysis_insight = generate_dynamic_insight(
+    analysis_insight = get_llm_insight(
         "Building Analysis",
         analysis_context,
-        openai_available
     )
     
     with thinking_container:
@@ -480,17 +431,16 @@ def generate_streaming_response(prompt):
     time.sleep(0.9)
     
     # Generate the actual response with dynamic insights
-    response = generate_detailed_response(prompt, thinking_steps, openai_available)
+    response = generate_detailed_response(prompt, thinking_steps)
     
     # Step 5: Finalizing response
     with progress_container:
         st.info("📝 **Preparing your analysis...**")
     
     # Generate final insight
-    final_insight = generate_dynamic_insight(
+    final_insight = get_llm_insight(
         "Response Preparation",
         f"Compiling comprehensive analysis for: {prompt[:50]}",
-        openai_available
     )
     
     thinking_steps.append({
@@ -508,7 +458,7 @@ def generate_streaming_response(prompt):
     
     return response, thinking_steps
 
-def generate_detailed_response(prompt, thinking_steps, openai_available=False):
+def generate_detailed_response(prompt, thinking_steps):
     """Generate detailed response with dynamic LLM-powered tool insights."""
     # Check if we have processed IFC files and PDFs
     processed_files = st.session_state.processed_ifc_files
@@ -519,10 +469,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
         if processed_files:
             # Generate dynamic insight for building overview
             building_context = f"Found {len(processed_files)} IFC files: {', '.join(processed_files.keys())}"
-            building_insight = generate_dynamic_insight(
+            building_insight = get_llm_insight(
                 "Building Overview",
                 building_context,
-                openai_available
             )
             thinking_steps.append({
                 "action": "📋 Building Overview",
@@ -540,10 +489,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
             
             # Generate dynamic insight for element counting
             element_context = f"Building has {total_spaces} spaces, {total_walls} walls, {total_doors} doors, {total_stairs} stairs"
-            element_insight = generate_dynamic_insight(
+            element_insight = get_llm_insight(
                 "Element Count",
                 element_context,
-                openai_available
             )
             thinking_steps.append({
                 "action": "🔢 Element Count",
@@ -561,10 +509,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
         if processed_files:
             # Generate dynamic insight for space analysis
             space_context = f"Analyzing spaces in {len(processed_files)} building models for compliance and accessibility"
-            space_insight = generate_dynamic_insight(
+            space_insight = get_llm_insight(
                 "Space Analyzer",
                 space_context,
-                openai_available
             )
             thinking_steps.append({
                 "action": "🏠 IFC Space Analyzer",
@@ -577,10 +524,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
             
             # Dynamic insight for space discovery
             discovery_context = f"Discovered {len(all_spaces)} spaces with various types and properties"
-            discovery_insight = generate_dynamic_insight(
+            discovery_insight = get_llm_insight(
                 "Space Discovery",
                 discovery_context,
-                openai_available
             )
             thinking_steps.append({
                 "action": "📊 Space Discovery",
@@ -628,10 +574,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
         if processed_files:
             # Generate dynamic insight for door analysis
             door_context = f"Extracting door specifications from {len(processed_files)} building models to check compliance"
-            door_insight = generate_dynamic_insight(
+            door_insight = get_llm_insight(
                 "Door Analyzer",
                 door_context,
-                openai_available
             )
             thinking_steps.append({
                 "action": "🚪 IFC Door Analyzer",
@@ -644,10 +589,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
             
             # Dynamic insight for compliance checking
             compliance_context = f"Checking {len(all_doors)} doors against ADA and safety standards"
-            compliance_insight = generate_dynamic_insight(
+            compliance_insight = get_llm_insight(
                 "Door Compliance Check",
                 compliance_context,
-                openai_available
             )
             thinking_steps.append({
                 "action": "📏 Compliance Check",
@@ -683,10 +627,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
         if processed_files:
             # Generate dynamic insight for stair analysis
             stair_context = f"Scanning building models for stair safety and code compliance"
-            stair_insight = generate_dynamic_insight(
+            stair_insight = get_llm_insight(
                 "Stair Analyzer",
                 stair_context,
-                openai_available
             )
             thinking_steps.append({
                 "action": "🪜 IFC Stair Analyzer",
@@ -699,10 +642,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
             
             if "distance" in prompt.lower():
                 distance_context = f"Computing spatial relationships between {len(all_stairs)} stairs for egress analysis"
-                distance_insight = generate_dynamic_insight(
+                distance_insight = get_llm_insight(
                     "Distance Calculator",
                     distance_context,
-                    openai_available
                 )
                 thinking_steps.append({
                     "action": "📐 Distance Calculator",
@@ -710,10 +652,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
                 })
             else:
                 analysis_context = f"Examining {len(all_stairs)} stairs for code compliance and safety standards"
-                analysis_insight = generate_dynamic_insight(
+                analysis_insight = get_llm_insight(
                     "Stair Analysis",
                     analysis_context,
-                    openai_available
                 )
                 thinking_steps.append({
                     "action": "📊 Stair Analysis",
@@ -780,10 +721,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
             try:
                 # Generate dynamic insight for legal search
                 legal_context = f"Searching {len(uploaded_pdfs)} legal documents for regulations related to: {prompt[:50]}"
-                legal_insight = generate_dynamic_insight(
+                legal_insight = get_llm_insight(
                     "Legal Document Search",
                     legal_context,
-                    openai_available
                 )
                 thinking_steps.append({
                     "action": "📚 Legal Document Search",
@@ -795,10 +735,9 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
                 
                 # Dynamic insight for RAG processing
                 rag_context = f"Processing search results to find specific compliance requirements"
-                rag_insight = generate_dynamic_insight(
+                rag_insight = get_llm_insight(
                     "RAG Processing",
                     rag_context,
-                    openai_available
                 )
                 thinking_steps.append({
                     "action": "🔍 RAG Processing",
@@ -935,81 +874,55 @@ def generate_detailed_response(prompt, thinking_steps, openai_available=False):
             return "I'm ready to help with AEC compliance questions. Upload your IFC models and legal documents to get started with detailed analysis."
 
 def show_session_sidebar():
-    """Display the session management sidebar."""
+    """Display a simplified session management sidebar."""
     with st.sidebar:
-        st.header("💬 Chat Sessions")
+        st.header("Chats")
         
         # New chat button
-        if st.button("➕ New Chat", use_container_width=True):
+        if st.button("➕ New chat", use_container_width=True):
             create_new_session()
         
         st.divider()
         
-        # Current session info
-        current_session = st.session_state.session_manager.load_session(st.session_state.current_session_id)
-        if current_session:
-            st.write(f"**Current:** {current_session.get('title', 'New Chat')[:20]}...")
-            
-            # Session stats
-            msg_count = len(st.session_state.messages)
-            ifc_count = len(st.session_state.processed_ifc_files)
-            pdf_count = len(st.session_state.uploaded_pdfs)
-            
-            st.caption(f"📝 {msg_count} messages | 🏗️ {ifc_count} IFC | 📄 {pdf_count} PDF")
-        
-        st.divider()
-        
-        # Session history
-        st.subheader("Recent Chats")
-        
+        # Session history with simpler layout
         sessions = st.session_state.session_manager.get_all_sessions()
         
         if not sessions:
-            st.info("No chat history yet")
+            st.caption("No previous chats")
         else:
-            # Show recent sessions
-            for session in sessions[:10]:  # Show last 10 sessions
+            # Show recent sessions in a cleaner format
+            for session in sessions[:15]:  # Show more sessions but cleaner
                 session_id = session["session_id"]
                 title = session["title"]
-                message_count = session["message_count"]
                 
                 # Highlight current session
                 is_current = session_id == st.session_state.current_session_id
                 
-                col1, col2 = st.columns([4, 1])
+                # Simple session button with clean styling
+                button_style = "🟢 " if is_current else ""
+                display_title = title if len(title) <= 30 else title[:27] + "..."
                 
-                with col1:
-                    if st.button(
-                        f"{'🟢' if is_current else '💬'} {title[:25]}...",
-                        key=f"session_{session_id}",
-                        use_container_width=True,
-                        disabled=is_current
-                    ):
-                        load_session(session_id)
-                
-                with col2:
-                    if st.button("🗑️", key=f"delete_{session_id}", help="Delete session"):
-                        delete_session(session_id)
-                
-                # Show session info
-                if message_count > 0:
-                    st.caption(f"{message_count} messages")
-                else:
-                    st.caption("Empty")
-                
-                st.divider()
+                # Use container for each session
+                with st.container():
+                    col1, col2 = st.columns([5, 1])
+                    
+                    with col1:
+                        if st.button(
+                            f"{button_style}{display_title}",
+                            key=f"session_{session_id}",
+                            use_container_width=True,
+                            disabled=is_current,
+                            type="secondary" if not is_current else "primary"
+                        ):
+                            load_session(session_id)
+                    
+                    with col2:
+                        if st.button("×", key=f"delete_{session_id}", help="Delete chat"):
+                            delete_session(session_id)
             
-            # Show overall stats
-            if len(sessions) > 10:
-                st.caption(f"... and {len(sessions) - 10} more sessions")
-            
-        # Session statistics
-        stats = st.session_state.session_manager.get_session_stats()
-        with st.expander("📊 Statistics"):
-            st.write(f"**Total Sessions:** {stats['total_sessions']}")
-            st.write(f"**Total Messages:** {stats['total_messages']}")
-            st.write(f"**IFC Files:** {stats['total_ifc_files']}")
-            st.write(f"**PDF Files:** {stats['total_pdf_files']}")
+            # Show count if there are more sessions
+            if len(sessions) > 15:
+                st.caption(f"... {len(sessions) - 15} more chats")
 
 
 def create_new_session():
