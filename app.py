@@ -11,21 +11,27 @@ from datetime import datetime
 from pathlib import Path
 from aec_agent.utils.ifc_to_json import IFCToJSONConverter
 from services.pdf_rag_manager import PDFRAGManager
+from services.session_manager import SessionManager
 
 # Set page config
 st.set_page_config(
     page_title="AEC Compliance Agent",
     page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 def main():
     """Main Streamlit application."""
-    st.title("🏗️ AEC Compliance Agent")
-    st.markdown("**Architecture, Engineering & Construction Compliance Assistant**")
+    # Initialize session manager and current session
+    if "session_manager" not in st.session_state:
+        st.session_state.session_manager = SessionManager()
     
-    # Initialize session state for chat and processed files
+    if "current_session_id" not in st.session_state:
+        # Create first session
+        st.session_state.current_session_id = st.session_state.session_manager.create_new_session()
+    
+    # Initialize session-specific state
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "processed_ifc_files" not in st.session_state:
@@ -34,6 +40,13 @@ def main():
         st.session_state.uploaded_pdfs = {}
     if "pdf_rag_manager" not in st.session_state:
         st.session_state.pdf_rag_manager = PDFRAGManager()
+    
+    # Show session sidebar
+    show_session_sidebar()
+    
+    # Main content
+    st.title("🏗️ AEC Compliance Agent")
+    st.markdown("**Architecture, Engineering & Construction Compliance Assistant**")
     
     # Create two columns for upload sections
     col1, col2 = st.columns(2)
@@ -46,6 +59,9 @@ def main():
     
     # Chat interface
     show_chat_interface()
+    
+    # Auto-save session periodically
+    save_current_session()
 
 def show_ifc_upload_section():
     """Display IFC file upload section."""
@@ -260,13 +276,16 @@ def show_chat_interface():
         with st.chat_message("user"):
             st.markdown(prompt)
         
-        # Generate assistant response (placeholder)
+        # Generate assistant response
         with st.chat_message("assistant"):
             response = generate_response(prompt)
             st.markdown(response)
         
         # Add assistant response to chat history
         st.session_state.messages.append({"role": "assistant", "content": response})
+        
+        # Save session after each interaction
+        save_current_session()
 
 def generate_response(prompt):
     """Generate response to user prompt."""
@@ -381,6 +400,159 @@ def generate_response(prompt):
             return f"I have access to {' and '.join(resources)}. Ask me about compliance, accessibility, building regulations, or specific elements like doors, spaces, walls, or stairs."
         else:
             return "I'm ready to help with AEC compliance questions. Upload your IFC models and legal documents to get started with detailed analysis."
+
+def show_session_sidebar():
+    """Display the session management sidebar."""
+    with st.sidebar:
+        st.header("💬 Chat Sessions")
+        
+        # New chat button
+        if st.button("➕ New Chat", use_container_width=True):
+            create_new_session()
+        
+        st.divider()
+        
+        # Current session info
+        current_session = st.session_state.session_manager.load_session(st.session_state.current_session_id)
+        if current_session:
+            st.write(f"**Current:** {current_session.get('title', 'New Chat')[:20]}...")
+            
+            # Session stats
+            msg_count = len(st.session_state.messages)
+            ifc_count = len(st.session_state.processed_ifc_files)
+            pdf_count = len(st.session_state.uploaded_pdfs)
+            
+            st.caption(f"📝 {msg_count} messages | 🏗️ {ifc_count} IFC | 📄 {pdf_count} PDF")
+        
+        st.divider()
+        
+        # Session history
+        st.subheader("Recent Chats")
+        
+        sessions = st.session_state.session_manager.get_all_sessions()
+        
+        if not sessions:
+            st.info("No chat history yet")
+        else:
+            # Show recent sessions
+            for session in sessions[:10]:  # Show last 10 sessions
+                session_id = session["session_id"]
+                title = session["title"]
+                message_count = session["message_count"]
+                
+                # Highlight current session
+                is_current = session_id == st.session_state.current_session_id
+                
+                col1, col2 = st.columns([4, 1])
+                
+                with col1:
+                    if st.button(
+                        f"{'🟢' if is_current else '💬'} {title[:25]}...",
+                        key=f"session_{session_id}",
+                        use_container_width=True,
+                        disabled=is_current
+                    ):
+                        load_session(session_id)
+                
+                with col2:
+                    if st.button("🗑️", key=f"delete_{session_id}", help="Delete session"):
+                        delete_session(session_id)
+                
+                # Show session info
+                if message_count > 0:
+                    st.caption(f"{message_count} messages")
+                else:
+                    st.caption("Empty")
+                
+                st.divider()
+            
+            # Show overall stats
+            if len(sessions) > 10:
+                st.caption(f"... and {len(sessions) - 10} more sessions")
+            
+        # Session statistics
+        stats = st.session_state.session_manager.get_session_stats()
+        with st.expander("📊 Statistics"):
+            st.write(f"**Total Sessions:** {stats['total_sessions']}")
+            st.write(f"**Total Messages:** {stats['total_messages']}")
+            st.write(f"**IFC Files:** {stats['total_ifc_files']}")
+            st.write(f"**PDF Files:** {stats['total_pdf_files']}")
+
+
+def create_new_session():
+    """Create a new session and switch to it."""
+    # Save current session first
+    save_current_session()
+    
+    # Create new session
+    new_session_id = st.session_state.session_manager.create_new_session()
+    
+    # Clear current state
+    st.session_state.messages = []
+    st.session_state.processed_ifc_files = {}
+    st.session_state.uploaded_pdfs = {}
+    st.session_state.current_session_id = new_session_id
+    
+    # Refresh page
+    st.rerun()
+
+
+def load_session(session_id: str):
+    """Load an existing session."""
+    # Save current session first
+    save_current_session()
+    
+    # Load the selected session
+    session_data = st.session_state.session_manager.load_session(session_id)
+    
+    if session_data:
+        st.session_state.current_session_id = session_id
+        st.session_state.messages = session_data.get("messages", [])
+        st.session_state.processed_ifc_files = session_data.get("processed_ifc_files", {})
+        st.session_state.uploaded_pdfs = session_data.get("uploaded_pdfs", {})
+        
+        # Refresh page
+        st.rerun()
+    else:
+        st.error("Failed to load session")
+
+
+def delete_session(session_id: str):
+    """Delete a session."""
+    if session_id == st.session_state.current_session_id:
+        # If deleting current session, create a new one
+        new_session_id = st.session_state.session_manager.create_new_session()
+        st.session_state.current_session_id = new_session_id
+        st.session_state.messages = []
+        st.session_state.processed_ifc_files = {}
+        st.session_state.uploaded_pdfs = {}
+    
+    # Delete the session
+    st.session_state.session_manager.delete_session(session_id)
+    
+    # Refresh page
+    st.rerun()
+
+
+def save_current_session():
+    """Save the current session state."""
+    if "current_session_id" in st.session_state:
+        session_data = {
+            "session_id": st.session_state.current_session_id,
+            "title": "Chat Session",  # Will be auto-generated based on first message
+            "messages": st.session_state.messages,
+            "processed_ifc_files": st.session_state.processed_ifc_files,
+            "uploaded_pdfs": st.session_state.uploaded_pdfs
+        }
+        
+        # Auto-generate title if this is the first save and we have messages
+        if st.session_state.messages:
+            current_session = st.session_state.session_manager.load_session(st.session_state.current_session_id)
+            if current_session and current_session.get("title") in ["Chat Session", "New Chat"] or "New Chat" in current_session.get("title", ""):
+                st.session_state.session_manager.auto_generate_title(st.session_state.current_session_id)
+        
+        st.session_state.session_manager.save_session(st.session_state.current_session_id, session_data)
+
 
 if __name__ == "__main__":
     main()
