@@ -15,6 +15,7 @@ from functools import lru_cache
 from typing import Any, Dict, List, Optional, Union
 
 from langchain_openai import ChatOpenAI
+from langsmith import traceable
 from pydantic import BaseModel
 
 from .summarization_config import SummarizationConfig
@@ -95,6 +96,7 @@ class SummarizationService:
             ttl_hours=self.config.cache_ttl_hours
         )
     
+    @traceable(name="summarize_conversation_async", metadata={"component": "summarization_service"})
     async def summarize_conversation_async(self, messages: List[str]) -> str:
         """
         Asynchronously summarize conversation messages using LLM.
@@ -137,6 +139,7 @@ class SummarizationService:
             self.logger.error(f"Failed to summarize conversation: {e}")
             return f"[Summary unavailable due to error: {str(e)[:100]}]"
     
+    @traceable(name="summarize_conversation_sync", metadata={"component": "summarization_service"})
     def summarize_conversation_sync(self, messages: List[str]) -> str:
         """
         Synchronously summarize conversation messages using LLM.
@@ -178,6 +181,7 @@ class SummarizationService:
             self.logger.error(f"Failed to summarize conversation: {e}")
             return f"[Summary unavailable due to error: {str(e)[:100]}]"
     
+    @traceable(name="summarize_tool_history", metadata={"component": "summarization_service"})
     def summarize_tool_history(self, executions: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Create a rule-based statistical summary of tool executions.
@@ -246,6 +250,7 @@ class SummarizationService:
             "summary_created_at": datetime.now(timezone.utc).isoformat()
         }
     
+    @traceable(name="summarize_subtasks", metadata={"component": "summarization_service"})
     def summarize_subtasks(self, tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Create a theme-based summary of subtasks.

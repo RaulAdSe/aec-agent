@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from .short_term_memory import ShortTermMemory, ShortTermMemoryConfig
 from .session_memory import SessionMemory, TaskStatus, SubTask, ToolExecution, GoalStatus, Goal
 from .execution_memory import ExecutionMemory
+from langsmith import traceable
 
 
 logger = logging.getLogger(__name__)
@@ -613,6 +614,7 @@ class MemoryManager:
         """Get the current session ID."""
         return self.session.state.session_id
     
+    @traceable(name="get_memory_usage_stats", metadata={"component": "memory_manager"})
     def get_memory_usage_stats(self) -> Dict[str, Any]:
         """Get detailed memory usage statistics."""
         return {

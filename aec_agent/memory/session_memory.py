@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Union
 from enum import Enum
 
 from pydantic import BaseModel, Field
+from langsmith import traceable
 
 
 logger = logging.getLogger(__name__)
@@ -267,6 +268,7 @@ class SessionMemory:
                 return goal
         return None
     
+    @traceable(name="_archive_goal_data", metadata={"component": "session_memory"})
     def _archive_goal_data(self, goal: Goal) -> None:
         """
         Archive a goal's data (tool_history, subtasks, context).
@@ -871,6 +873,7 @@ class SessionMemory:
         
         return False
     
+    @traceable(name="compact_session_memory", metadata={"component": "session_memory"})
     def compact_session_memory(self) -> Dict[str, Any]:
         """
         Compact session memory by applying goal-based archiving and cleanup.
