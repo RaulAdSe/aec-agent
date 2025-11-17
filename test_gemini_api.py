@@ -48,9 +48,32 @@ def test_gemini_api():
                 print(f"\n🤖 Testing with model: {model_name}")
                 
                 try:
-                    model = genai.GenerativeModel(model_name)
+                    # Try with safety settings disabled
+                    safety_settings = [
+                        {
+                            "category": "HARM_CATEGORY_HARASSMENT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                        {
+                            "category": "HARM_CATEGORY_HATE_SPEECH", 
+                            "threshold": "BLOCK_NONE"
+                        },
+                        {
+                            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                        {
+                            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            "threshold": "BLOCK_NONE"
+                        }
+                    ]
                     
-                    test_prompt = "Explain what analyzing building doors means in construction compliance."
+                    model = genai.GenerativeModel(
+                        model_name,
+                        safety_settings=safety_settings
+                    )
+                    
+                    test_prompt = "Briefly explain analyzing building doors for compliance."
                     
                     response = model.generate_content(
                         test_prompt,

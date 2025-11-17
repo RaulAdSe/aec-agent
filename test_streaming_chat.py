@@ -52,8 +52,9 @@ st.session_state.processed_ifc_files = {}
 st.session_state.uploaded_pdfs = {}
 st.session_state.pdf_rag_manager = MagicMock()
 
-# Set up environment for Gemini (mock or use real API)
-os.environ.setdefault("GEMINI_API_KEY", "test_key")
+# Load environment variables for OpenAI
+from dotenv import load_dotenv
+load_dotenv()
 
 def test_streaming_functionality():
     """Test the streaming response generation."""

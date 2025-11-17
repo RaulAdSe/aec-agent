@@ -13,114 +13,83 @@ from pathlib import Path
 from aec_agent.utils.ifc_to_json import IFCToJSONConverter
 from services.pdf_rag_manager import PDFRAGManager
 from services.session_manager import SessionManager
-import google.generativeai as genai
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Initialize Gemini for dynamic insights
-def setup_gemini():
-    """Setup Gemini for dynamic reasoning insights."""
-    api_key = os.getenv("GEMINI_API_KEY")
+# Initialize OpenAI for dynamic insights  
+def setup_openai():
+    """Setup OpenAI for dynamic reasoning insights."""
+    api_key = os.getenv("OPENAI_API_KEY")
     if api_key:
         try:
-            genai.configure(api_key=api_key)
-            return genai.GenerativeModel("models/gemini-2.5-flash")  # Updated model name
+            return True
         except:
-            return None
-    return None
+            return False
+    return False
 
-def generate_dynamic_insight(action, context, quick_model=None):
-    """Generate dynamic LLM-powered insight about current analysis step with intelligent fallbacks."""
+def generate_dynamic_insight(action, context, openai_available=False):
+    """Generate dynamic LLM-powered insight about current analysis step."""
     
-    # Smart fallbacks with specific insights based on context
-    if "Analyzing Question" in action:
-        if "door" in context.lower():
-            fallback = "Examining door-related compliance requirements including accessibility, width standards, and fire safety"
-        elif "space" in context.lower() or "room" in context.lower():
-            fallback = "Analyzing space usage, occupancy requirements, and accessibility compliance standards"
-        elif "stair" in context.lower():
-            fallback = "Evaluating stair safety including rise/run ratios, handrails, and egress requirements"
-        elif "wall" in context.lower():
-            fallback = "Checking wall specifications for fire ratings, structural integrity, and thermal properties"
-        elif "compliance" in context.lower():
-            fallback = "Cross-referencing building elements against relevant legal and safety standards"
-        else:
-            fallback = "Parsing your question to identify specific building elements and compliance requirements"
-    
-    elif "Data Source Check" in action:
-        if "No uploaded files" in context:
-            fallback = "No building models or legal documents available - will provide general guidance based on standard codes"
-        else:
-            fallback = f"Found comprehensive data sources - ready to perform detailed compliance analysis with {context.replace('Found: ', '')}"
-    
-    elif "Tool Selection" in action:
-        if "IFC Building Data Analyzer" in context:
-            fallback = "Selected IFC analysis tools to extract building geometry, materials, and structural elements"
-        elif "Legal Document Search" in context:
-            fallback = "Activated legal document search to find relevant regulations and compliance requirements"
-        else:
-            fallback = "Choosing appropriate analysis methods based on available data and question complexity"
-    
-    elif "Building Overview" in context or "Building Analysis" in action:
-        fallback = f"Scanning building model architecture to identify key structural and safety elements"
-    
-    elif "Space" in action:
-        fallback = "Examining space classifications, areas, and occupancy requirements for accessibility compliance"
-    
-    elif "Door" in action:
-        fallback = "Evaluating door dimensions, hardware, and placement against ADA and fire safety standards"
-    
-    elif "Stair" in action:
-        if "distance" in context.lower():
-            fallback = "Computing spatial distances between stairs to verify emergency egress requirements"
-        else:
-            fallback = "Analyzing stair geometry, handrails, and code compliance for safe vertical circulation"
-    
-    elif "Wall" in action:
-        fallback = "Categorizing wall types and checking fire ratings, insulation, and structural specifications"
-    
-    elif "Legal Document Search" in action:
-        fallback = "Searching regulatory documents for specific compliance requirements and safety standards"
-    
-    elif "RAG Processing" in action:
-        fallback = "Processing legal text to extract relevant regulations and compliance guidelines"
-    
-    elif "Response Preparation" in action:
-        fallback = "Synthesizing analysis results into actionable compliance insights and recommendations"
-    
-    else:
-        fallback = f"Processing {action.lower().replace('🧠', '').replace('🔍', '').replace('🔧', '').replace('⚡', '').replace('📝', '').strip()} with available building data"
-    
-    # Try LLM first, fall back to smart insights
-    if quick_model:
+    # If OpenAI is available, generate real insights
+    if openai_available:
         try:
-            # Create insight prompt based on action
+            # Create specific prompts based on action type
             if "Analyzing Question" in action:
-                prompt = f"Briefly explain what you're analyzing about this building compliance question: '{context[:60]}'"
+                prompt = f"In 1 sentence, explain what an AEC compliance agent is analyzing when a user asks: '{context[:80]}'. Focus on building safety and code compliance."
             elif "Data Source Check" in action:
-                prompt = f"Explain what building data sources you found: {context}"
+                prompt = f"In 1 sentence, explain what it means for a building compliance system to find: {context}"
             elif "Tool Selection" in action:
-                prompt = f"Explain why these analysis tools were selected: {context}"
+                prompt = f"In 1 sentence, explain why a building compliance agent would select these tools: {context}"
+            elif "Building Overview" in action or "Building Analysis" in action:
+                prompt = f"In 1 sentence, explain what a building compliance expert examines when analyzing: {context}"
+            elif "Space" in action:
+                prompt = f"In 1 sentence, explain what analyzing building spaces means for AEC compliance: {context}"
+            elif "Door" in action:
+                prompt = f"In 1 sentence, explain what door compliance analysis involves in building safety: {context}"
+            elif "Stair" in action:
+                prompt = f"In 1 sentence, explain what stair safety analysis means for building compliance: {context}"
+            elif "Wall" in action:
+                prompt = f"In 1 sentence, explain what wall analysis involves for building compliance: {context}"
+            elif "Legal Document Search" in action:
+                prompt = f"In 1 sentence, explain what searching legal documents for building compliance means: {context}"
+            elif "RAG Processing" in action:
+                prompt = f"In 1 sentence, explain what processing legal regulations for building compliance involves."
+            elif "Response Preparation" in action:
+                prompt = f"In 1 sentence, explain what preparing a building compliance analysis report involves."
             else:
-                prompt = f"Explain this building analysis step: {action} - {context[:60]}"
+                prompt = f"In 1 sentence, explain this building compliance analysis step: {action}"
             
-            response = quick_model.generate_content(
-                prompt,
-                generation_config={
-                    "max_output_tokens": 80,
-                    "temperature": 0.2,
-                }
+            # Use OpenAI to generate insight
+            from openai import OpenAI
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "You are an expert in AEC (Architecture, Engineering, Construction) compliance. Provide concise, professional insights about building analysis steps. Keep responses under 120 characters and focus on safety, codes, and regulations."
+                    },
+                    {
+                        "role": "user", 
+                        "content": prompt
+                    }
+                ],
+                max_tokens=50,
+                temperature=0.3
             )
             
-            if response.candidates and response.candidates[0].content:
-                return response.text.strip()
-                
-        except Exception:
+            insight = response.choices[0].message.content.strip()
+            return insight
+            
+        except Exception as e:
+            # If OpenAI fails, we'll use a simple fallback
             pass
     
-    return fallback
+    # Minimal fallback for when LLM is not available
+    return f"Analyzing {action.replace('🧠', '').replace('🔍', '').replace('🔧', '').replace('⚡', '').replace('📝', '').strip().lower()}"
 
 # Set page config
 st.set_page_config(
@@ -410,7 +379,7 @@ def generate_streaming_response(prompt):
     thinking_steps = []
     
     # Setup dynamic insight generation
-    quick_model = setup_gemini()
+    openai_available = setup_openai()
     
     # Create containers for progress indicators
     progress_container = st.empty()
@@ -425,7 +394,7 @@ def generate_streaming_response(prompt):
     analysis_insight = generate_dynamic_insight(
         "Analyzing Question", 
         prompt[:100], 
-        quick_model
+        openai_available
     )
     
     thinking_steps.append({
@@ -455,7 +424,7 @@ def generate_streaming_response(prompt):
     data_insight = generate_dynamic_insight(
         "Data Source Check",
         data_context,
-        quick_model
+        openai_available
     )
     
     thinking_steps.append({
@@ -482,7 +451,7 @@ def generate_streaming_response(prompt):
     tool_insight = generate_dynamic_insight(
         "Tool Selection",
         tool_context,
-        quick_model
+        openai_available
     )
     
     thinking_steps.append({
@@ -503,7 +472,7 @@ def generate_streaming_response(prompt):
     analysis_insight = generate_dynamic_insight(
         "Building Analysis",
         analysis_context,
-        quick_model
+        openai_available
     )
     
     with thinking_container:
@@ -511,7 +480,7 @@ def generate_streaming_response(prompt):
     time.sleep(0.9)
     
     # Generate the actual response with dynamic insights
-    response = generate_detailed_response(prompt, thinking_steps, quick_model)
+    response = generate_detailed_response(prompt, thinking_steps, openai_available)
     
     # Step 5: Finalizing response
     with progress_container:
@@ -521,7 +490,7 @@ def generate_streaming_response(prompt):
     final_insight = generate_dynamic_insight(
         "Response Preparation",
         f"Compiling comprehensive analysis for: {prompt[:50]}",
-        quick_model
+        openai_available
     )
     
     thinking_steps.append({
@@ -539,7 +508,7 @@ def generate_streaming_response(prompt):
     
     return response, thinking_steps
 
-def generate_detailed_response(prompt, thinking_steps, quick_model=None):
+def generate_detailed_response(prompt, thinking_steps, openai_available=False):
     """Generate detailed response with dynamic LLM-powered tool insights."""
     # Check if we have processed IFC files and PDFs
     processed_files = st.session_state.processed_ifc_files
@@ -553,7 +522,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
             building_insight = generate_dynamic_insight(
                 "Building Overview",
                 building_context,
-                quick_model
+                openai_available
             )
             thinking_steps.append({
                 "action": "📋 Building Overview",
@@ -574,7 +543,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
             element_insight = generate_dynamic_insight(
                 "Element Count",
                 element_context,
-                quick_model
+                openai_available
             )
             thinking_steps.append({
                 "action": "🔢 Element Count",
@@ -595,7 +564,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
             space_insight = generate_dynamic_insight(
                 "Space Analyzer",
                 space_context,
-                quick_model
+                openai_available
             )
             thinking_steps.append({
                 "action": "🏠 IFC Space Analyzer",
@@ -611,7 +580,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
             discovery_insight = generate_dynamic_insight(
                 "Space Discovery",
                 discovery_context,
-                quick_model
+                openai_available
             )
             thinking_steps.append({
                 "action": "📊 Space Discovery",
@@ -662,7 +631,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
             door_insight = generate_dynamic_insight(
                 "Door Analyzer",
                 door_context,
-                quick_model
+                openai_available
             )
             thinking_steps.append({
                 "action": "🚪 IFC Door Analyzer",
@@ -678,7 +647,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
             compliance_insight = generate_dynamic_insight(
                 "Door Compliance Check",
                 compliance_context,
-                quick_model
+                openai_available
             )
             thinking_steps.append({
                 "action": "📏 Compliance Check",
@@ -717,7 +686,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
             stair_insight = generate_dynamic_insight(
                 "Stair Analyzer",
                 stair_context,
-                quick_model
+                openai_available
             )
             thinking_steps.append({
                 "action": "🪜 IFC Stair Analyzer",
@@ -733,7 +702,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
                 distance_insight = generate_dynamic_insight(
                     "Distance Calculator",
                     distance_context,
-                    quick_model
+                    openai_available
                 )
                 thinking_steps.append({
                     "action": "📐 Distance Calculator",
@@ -744,7 +713,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
                 analysis_insight = generate_dynamic_insight(
                     "Stair Analysis",
                     analysis_context,
-                    quick_model
+                    openai_available
                 )
                 thinking_steps.append({
                     "action": "📊 Stair Analysis",
@@ -814,7 +783,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
                 legal_insight = generate_dynamic_insight(
                     "Legal Document Search",
                     legal_context,
-                    quick_model
+                    openai_available
                 )
                 thinking_steps.append({
                     "action": "📚 Legal Document Search",
@@ -829,7 +798,7 @@ def generate_detailed_response(prompt, thinking_steps, quick_model=None):
                 rag_insight = generate_dynamic_insight(
                     "RAG Processing",
                     rag_context,
-                    quick_model
+                    openai_available
                 )
                 thinking_steps.append({
                     "action": "🔍 RAG Processing",
