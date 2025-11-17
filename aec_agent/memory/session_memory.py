@@ -29,10 +29,39 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class GoalStatus(str, Enum):
+    """Status of a goal."""
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class Goal(BaseModel):
+    """Represents a goal in the session."""
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    goal_text: str = Field(..., description="The goal description")
+    status: GoalStatus = Field(default=GoalStatus.ACTIVE)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: Optional[datetime] = Field(default=None)
+    
+    # Summary of goal's execution (created when goal completes)
+    tool_executions_count: int = 0
+    subtasks_count: int = 0
+    success_rate: float = 1.0
+    
+    # Summarized data (created when goal completes)
+    tool_history_summary: Optional[Dict[str, Any]] = None
+    subtasks_summary: Optional[Dict[str, Any]] = None
+    context_summary: Optional[str] = None
+
+
 class SubTask(BaseModel):
     """Individual subtask within a session."""
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    goal_id: Optional[str] = Field(default=None, description="ID of goal this subtask belongs to")
     name: str = Field(..., description="Description of the subtask")
     status: TaskStatus = Field(default=TaskStatus.PENDING, description="Current status")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -52,6 +81,7 @@ class ToolExecution(BaseModel):
     """Record of a tool execution."""
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    goal_id: Optional[str] = Field(default=None, description="ID of goal this execution belongs to")
     tool_name: str = Field(..., description="Name of the tool executed")
     arguments: Dict[str, Any] = Field(default_factory=dict, description="Arguments passed to tool")
     result_summary: Optional[str] = Field(default=None, description="Summary of tool result")
@@ -67,9 +97,14 @@ class SessionState(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
-    # High-level session context
-    goal: Optional[str] = Field(default=None, description="Main goal for this session")
+    # High-level session context (legacy - keeping for backward compatibility)
+    goal: Optional[str] = Field(default=None, description="Main goal for this session (legacy)")
     context: str = Field(default="", description="Additional context information")
+    
+    # Goal tracking (new goal-based system)
+    current_goal_id: Optional[str] = Field(default=None, description="ID of currently active goal")
+    goals: List[Goal] = Field(default_factory=list, description="All goals (active + completed)")
+    completed_goals: List[Goal] = Field(default_factory=list, description="Completed goals with summaries")
     
     # File tracking
     active_files: List[str] = Field(default_factory=list, description="Currently active/opened files")
@@ -129,12 +164,41 @@ class SessionMemory:
         self.logger.info(f"SessionMemory initialized with session_id={self.state.session_id}")
     
     # Goal and Context Management
-    def set_goal(self, goal: str, context: str = "") -> None:
-        """Set the main goal for this session."""
-        self.state.goal = goal
+    def set_goal(self, goal: str, context: str = "") -> str:
+        """
+        Set a new goal for the session.
+        
+        If there's an active goal, archive it first.
+        Then create a new goal and set it as active.
+        
+        Args:
+            goal: Goal description
+            context: Additional context for the goal
+            
+        Returns:
+            ID of the new goal
+        """
+        # Archive previous goal if exists
+        if self.state.current_goal_id:
+            self._archive_current_goal()
+        
+        # Create new goal
+        new_goal = Goal(
+            goal_text=goal,
+            status=GoalStatus.ACTIVE
+        )
+        self.state.goals.append(new_goal)
+        self.state.current_goal_id = new_goal.id
+        
+        # Reset context for new goal
         self.state.context = context
         self.state.update_timestamp()
-        self.logger.info(f"Session goal set: {goal[:50]}...")
+        
+        # Maintain backward compatibility
+        self.state.goal = goal
+        
+        self.logger.info(f"New goal set: {goal[:50]}... (goal_id: {new_goal.id})")
+        return new_goal.id
     
     def get_goal(self) -> Optional[str]:
         """Get the current session goal."""
@@ -147,6 +211,196 @@ class SessionMemory:
         else:
             self.state.context = additional_context
         self.state.update_timestamp()
+    
+    def complete_current_goal(self, success: bool = True) -> None:
+        """
+        Mark the current goal as completed and archive it.
+        
+        Args:
+            success: Whether the goal was completed successfully
+        """
+        if not self.state.current_goal_id:
+            self.logger.warning("No active goal to complete")
+            return
+        
+        goal = self._get_goal_by_id(self.state.current_goal_id)
+        if not goal:
+            return
+        
+        goal.status = GoalStatus.COMPLETED if success else GoalStatus.FAILED
+        goal.completed_at = datetime.now(timezone.utc)
+        
+        # Archive the goal's data
+        self._archive_goal_data(goal)
+        
+        # Move to completed goals
+        self.state.completed_goals.append(goal)
+        self.state.current_goal_id = None
+        
+        self.logger.info(f"Goal completed: {goal.goal_text[:50]}... (success: {success})")
+    
+    def _archive_current_goal(self) -> None:
+        """Archive the current active goal when a new goal starts."""
+        if not self.state.current_goal_id:
+            return
+        
+        goal = self._get_goal_by_id(self.state.current_goal_id)
+        if not goal:
+            return
+        
+        # Mark as completed (or cancelled if we're replacing it)
+        goal.status = GoalStatus.COMPLETED
+        goal.completed_at = datetime.now(timezone.utc)
+        
+        # Archive the goal's data
+        self._archive_goal_data(goal)
+        
+        # Move to completed goals
+        self.state.completed_goals.append(goal)
+        
+        self.logger.info(f"Archived previous goal: {goal.goal_text[:50]}...")
+    
+    def _get_goal_by_id(self, goal_id: str) -> Optional[Goal]:
+        """Get a goal by its ID."""
+        for goal in self.state.goals:
+            if goal.id == goal_id:
+                return goal
+        return None
+    
+    def _archive_goal_data(self, goal: Goal) -> None:
+        """
+        Archive a goal's data (tool_history, subtasks, context).
+        
+        Creates summaries and removes detailed data from active lists.
+        """
+        goal_id = goal.id
+        
+        # Get all tool executions for this goal
+        goal_tools = [t for t in self.state.tool_history if t.goal_id == goal_id]
+        
+        # Get all subtasks for this goal
+        goal_subtasks = [s for s in self.state.subtasks if s.goal_id == goal_id]
+        
+        # Create summaries using rule-based approach
+        if goal_tools:
+            goal.tool_history_summary = self._create_tool_history_summary(goal_tools)
+            goal.tool_executions_count = len(goal_tools)
+            goal.success_rate = sum(1 for t in goal_tools if t.success) / len(goal_tools)
+        
+        if goal_subtasks:
+            goal.subtasks_summary = self._create_subtask_summary(goal_subtasks)
+            goal.subtasks_count = len(goal_subtasks)
+        
+        # Archive context
+        if self.state.context:
+            goal.context_summary = self.state.context[:500]  # Keep first 500 chars
+        
+        # Remove from active lists (keep only for active goal)
+        self.state.tool_history = [t for t in self.state.tool_history if t.goal_id != goal_id]
+        self.state.subtasks = [s for s in self.state.subtasks if s.goal_id != goal_id]
+        
+        self.logger.info(
+            f"Archived goal data: {len(goal_tools)} tools, {len(goal_subtasks)} subtasks"
+        )
+    
+    def _create_tool_history_summary(self, executions: List[ToolExecution]) -> Dict[str, Any]:
+        """
+        Create a statistical summary of tool executions.
+        
+        Returns a dict that can be stored as a summary in the goal.
+        """
+        if not executions:
+            return {}
+        
+        # Group by tool name
+        by_tool = {}
+        for exec in executions:
+            tool = exec.tool_name
+            if tool not in by_tool:
+                by_tool[tool] = []
+            by_tool[tool].append(exec)
+        
+        # Calculate statistics
+        total = len(executions)
+        successful = sum(1 for e in executions if e.success)
+        success_rate = successful / total if total > 0 else 0.0
+        
+        # Tool usage counts
+        tool_counts = {tool: len(execs) for tool, execs in by_tool.items()}
+        
+        # Error patterns
+        errors = [e.error_message for e in executions if e.error_message]
+        error_patterns = {}
+        for error in errors:
+            # Extract error type (first part before colon or common patterns)
+            error_type = error.split(':')[0] if ':' in error else error[:50]
+            error_patterns[error_type] = error_patterns.get(error_type, 0) + 1
+        
+        # Time range
+        times = [e.execution_time for e in executions if e.execution_time]
+        time_range = {}
+        if times:
+            time_range = {
+                "first": min(times).isoformat(),
+                "last": max(times).isoformat()
+            }
+        
+        return {
+            "_type": "tool_history_summary",
+            "total_executions": total,
+            "success_rate": success_rate,
+            "tool_usage": tool_counts,
+            "error_patterns": error_patterns,
+            "time_range": time_range,
+            "summary_created_at": datetime.now(timezone.utc).isoformat()
+        }
+    
+    def _create_subtask_summary(self, tasks: List[SubTask]) -> Dict[str, Any]:
+        """
+        Create a theme-based summary of subtasks.
+        
+        Returns a dict that can be stored as a summary in the goal.
+        """
+        if not tasks:
+            return {}
+        
+        # Group by common patterns in task names
+        # Extract key themes (e.g., "Load", "Analyze", "Check")
+        task_themes = {}
+        for task in tasks:
+            # Simple heuristic: first word or common prefix
+            first_word = task.name.split()[0] if task.name else "Other"
+            if first_word not in task_themes:
+                task_themes[first_word] = []
+            task_themes[first_word].append(task.name)
+        
+        # Calculate statistics
+        total_tasks = len(tasks)
+        status_counts = {}
+        for task in tasks:
+            status = task.status
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
+        # Theme counts
+        theme_counts = {theme: len(names) for theme, names in task_themes.items()}
+        
+        # Time range
+        times = [t.updated_at for t in tasks if t.updated_at]
+        time_range = {}
+        if times:
+            time_range = {
+                "first": min(times).isoformat(),
+                "last": max(times).isoformat()
+            }
+        
+        return {
+            "_type": "subtask_summary",
+            "total_tasks": total_tasks,
+            "status_distribution": status_counts,
+            "task_themes": theme_counts,
+            "time_range": time_range,
+            "summary_created_at": datetime.now(timezone.utc).isoformat()
+        }
     
     # File Management
     def add_active_file(self, file_path: str) -> None:
@@ -173,7 +427,7 @@ class SessionMemory:
     # Task Management
     def add_subtask(self, name: str, dependencies: Optional[List[str]] = None) -> str:
         """
-        Add a new subtask to the session.
+        Add a new subtask to the session, automatically associating it with current goal.
         
         Args:
             name: Description of the subtask
@@ -182,10 +436,14 @@ class SessionMemory:
         Returns:
             ID of the created subtask
         """
-        subtask = SubTask(name=name, dependencies=dependencies or [])
+        subtask = SubTask(
+            goal_id=self.state.current_goal_id,  # Automatically set
+            name=name, 
+            dependencies=dependencies or []
+        )
         self.state.subtasks.append(subtask)
         self.state.update_timestamp()
-        self.logger.info(f"Added subtask: {name}")
+        self.logger.info(f"Added subtask: {name} (goal_id: {subtask.goal_id})")
         return subtask.id
     
     def update_subtask_status(self, subtask_id: str, status: TaskStatus, notes: Optional[str] = None) -> bool:
@@ -238,7 +496,7 @@ class SessionMemory:
         error_message: Optional[str] = None
     ) -> str:
         """
-        Record a tool execution.
+        Record a tool execution, automatically associating it with current goal.
         
         Args:
             tool_name: Name of the executed tool
@@ -251,6 +509,7 @@ class SessionMemory:
             ID of the tool execution record
         """
         execution = ToolExecution(
+            goal_id=self.state.current_goal_id,  # Automatically set
             tool_name=tool_name,
             arguments=arguments,
             success=success,
@@ -259,16 +518,76 @@ class SessionMemory:
         )
         self.state.tool_history.append(execution)
         self.state.update_timestamp()
-        self.logger.debug(f"Recorded tool execution: {tool_name}")
+        self.logger.debug(f"Recorded tool execution: {tool_name} (goal_id: {execution.goal_id})")
         return execution.id
     
-    def get_recent_tool_executions(self, limit: int = 10) -> List[ToolExecution]:
-        """Get the most recent tool executions."""
+    def get_recent_tool_executions(self, limit: int = 10, goal_id: Optional[str] = None) -> List[ToolExecution]:
+        """
+        Get the most recent tool executions.
+        
+        Args:
+            limit: Maximum number of executions to return
+            goal_id: Optional goal ID to filter by. If None, uses current goal.
+        """
+        target_goal_id = goal_id or self.state.current_goal_id
+        
+        if target_goal_id:
+            # Filter by goal
+            executions = [t for t in self.state.tool_history if t.goal_id == target_goal_id]
+        else:
+            # No goal filter, return all
+            executions = self.state.tool_history
+        
         return sorted(
-            self.state.tool_history, 
+            executions, 
             key=lambda x: x.execution_time, 
             reverse=True
         )[:limit]
+    
+    def get_current_goal_subtasks(self) -> List[SubTask]:
+        """Get subtasks for the current goal."""
+        if not self.state.current_goal_id:
+            return []
+        
+        return [
+            task for task in self.state.subtasks 
+            if task.goal_id == self.state.current_goal_id
+        ]
+    
+    def get_completed_goals_summary(self) -> List[Dict[str, Any]]:
+        """Get summaries of completed goals."""
+        return [
+            {
+                "goal_id": goal.id,
+                "goal_text": goal.goal_text,
+                "status": goal.status,
+                "completed_at": goal.completed_at,
+                "tool_executions_count": goal.tool_executions_count,
+                "subtasks_count": goal.subtasks_count,
+                "success_rate": goal.success_rate,
+                "tool_history_summary": goal.tool_history_summary,
+                "subtasks_summary": goal.subtasks_summary
+            }
+            for goal in self.state.completed_goals
+        ]
+    
+    def get_current_goal_info(self) -> Optional[Dict[str, Any]]:
+        """Get information about the current active goal."""
+        if not self.state.current_goal_id:
+            return None
+        
+        goal = self._get_goal_by_id(self.state.current_goal_id)
+        if not goal:
+            return None
+        
+        return {
+            "goal_id": goal.id,
+            "goal_text": goal.goal_text,
+            "status": goal.status,
+            "created_at": goal.created_at,
+            "current_subtasks": len(self.get_current_goal_subtasks()),
+            "current_tool_executions": len([t for t in self.state.tool_history if t.goal_id == goal.id])
+        }
     
     # Building Data Context (AEC-specific)
     def set_building_data(self, data_path: str, context: Optional[Dict[str, Any]] = None) -> None:
@@ -468,3 +787,212 @@ class SessionMemory:
         old_session_id = self.state.session_id
         self.state = SessionState()
         self.logger.info(f"Session cleared (was {old_session_id})")
+    
+    # Token-Based Memory Management
+    def estimate_tokens(self, text: str) -> int:
+        """
+        Estimate token count for text.
+        
+        Simple heuristic: ~4 characters per token (conservative estimate).
+        For more accuracy, could use tiktoken library.
+        """
+        return len(text) // 4
+    
+    def estimate_session_memory_tokens(self) -> int:
+        """
+        Estimate total token count for session memory.
+        
+        Includes:
+        - tool_history (all executions)
+        - subtasks (all tasks)
+        - context string
+        - completed_goals summaries
+        - active_files, modified_files (small)
+        - accumulated_context
+        """
+        total = 0
+        
+        # Tool history
+        for exec in self.state.tool_history:
+            total += self.estimate_tokens(str(exec.model_dump()))
+        
+        # Subtasks
+        for task in self.state.subtasks:
+            total += self.estimate_tokens(str(task.model_dump()))
+        
+        # Context
+        total += self.estimate_tokens(self.state.context)
+        
+        # Completed goals summaries
+        for goal in self.state.completed_goals:
+            if goal.tool_history_summary:
+                total += self.estimate_tokens(str(goal.tool_history_summary))
+            if goal.subtasks_summary:
+                total += self.estimate_tokens(str(goal.subtasks_summary))
+            if goal.context_summary:
+                total += self.estimate_tokens(goal.context_summary)
+        
+        # Accumulated context
+        total += self.estimate_tokens(str(self.state.accumulated_context))
+        
+        return total
+    
+    def check_and_trigger_compaction(self, session_token_cap: int = 12000, 
+                                   session_token_warning_threshold: int = 10000) -> bool:
+        """
+        Check if memory exceeds token cap and trigger compaction if needed.
+        
+        Args:
+            session_token_cap: Maximum tokens allowed before triggering compaction
+            session_token_warning_threshold: Warning threshold
+        
+        Returns:
+            True if compaction was triggered, False otherwise
+        """
+        current_tokens = self.estimate_session_memory_tokens()
+        
+        # Check if we've exceeded the cap
+        if current_tokens > session_token_cap:
+            self.logger.warning(
+                f"Session memory token cap exceeded: {current_tokens} > {session_token_cap}. "
+                f"Triggering compaction... (Memory should stay under cap to leave room for prompts/responses)"
+            )
+            
+            # Trigger comprehensive compaction
+            self.compact_session_memory()
+            return True
+        
+        # Warning threshold
+        elif current_tokens > session_token_warning_threshold:
+            self.logger.info(
+                f"Session memory approaching token cap: {current_tokens}/{session_token_cap} "
+                f"({current_tokens/session_token_cap*100:.1f}%)"
+            )
+        
+        return False
+    
+    def compact_session_memory(self) -> Dict[str, Any]:
+        """
+        Compact session memory by applying goal-based archiving and cleanup.
+        
+        Note: Most compaction happens automatically through goal lifecycle.
+        This method handles additional cleanup for edge cases.
+        
+        Returns:
+            Dict with compaction statistics
+        """
+        stats = {
+            "tool_history_before": len(self.state.tool_history),
+            "subtasks_before": len(self.state.subtasks),
+            "active_files_before": len(self.state.active_files),
+            "modified_files_before": len(self.state.modified_files),
+            "context_length_before": len(self.state.context),
+            "accumulated_context_before": len(self.state.accumulated_context),
+            "completed_goals_before": len(self.state.completed_goals)
+        }
+        
+        # Compact file tracking
+        self._compact_file_tracking()
+        
+        # Compact context if too long
+        self._compact_context()
+        
+        # Compact accumulated context
+        self._compact_accumulated_context()
+        
+        # Compact completed goals if needed
+        self._compact_completed_goals()
+        
+        stats.update({
+            "tool_history_after": len(self.state.tool_history),
+            "subtasks_after": len(self.state.subtasks),
+            "active_files_after": len(self.state.active_files),
+            "modified_files_after": len(self.state.modified_files),
+            "context_length_after": len(self.state.context),
+            "accumulated_context_after": len(self.state.accumulated_context),
+            "completed_goals_after": len(self.state.completed_goals)
+        })
+        
+        self.logger.info(f"Session memory compacted. Token savings: {stats}")
+        return stats
+    
+    def _compact_file_tracking(self, keep_active: int = 10, keep_modified: int = 20) -> None:
+        """Compact file tracking lists."""
+        # Active files: simple truncation (FIFO)
+        if len(self.state.active_files) > keep_active:
+            removed = self.state.active_files[:-keep_active]
+            self.state.active_files = self.state.active_files[-keep_active:]
+            self.logger.debug(f"Removed {len(removed)} old active files")
+        
+        # Modified files: keep recent
+        if len(self.state.modified_files) > keep_modified:
+            recent_modified = self.state.modified_files[-keep_modified:]
+            older_modified = self.state.modified_files[:-keep_modified]
+            self.state.modified_files = recent_modified
+            self.logger.debug(f"Compacted modified files: {len(older_modified)} older files removed")
+        
+        self.state.update_timestamp()
+    
+    def _compact_context(self, max_length: int = 2000) -> None:
+        """Compact context string if it exceeds max_length."""
+        if len(self.state.context) <= max_length:
+            return
+        
+        # Split by newlines to preserve structure
+        lines = self.state.context.split('\n')
+        
+        # Keep recent lines (last N lines that fit in limit)
+        recent_lines = []
+        current_length = 0
+        for line in reversed(lines):
+            if current_length + len(line) + 1 <= max_length * 0.7:  # Use 70% for recent
+                recent_lines.insert(0, line)
+                current_length += len(line) + 1
+            else:
+                break
+        
+        # Older lines to summarize
+        older_lines = lines[:len(lines) - len(recent_lines)]
+        
+        if older_lines:
+            # Simple truncation approach
+            older_summary = f"[Previous context summarized: {len(older_lines)} lines]\n"
+            self.state.context = older_summary + '\n'.join(recent_lines)
+            self.logger.info(f"Compacted context: {len(older_lines)} lines summarized")
+        
+        self.state.update_timestamp()
+    
+    def _compact_accumulated_context(self, max_entries: int = 50) -> None:
+        """Compact accumulated_context dict."""
+        if len(self.state.accumulated_context) <= max_entries:
+            return
+        
+        # Convert to list of (key, value) tuples
+        items = list(self.state.accumulated_context.items())
+        
+        # Keep most recent N entries
+        keep_items = items[-max_entries:]
+        
+        # Rebuild dict
+        self.state.accumulated_context = dict(keep_items)
+        
+        self.logger.info(
+            f"Compacted accumulated_context: {len(items) - max_entries} entries removed, "
+            f"{max_entries} kept"
+        )
+        self.state.update_timestamp()
+    
+    def _compact_completed_goals(self, keep_recent: int = 10) -> None:
+        """Compact completed goals list if it gets too large."""
+        if len(self.state.completed_goals) <= keep_recent:
+            return
+        
+        recent = self.state.completed_goals[-keep_recent:]
+        older = self.state.completed_goals[:-keep_recent]
+        
+        self.state.completed_goals = recent
+        
+        self.logger.info(
+            f"Compacted completed goals: removed {len(older)} older goals, "
+            f"keeping {len(recent)} recent"
+        )

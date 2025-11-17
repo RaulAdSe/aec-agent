@@ -153,8 +153,14 @@ Context information: {context}
 Break down the goal into 3-6 specific tasks that:
 1. Follow logical dependencies (load data before analysis)
 2. Are concrete and actionable
-3. Use the available tools effectively
-4. Lead to achieving the stated goal
+3. **Each task must be achievable with exactly ONE tool call** - this is a critical constraint
+4. Use the available tools effectively
+5. Lead to achieving the stated goal
+
+**IMPORTANT CONSTRAINT**: Each task you create must be accomplishable by executing exactly ONE tool. If a goal requires multiple tool calls, break it into separate tasks with dependencies. For example:
+- ❌ Bad: "Get all doors and calculate their distances" (requires 2 tools: get_all_elements + calculate_distances)
+- ✅ Good: "Get all door elements" → Task 1 (uses get_all_elements)
+           "Calculate distances between doors" → Task 2 (uses calculate_distances, depends on Task 1)
 
 Return ONLY a JSON list of task objects like this:
 [
