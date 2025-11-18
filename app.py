@@ -172,6 +172,77 @@ class StreamlitLogHandler(logging.Handler):
         if 'reasoning completed' in message_lower:
             return 'Analysis complete'
         
+        # New flexible recovery system messages
+        if 'llm recovery decision:' in message_lower:
+            strategy = message.split('llm recovery decision:')[-1].strip()
+            # Shorten LLM response for display
+            if len(strategy) > 80:
+                strategy = strategy[:77] + "..."
+            return f'🧠 Recovery analysis: {strategy}'
+        
+        if 'modified task input:' in message_lower:
+            modifications = message.split('modified task input:')[-1].strip()
+            return f'🔧 Task modified: {modifications}'
+        
+        if 'switching to alternative tool:' in message_lower:
+            tool = message.split('switching to alternative tool:')[-1].strip()
+            return f'🔄 Switching to: {tool}'
+        
+        if 'task requires goal replanning:' in message_lower:
+            task = message.split('task requires goal replanning:')[-1].strip()
+            return f'📋 Replanning needed for: {task}'
+        
+        if 'gracefully skipping task:' in message_lower:
+            task = message.split('gracefully skipping task:')[-1].strip()
+            return f'⏭️ Skipping: {task}'
+        
+        if 'attempting recovery for planning failure' in message_lower:
+            return '🔄 Recovering from planning failure...'
+        
+        if 'created fallback task:' in message_lower:
+            task = message.split('created fallback task:')[-1].strip()
+            return f'✨ Created fallback: {task}'
+        
+        if 'attempting recovery' in message_lower:
+            if 'parameter recovery' in message_lower:
+                return '🔧 Attempting parameter fix...'
+            elif 'tool recovery' in message_lower:
+                return '🔄 Trying alternative tool...'
+            else:
+                return '🔄 Attempting recovery...'
+        
+        if 'recovery successful' in message_lower:
+            return '✅ Recovery successful'
+        
+        if 'recovery failed' in message_lower:
+            return '⚠️ Recovery failed, trying alternatives...'
+        
+        if 'graceful degradation' in message_lower:
+            return '📉 Providing partial results...'
+        
+        if 'goal replanning' in message_lower or 'replanning' in message_lower:
+            return '🎯 Replanning approach...'
+        
+        if 'skipped non-critical task' in message_lower:
+            task_match = re.search(r"task.*?([A-Z][^:]+)", message)
+            if task_match:
+                task_name = task_match.group(1).strip()
+                return f'⏭️ Skipped optional: {task_name}'
+            return '⏭️ Skipped optional task'
+        
+        # Tool execution failures (show before recovery)
+        if 'tool execution failed' in message_lower:
+            tool_match = re.search(r"for\s+['\"]([^'\"]+)['\"]", message_lower)
+            if tool_match:
+                tool_name = tool_match.group(1)
+                tool_display = self.TOOL_NAMES.get(tool_name, tool_name.replace('_', ' ').title())
+                return f'❌ {tool_display} failed'
+            return '❌ Tool failed'
+        
+        # Task validation failures
+        if 'task validation failed' in message_lower:
+            return '⚠️ Validating results...'
+        
         # Skip other technical messages
         return None
     
@@ -187,7 +258,8 @@ class StreamlitLogHandler(logging.Handler):
             'Tool Planner': 'Planner',
             'Tool Executor': 'Executor',
             'Result Validator': 'Validator',
-            'Reasoning Agent': 'Agent'
+            'Reasoning Agent': 'Agent',
+            'Recovery System': 'Recovery'
         }
         
         return name_map.get(component, component)
