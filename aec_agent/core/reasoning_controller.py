@@ -329,12 +329,11 @@ class ReasoningController:
                 # Analyze the tool failure
                 failure_analysis = self.recovery_system.analyze_failure(
                     task=task,
-                    error_message=result.error_message,
-                    execution_context={
+                    error_result=result,
+                    context={
                         "goal": self.state.goal,
                         "tool_name": tool_name,
-                        "context": self.state.context,
-                        "execution_result": result
+                        "execution_context": self.state.context
                     }
                 )
                 
@@ -344,22 +343,30 @@ class ReasoningController:
                 recovery_attempt = self.recovery_system.attempt_recovery(
                     task=task,
                     failure_analysis=failure_analysis,
-                    available_tools=list(self.executor.tool_registry.keys()),
-                    task_graph=self.state.task_graph
+                    context={
+                        "available_tools": list(self.executor.tool_registry.keys()),
+                        "task_graph": self.state.task_graph,
+                        "goal": self.state.goal,
+                        "execution_context": self.state.context
+                    }
                 )
                 
-                if recovery_attempt.success and recovery_attempt.modified_task:
-                    self.logger.info(f"Attempting tool recovery with strategy: {recovery_attempt.strategy}")
+                if recovery_attempt and recovery_attempt.get("success", False):
+                    self.logger.info(f"Attempting tool recovery with strategy: {recovery_attempt.get('recovery_type', 'unknown')}")
                     
-                    # Retry with modified task if recovery suggests changes
-                    if recovery_attempt.modified_task.tool_sequence != task.tool_sequence:
-                        # Use the recovered tool sequence
-                        recovered_tool = recovery_attempt.modified_task.tool_sequence[0] if recovery_attempt.modified_task.tool_sequence else tool_name
+                    # Check if recovery provides new tool sequence
+                    if "new_tool_sequence" in recovery_attempt and recovery_attempt["new_tool_sequence"]:
+                        new_tool_sequence = recovery_attempt["new_tool_sequence"]
+                        recovered_tool = new_tool_sequence[0] if new_tool_sequence else tool_name
                         
                         self.logger.info(f"Retrying with recovered tool: {recovered_tool}")
+                        
+                        # Update task with new tool sequence
+                        task.tool_sequence = new_tool_sequence
+                        
                         result = self.executor.execute_tool(
                             tool_name=recovered_tool,
-                            task=recovery_attempt.modified_task,
+                            task=task,
                             context={
                                 "goal": self.state.goal, 
                                 "iteration": self.state.iteration,
@@ -484,13 +491,21 @@ class ReasoningController:
         """Try to handle task failure and recover using the recovery system."""
         try:
             # Analyze the failure using the recovery system
+            # Create an error result from validation failure
+            error_result = ExecutionResult(
+                success=False,
+                tool_name="validation",
+                output=None,
+                error_message=validation_result.get("message", "Task validation failed")
+            )
+            
             failure_analysis = self.recovery_system.analyze_failure(
                 task=task,
-                error_message=validation_result.get("message", "Task validation failed"),
-                execution_context={
+                error_result=error_result,
+                context={
                     "goal": self.state.goal,
                     "task_graph": self.state.task_graph,
-                    "context": self.state.context,
+                    "execution_context": self.state.context,
                     "validation_result": validation_result
                 }
             )
@@ -501,43 +516,44 @@ class ReasoningController:
             recovery_attempt = self.recovery_system.attempt_recovery(
                 task=task,
                 failure_analysis=failure_analysis,
-                available_tools=list(self.executor.tool_registry.keys()),
-                task_graph=self.state.task_graph
+                context={
+                    "available_tools": list(self.executor.tool_registry.keys()),
+                    "task_graph": self.state.task_graph,
+                    "goal": self.state.goal,
+                    "execution_context": self.state.context,
+                    "validation_result": validation_result
+                }
             )
             
-            if recovery_attempt.success:
-                self.logger.info(f"Recovery successful for task '{task.name}': {recovery_attempt.strategy}")
+            if recovery_attempt and recovery_attempt.get("success", False):
+                self.logger.info(f"Recovery successful for task '{task.name}': {recovery_attempt.get('recovery_type', 'unknown')}")
                 
-                # Apply recovery actions
-                if recovery_attempt.modified_task:
-                    # Update task with recovered version
-                    self.state.task_graph.update_task(recovery_attempt.modified_task)
-                    self.logger.info(f"Updated task with recovery modifications")
+                # Apply recovery actions based on recovery type
+                recovery_type = recovery_attempt.get("recovery_type", "")
                 
-                if recovery_attempt.strategy == "replan":
+                if recovery_type == "replan" or recovery_attempt.get("requires_goal_replanning", False):
                     # Check if this requires goal-level replanning
-                    if recovery_attempt.get("requires_goal_replanning", False):
-                        try:
-                            self.execution_guardrail.record_replanning_event()
-                            self.logger.info(f"Triggering goal-level replanning due to planning error")
-                            
-                            # Trigger full goal replanning
-                            return self._trigger_goal_replanning(recovery_attempt.get("failed_task_context", {}))
-                            
-                        except GuardrailViolationError as e:
-                            self.logger.error(f"Goal replanning guardrail violation: {e}")
-                            return False
-                            
-                    elif validation_result.get("should_replan", False):
-                        # Check guardrails for task-level replanning
-                        try:
-                            self.execution_guardrail.record_replanning_event()
-                            self.logger.info(f"Triggering task replanning for failed task: {task.name}")
-                            # Mark for task-level replanning - the main reasoning loop will handle it
-                            return True
-                        except GuardrailViolationError as e:
-                            self.logger.error(f"Task replanning guardrail violation: {e}")
-                            return False
+                    try:
+                        self.execution_guardrail.record_replanning_event()
+                        self.logger.info(f"Triggering goal-level replanning due to planning error")
+                        
+                        # Trigger full goal replanning
+                        return self._trigger_goal_replanning(recovery_attempt.get("failed_task_context", {}))
+                        
+                    except GuardrailViolationError as e:
+                        self.logger.error(f"Goal replanning guardrail violation: {e}")
+                        return False
+                        
+                elif validation_result.get("should_replan", False):
+                    # Check guardrails for task-level replanning
+                    try:
+                        self.execution_guardrail.record_replanning_event()
+                        self.logger.info(f"Triggering task replanning for failed task: {task.name}")
+                        # Mark for task-level replanning - the main reasoning loop will handle it
+                        return True
+                    except GuardrailViolationError as e:
+                        self.logger.error(f"Task replanning guardrail violation: {e}")
+                        return False
                 
                 # For other recovery strategies, retry the task
                 return True
