@@ -412,6 +412,8 @@ class ReasoningController:
                         element_type = "spaces"
                     elif "wall" in task.description.lower():
                         element_type = "walls"
+                    elif "stair" in task.description.lower():
+                        element_type = "stairs"
                     
                     if element_type and result.output.get("data"):
                         self.state.context[f"{element_type}_data"] = result.output["data"]

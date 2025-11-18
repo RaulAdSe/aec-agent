@@ -166,12 +166,15 @@ class ReasoningAgent:
         llm_kwargs = {
             "model": self.model_name,
             "temperature": self.temperature,
-            "max_tokens": 4000,
-            "model_kwargs": {
+            "max_tokens": 4000
+        }
+        
+        # Add penalty parameters only for models that support them (not GPT-5)
+        if not self.model_name.startswith("gpt-5"):
+            llm_kwargs["model_kwargs"] = {
                 "frequency_penalty": 0.1,
                 "presence_penalty": 0.1
             }
-        }
         
         if self.callback_manager:
             llm_kwargs["callbacks"] = self.callback_manager
