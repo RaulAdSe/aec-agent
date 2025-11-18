@@ -273,6 +273,104 @@ class ToolPlanner:
             }
         }
         
+        # Known tool limitations for capability detection
+        self.known_limitations = {
+            "find_related": {
+                "unsupported_relationships": ["spatial", "contains"],
+                "supported_relationships": ["adjacent", "connected"]
+            },
+            "validate_rule": {
+                "unsupported_rule_types": ["stair_compliance", "door_compliance"],
+                "supported_rule_types": ["fire_safety", "accessibility", "general"]
+            }
+        }
+        
+    def _check_tool_capability(self, tool_name: str, planned_input: dict) -> bool:
+        """Check if tool can handle the planned input."""
+        limitations = self.known_limitations.get(tool_name, {})
+        
+        # Check relationship type limitations
+        if "relationship_type" in planned_input:
+            unsupported = limitations.get("unsupported_relationships", [])
+            return planned_input["relationship_type"] not in unsupported
+        
+        # Check rule type limitations  
+        if "rule_type" in planned_input:
+            unsupported = limitations.get("unsupported_rule_types", [])
+            return planned_input["rule_type"] not in unsupported
+            
+        return True  # Assume capable if no known limitations
+
+    def _get_capability_safe_alternative(self, primary_tool: str, task: Task) -> str:
+        """Get a capability-safe alternative for the primary tool."""
+        # Map problematic tools to safe alternatives
+        capability_alternatives = {
+            "find_related": "query_elements",
+            "validate_rule": "search_compliance_documents"
+        }
+        
+        return capability_alternatives.get(primary_tool, "query_elements")
+        
+    def select_tool_with_capability_check(self, task: Task, context: dict) -> str:
+        """Select tool and verify it can handle the task."""
+        primary_tool = self._select_primary_tool(task)
+        planned_input = self._prepare_tool_input(primary_tool, task, context)
+        
+        if self._check_tool_capability(primary_tool, planned_input):
+            return primary_tool
+        else:
+            # Use alternative approach
+            return self._get_capability_safe_alternative(primary_tool, task)
+
+    def _select_primary_tool(self, task: Task) -> str:
+        """Select primary tool based on task description."""
+        task_lower = task.description.lower()
+        task_name_lower = task.name.lower()
+        combined = f"{task_name_lower} {task_lower}"
+        
+        # Prioritize load operations
+        if any(keyword in combined for keyword in ["load", "initialize"]):
+            return "load_building_data"
+        
+        # Search operations - prioritize explicit search keywords
+        if any(keyword in combined for keyword in ["search", "documents", "regulations"]):
+            return "search_compliance_documents"
+            
+        # Validation operations (check capabilities first)
+        if any(keyword in combined for keyword in ["validate", "check"]):
+            return "validate_rule"
+            
+        # General compliance operations default to search first
+        if "compliance" in combined:
+            return "search_compliance_documents"
+            
+        # Spatial relationship operations
+        if any(keyword in combined for keyword in ["relationship", "related", "connected", "adjacent"]):
+            return "find_related"
+            
+        # Default fallback
+        return "query_elements"
+
+    def _prepare_tool_input(self, tool_name: str, task: Task, context: dict) -> dict:
+        """Prepare input parameters for tool execution."""
+        planned_input = {}
+        task_lower = task.description.lower()
+        
+        if tool_name == "find_related":
+            # Try to extract relationship type
+            if "spatial" in task_lower:
+                planned_input["relationship_type"] = "spatial"
+            elif "connected" in task_lower:
+                planned_input["relationship_type"] = "connected"
+                
+        elif tool_name == "validate_rule":
+            # Try to extract rule type
+            if "stair_compliance" in task_lower or "stair compliance" in task_lower:
+                planned_input["rule_type"] = "stair_compliance"
+            elif "door_compliance" in task_lower or "door compliance" in task_lower:
+                planned_input["rule_type"] = "door_compliance"
+                
+        return planned_input
     
     @traceable(name="tool_planning", metadata={"component": "tool_planner"})
     def plan_tools(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
