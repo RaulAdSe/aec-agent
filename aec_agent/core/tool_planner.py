@@ -19,6 +19,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import json
+from ..config import AgentConfig
 
 
 class ToolPlanner:
@@ -28,19 +29,32 @@ class ToolPlanner:
     Uses LLM-based reasoning only - no fallback mechanisms.
     """
     
-    def __init__(self, llm=None):
-        """Initialize the tool planner."""
+    def __init__(self, llm=None, config: Optional[AgentConfig] = None):
+        """Initialize the tool planner.
+        
+        Args:
+            llm: Optional pre-configured LLM instance (takes precedence)
+            config: Optional AgentConfig to use for model configuration
+        """
         self.logger = ReasoningUtils.setup_logger(__name__)
         
         # Setup LLM for intelligent tool planning
-        if llm is None:
+        if llm is not None:
+            self.llm = llm
+        elif config is not None:
+            # Use config to create LLM
             self.llm = ChatOpenAI(
-                model="gpt-4o-mini",
+                model=config.llm.get_component_model("tool_planner"),
+                temperature=config.llm.get_component_temperature("tool_planner"),
+                max_tokens=config.llm.get_component_max_tokens("tool_planner")
+            )
+        else:
+            # Fallback to defaults (for backward compatibility)
+            self.llm = ChatOpenAI(
+                model="gpt-5-mini",
                 temperature=0.1,
                 max_tokens=1000
             )
-        else:
-            self.llm = llm
         
         # Tool dependency mapping
         self.tool_dependencies = {
@@ -80,7 +94,7 @@ class ToolPlanner:
                     'get_all_elements("walls")'
                 ]
             },
-            "get_element_properties": {
+            "get_all_properties": {
                 "purpose": "Get all properties and quantities for a specific element",
                 "input": "String: Element ID (obtained from get_all_elements or query_elements)",
                 "output": "Dict with status, data (complete element properties), and logs", 
@@ -90,8 +104,8 @@ class ToolPlanner:
                 "prerequisites": ["Building data loaded", "Valid element ID from get_all_elements or query_elements"],
                 "good_for": ["detailed analysis", "property inspection", "discovering available properties", "understanding element structure"],
                 "examples": [
-                    'get_element_properties("door_123")',
-                    'get_element_properties("space_456")'
+                    'get_all_properties("door_123")',
+                    'get_all_properties("space_456")'
                 ],
                 "workflow": "ALWAYS use get_all_elements() or query_elements() first to obtain element_id"
             },
@@ -101,18 +115,18 @@ class ToolPlanner:
                 "output": "Dict with status, data (filtered list of elements), and logs",
                 "parameters": {
                     "element_type": "Required string: One of 'spaces', 'doors', 'walls', 'slabs', 'stairs'",
-                    "filters": "Optional dict: Filter criteria using property paths (use get_element_properties first to discover paths)"
+                    "filters": "Optional dict: Filter criteria using property paths (use get_all_properties first to discover paths)"
                 },
-                "prerequisites": ["Building data loaded", "For filters: use get_element_properties on sample element to discover property names"],
+                "prerequisites": ["Building data loaded", "For filters: use get_all_properties on sample element to discover property names"],
                 "good_for": ["filtering", "finding specific elements", "complex searches", "conditional filtering"],
                 "examples": [
                     'query_elements("doors", {"properties.IsExternal": True})',
                     'query_elements("spaces", {"quantities.NetFloorArea__gt": 50})',
                     'query_elements("doors", {"quantities.Width__gte": 0.8})'
                 ],
-                "workflow": "1. Use get_element_properties() on sample element to discover available property paths, 2. Use discovered paths in filters"
+                "workflow": "1. Use get_all_properties() on sample element to discover available property paths, 2. Use discovered paths in filters"
             },
-            "calculate_distances": {
+            "calculate": {
                 "purpose": "Calculate distances between building elements or coordinates",
                 "input": "Element IDs or coordinate points",
                 "output": "Distance in meters",
@@ -131,23 +145,7 @@ class ToolPlanner:
                 ],
                 "workflow": "Use for ANY distance measurement task - between elements or coordinates"
             },
-            "calculate_areas": {
-                "purpose": "Calculate areas and volumes of building elements",
-                "input": "Element IDs and calculation type",
-                "output": "Area in square meters or volume in cubic meters",
-                "parameters": {
-                    "element_ids": "List[str]: List of element IDs to calculate for",
-                    "calculation_type": "String: 'area' (default) or 'volume'"
-                },
-                "prerequisites": ["Building data loaded", "Element IDs from get_all_elements"],
-                "good_for": ["area", "areas", "volume", "volumes", "space", "size", "square meters", "cubic meters", "floor area"],
-                "examples": [
-                    'calculate_areas(element_ids=["room_001", "room_002"])',
-                    'calculate_areas(element_ids=["space_123"], calculation_type="volume")'
-                ],
-                "workflow": "Use for area or volume calculations of spaces, rooms, or other elements"
-            },
-            "find_related_elements": {
+            "find_related": {
                 "purpose": "Find elements related to a specific element through spatial or logical relationships",
                 "input": "Element ID (string) and relationship type (string) with optional parameters",
                 "output": "Dict with status, data (list of related elements), and logs",
@@ -167,12 +165,12 @@ class ToolPlanner:
                 "prerequisites": ["Building data loaded", "Valid element ID from get_all_elements or query_elements"],
                 "good_for": ["spatial relationships", "connectivity", "adjacency", "finding connected elements"],
                 "examples": [
-                    'find_related_elements("door_123", "connected_spaces")',
-                    'find_related_elements("space_456", "connected_doors")',
-                    'find_related_elements("space_123", "within_distance", max_distance=5.0, element_types=["doors"])'
+                    'find_related("door_123", "connected_spaces")',
+                    'find_related("space_456", "connected_doors")',
+                    'find_related("space_123", "within_distance", max_distance=5.0, element_types=["doors"])'
                 ]
             },
-            "validate_compliance_rule": {
+            "validate_rule": {
                 "purpose": "Validate elements against compliance rules and building codes",
                 "input": "Rule type (string), element ID (string), and criteria (dict)",
                 "output": "Dict with status, data (validation result with is_valid, message, actual_value), and logs",
@@ -186,37 +184,38 @@ class ToolPlanner:
                         "description": "Check minimum width requirement",
                         "required_criteria": {"min_value": "float: Minimum required width in meters"},
                         "optional_criteria": {"width_property": "string: Property path (default: 'quantities.Width')"},
-                        "example": 'validate_compliance_rule("min_width", "door_123", {"min_value": 0.8})'
+                        "example": 'validate_rule("min_width", "door_123", {"min_value": 0.8})'
                     },
                     "min_area": {
                         "description": "Check minimum area requirement", 
                         "required_criteria": {"min_value": "float: Minimum required area in m²"},
                         "optional_criteria": {"area_property": "string: Property path (default: 'quantities.NetFloorArea')"},
-                        "example": 'validate_compliance_rule("min_area", "room_456", {"min_value": 10.0})'
+                        "example": 'validate_rule("min_area", "room_456", {"min_value": 10.0})'
                     },
                     "accessibility_width": {
                         "description": "Check accessibility width requirements",
                         "required_criteria": {"min_width": "float: Minimum width for accessibility"},
                         "optional_criteria": {"door_type": "string: Type of door (default: 'general')"},
-                        "example": 'validate_compliance_rule("accessibility_width", "door_123", {"min_width": 0.85, "door_type": "emergency_exit"})'
+                        "example": 'validate_rule("accessibility_width", "door_123", {"min_width": 0.85, "door_type": "emergency_exit"})'
                     },
                     "fire_rating": {
                         "description": "Check fire rating requirements",
                         "required_criteria": {"required_rating": "string: Required fire rating (e.g., 'EI30')"},
                         "optional_criteria": {"rating_property": "string: Property path for fire rating"},
-                        "example": 'validate_compliance_rule("fire_rating", "door_789", {"required_rating": "EI30"})'
+                        "example": 'validate_rule("fire_rating", "door_789", {"required_rating": "EI30"})'
                     }
                 },
-                "prerequisites": ["Building data loaded", "Valid element ID", "Use get_element_properties to discover available property paths for criteria"],
+                "prerequisites": ["Building data loaded", "Valid element ID", "Use get_all_properties to discover available property paths for criteria", "MUST search compliance documents first to determine specific rules and criteria"],
                 "good_for": ["compliance checking", "validation", "rule enforcement", "building code compliance"],
                 "examples": [
-                    'validate_compliance_rule("min_width", "door_123", {"min_value": 0.8})',
-                    'validate_compliance_rule("min_area", "room_456", {"min_value": 15.0})',
-                    'validate_compliance_rule("fire_rating", "door_789", {"required_rating": "EI30"})'
-                ]
+                    'validate_rule("min_width", "door_123", {"min_value": 0.8})',
+                    'validate_rule("min_area", "room_456", {"min_value": 15.0})',
+                    'validate_rule("fire_rating", "door_789", {"required_rating": "EI30"})'
+                ],
+                "workflow": "1. FIRST use search_compliance_documents() to find specific requirements, 2. Extract rule parameters from search results, 3. THEN use validate_rule() with discovered parameters"
             },
             "search_compliance_documents": {
-                "purpose": "Search compliance documents and building regulations",
+                "purpose": "Search compliance documents and building regulations to discover specific requirements before validation",
                 "input": "String: Query text for document search",
                 "output": "Dict with status, data (relevant compliance information), and logs",
                 "parameters": {
@@ -225,10 +224,13 @@ class ToolPlanner:
                 "prerequisites": ["Knowledge base available"],
                 "good_for": ["regulations", "standards", "compliance requirements", "building codes"],
                 "examples": [
+                    'search_compliance_documents("stair riser height requirements")',
+                    'search_compliance_documents("stair tread depth minimum")',
+                    'search_compliance_documents("stair handrail height standards")',
                     'search_compliance_documents("fire door width requirements")',
-                    'search_compliance_documents("accessibility door standards")',
-                    'search_compliance_documents("emergency exit regulations")'
-                ]
+                    'search_compliance_documents("accessibility door standards")'
+                ],
+                "workflow": "Use this BEFORE validate_rule() to discover what specific rules, criteria, and thresholds to apply"
             },
             "document_findings": {
                 "purpose": "Document analysis results and findings in structured format",
@@ -391,9 +393,18 @@ Context: {{context}}
 CRITICAL WORKFLOW REQUIREMENTS:
 1. Building data MUST be loaded first before any other building-related operations
 2. Element IDs MUST be obtained from get_all_elements() or query_elements() before using them in other tools
-3. Property paths MUST be discovered using get_element_properties() before filtering or validation
-4. **DISTANCE CALCULATIONS**: For ANY task involving distances, measurements, or finding closest elements, you MUST use "calculate" tool
-5. Documentation should be the final step after analysis
+3. Property paths MUST be discovered using get_all_properties() before filtering or validation
+4. **COMPLIANCE VALIDATION**: For ANY compliance/validation task, you MUST search_compliance_documents() FIRST to discover specific requirements, then use validate_rule() with discovered criteria
+5. **DISTANCE CALCULATIONS**: For ANY task involving distances, measurements, or finding closest elements, you MUST use "calculate" tool
+6. Documentation should be the final step after analysis
+
+MANDATORY COMPLIANCE DETECTION:
+If the task name or description contains ANY of these words or phrases:
+- "compliance", "compliant", "validate", "validation", "check", "verify"
+- "standards", "regulations", "requirements", "codes", "rules"
+→ YOU MUST FOLLOW THIS SEQUENCE:
+  1. FIRST use "search_compliance_documents" to discover specific requirements
+  2. THEN use "validate_rule" with criteria discovered from search results
 
 MANDATORY DISTANCE DETECTION:
 If the task name or description contains ANY of these words or phrases:
@@ -414,11 +425,20 @@ SELECTION RULES:
 1. Return ONLY the tool name (e.g., "get_all_elements")
 2. Choose the tool that DIRECTLY accomplishes the task with proper parameters
 3. Consider prerequisites - if task needs element IDs, ensure they can be obtained first
-4. **CRITICAL**: For ANY distance-related task, ALWAYS use "calculate" - NEVER use "get_all_elements"
-5. For area/volume calculations, use "calculate"
-6. For documentation/formatting results, ALWAYS use "document_findings"
-7. If task requires discovering available properties, use "get_all_properties"
-8. If no tool can accomplish the task, return "none"
+4. **CRITICAL**: For compliance discovery tasks (how/what), use "search_compliance_documents". For validation tasks (validate against known rules), use "validate_rule"
+5. **CRITICAL**: For ANY distance-related task, ALWAYS use "calculate" - NEVER use "get_all_elements"
+6. For area/volume calculations, use "calculate"
+7. For documentation/formatting results, ALWAYS use "document_findings"
+8. If task requires discovering available properties, use "get_all_properties"
+9. If no tool can accomplish the task, return "none"
+
+COMPLIANCE VALIDATION RULES (MANDATORY):
+- Tasks asking "How to check" or "What are the requirements" → "search_compliance_documents"
+- Tasks that CONTAIN "validate" + "against" + "rules" → "validate_rule" (NEVER search_compliance_documents)
+- Tasks that CONTAIN "validate" + "compliance" → "validate_rule" (NEVER search_compliance_documents)
+- "How do I check if stairs are compliant?" → "search_compliance_documents"
+- "Validate stairs against compliance rules" → "validate_rule" (MANDATORY)
+- "Validate doors against compliance rules" → "validate_rule" (MANDATORY)
 
 DISTANCE CALCULATION RULES (MANDATORY):
 - ANY task containing words: "distance", "distances", "far", "close", "closest", "between", "from...to" → "calculate"
@@ -473,7 +493,6 @@ Select the best tool:""")
             tool_aliases = {
                 "find_related_elements": "find_related",
                 "get_element_properties": "get_all_properties", 
-                "validate_compliance_rule": "validate_rule",
                 "calculate_distances": "calculate",
                 "calculate_areas": "calculate"
             }
@@ -558,11 +577,11 @@ Select the best tool:""")
 Available tools and their capabilities:
 - load_building_data: Load IFC JSON building data files (input: file_path)
 - get_all_elements: Get all elements of a specific type like spaces, doors, walls, slabs, stairs (input: element_type)
-- get_element_properties: Get detailed properties of a specific element (input: element_id)
+- get_all_properties: Get detailed properties of a specific element (input: element_id)
 - query_elements: Filter elements with specific criteria (input: JSON with element_type and filters)
-- calculate_metrics: Perform calculations like counts, areas, volumes, distances between elements (input: JSON with operation and parameters)
-- find_related_elements: Find spatial relationships between elements (input: JSON with element_id and relationship_type)
-- validate_compliance_rule: Check elements against compliance rules (input: JSON with rule_type, element_id, criteria)
+- calculate: Perform calculations like counts, areas, volumes, distances between elements (input: JSON with operation and parameters)
+- find_related: Find spatial relationships between elements (input: JSON with element_id and relationship_type)
+- validate_rule: Check elements against compliance rules (input: JSON with rule_type, element_id, criteria)
 - search_compliance_documents: Search building codes and regulations (input: query_string)
 - document_findings: Document analysis results and findings (input: JSON with content, title, type, sections, summary, recommendations)
 
@@ -794,14 +813,14 @@ Select the best tool considering execution history:""")
         
         # Tool-specific alternatives based on failure patterns
         tool_alternatives = {
-            "query_elements": ["get_all_elements", "get_element_properties"],
-            "get_all_elements": ["query_elements", "calculate_metrics"],
-            "calculate_metrics": ["get_all_elements", "query_elements"],
-            "get_element_properties": ["query_elements", "get_all_elements"],
+            "query_elements": ["get_all_elements", "get_all_properties"],
+            "get_all_elements": ["query_elements", "calculate"],
+            "calculate": ["get_all_elements", "query_elements"],
+            "get_all_properties": ["query_elements", "get_all_elements"],
             "load_building_data": [],  # No alternatives for data loading
-            "validate_compliance_rule": ["search_compliance_documents"],
-            "search_compliance_documents": ["validate_compliance_rule"],
-            "find_related_elements": ["query_elements", "get_element_properties"]
+            "validate_rule": ["search_compliance_documents"],
+            "search_compliance_documents": ["validate_rule"],
+            "find_related": ["query_elements", "get_all_properties"]
         }
         
         # Get direct alternatives
@@ -851,7 +870,7 @@ Select the best tool considering execution history:""")
                     if 'example' in op_info:
                         specs.append(f"    Example: {escape_braces(op_info['example'])}")
             
-            # Add rule types for validate_compliance_rule
+            # Add rule types for validate_rule
             if 'rule_types' in tool_info:
                 specs.append("Rule Types:")
                 for rule_type, rule_info in tool_info['rule_types'].items():

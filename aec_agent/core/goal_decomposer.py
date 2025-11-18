@@ -18,6 +18,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import os
+from ..config import AgentConfig
 
 
 class GoalDecomposer:
@@ -27,19 +28,32 @@ class GoalDecomposer:
     Uses LLM-based reasoning with AEC domain knowledge for intelligent task decomposition.
     """
     
-    def __init__(self, llm: ChatOpenAI = None):
-        """Initialize the goal decomposer."""
+    def __init__(self, llm: ChatOpenAI = None, config: Optional[AgentConfig] = None):
+        """Initialize the goal decomposer.
+        
+        Args:
+            llm: Optional pre-configured LLM instance (takes precedence)
+            config: Optional AgentConfig to use for model configuration
+        """
         self.logger = ReasoningUtils.setup_logger(__name__)
         
         # Setup LLM for reasoning
-        if llm is None:
+        if llm is not None:
+            self.llm = llm
+        elif config is not None:
+            # Use config to create LLM
             self.llm = ChatOpenAI(
-                model="gpt-4o-mini",
+                model=config.llm.get_component_model("goal_decomposer"),
+                temperature=config.llm.get_component_temperature("goal_decomposer"),
+                max_tokens=config.llm.get_component_max_tokens("goal_decomposer")
+            )
+        else:
+            # Fallback to defaults (for backward compatibility)
+            self.llm = ChatOpenAI(
+                model="gpt-5-mini",
                 temperature=0.1,
                 max_tokens=2000
             )
-        else:
-            self.llm = llm
         
         # AEC-specific task patterns
         self.aec_patterns = {
@@ -183,7 +197,7 @@ Available tools for task execution:
 
 Context information: {context}
 
-Break down the goal into 3-6 specific tasks that:
+Break down the goal into 3-8 specific tasks that:
 1. Follow logical dependencies (load data before analysis)
 2. Are concrete and actionable
 3. **Each task must be achievable with exactly ONE tool call** - this is a critical constraint
@@ -194,6 +208,11 @@ Break down the goal into 3-6 specific tasks that:
 - ❌ Bad: "Get all doors and calculate their distances" (requires 2 tools: get_all_elements + calculate_distances)
 - ✅ Good: "Get all door elements" → Task 1 (uses get_all_elements)
            "Calculate distances between doors" → Task 2 (uses calculate_distances, depends on Task 1)
+
+**COMPLIANCE WORKFLOW PATTERN**: For compliance checking goals, ALWAYS create separate tasks:
+- ✅ Good: "Search compliance documents for stair requirements" → Task N (uses search_compliance_documents)
+           "Validate stairs against compliance rules" → Task N+1 (uses validate_rule, depends on Task N)
+- ❌ Bad: "Get compliance rules for stairs" (unclear which tool to use)
 
 Return ONLY a JSON list of task objects like this:
 [

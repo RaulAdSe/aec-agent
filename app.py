@@ -301,7 +301,7 @@ def get_llm_insight(action, context):
         prompt = f"In 3-4 words, what is an AI agent doing when: {action} with context: {context[:50]}"
         
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-5-mini",
             messages=[
                 {
                     "role": "system", 
@@ -355,7 +355,7 @@ def main():
         
         # Initialize the actual ReAct agent with 3-layer memory management
         st.session_state.reasoning_agent = create_agent(
-            model_name="gpt-4o-mini",
+            model_name="gpt-5-mini",
             temperature=0.1,
             verbose=True,
             enable_memory=True,
@@ -385,9 +385,58 @@ def main():
     # Auto-save session periodically
     save_current_session()
 
+def load_cached_ifc_files():
+    """Load previously processed IFC files from persistent storage."""
+    processed_dir = Path("data/processed_ifc")
+    if not processed_dir.exists():
+        return {}
+    
+    cached_files = {}
+    for json_file in processed_dir.glob("*.json"):
+        try:
+            # Extract original filename (remove .json extension)
+            original_name = json_file.name[:-5]  # Remove ".json"
+            
+            # Load the JSON data
+            with open(json_file, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+            
+            # Get file stats for cache info
+            file_stats = json_file.stat()
+            
+            cached_files[original_name] = {
+                "json_data": json_data,
+                "file_size": file_stats.st_size,
+                "processed_at": str(datetime.fromtimestamp(file_stats.st_mtime)),
+                "cached": True
+            }
+            
+        except Exception as e:
+            st.warning(f"⚠️ Could not load cached file {json_file.name}: {str(e)}")
+            continue
+    
+    return cached_files
+
 def show_ifc_upload_section():
-    """Display IFC file upload section."""
+    """Display IFC file upload section with persistent caching."""
     st.subheader("📊 IFC Building Models")
+    
+    # Load cached files on first run or if session state is empty
+    if not st.session_state.processed_ifc_files:
+        st.session_state.processed_ifc_files = load_cached_ifc_files()
+    
+    # Show cache management controls
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        if st.session_state.processed_ifc_files:
+            cached_count = sum(1 for f in st.session_state.processed_ifc_files.values() if f.get('cached'))
+            if cached_count > 0:
+                st.info(f"📁 {cached_count} previously processed file(s) loaded from cache")
+    
+    with col2:
+        if st.session_state.processed_ifc_files:
+            if st.button("🗑️ Clear Cache", help="Remove all cached IFC files"):
+                clear_ifc_cache()
     
     with st.container():
         st.markdown("""
@@ -413,73 +462,149 @@ def show_ifc_upload_section():
             label_visibility="collapsed"
         )
         
+        # Show cached files even if no new files are uploaded
+        if st.session_state.processed_ifc_files and not uploaded_ifc:
+            st.subheader("📋 Cached IFC Files")
+            for filename, data in st.session_state.processed_ifc_files.items():
+                show_ifc_file_summary(filename, data)
+        
         if uploaded_ifc:
-            st.success(f"✅ {len(uploaded_ifc)} IFC file(s) uploaded")
-            
             for file in uploaded_ifc:
-                st.write(f"📄 {file.name} ({file.size} bytes)")
+                # Check if already processed (by filename and size)
+                existing_data = st.session_state.processed_ifc_files.get(file.name)
+                if existing_data:
+                    # Compare file sizes to detect if file was modified
+                    if existing_data.get("original_file_size") == file.size:
+                        # Show single consolidated status line for cached files
+                        show_ifc_file_status(file.name, existing_data, "cached")
+                        continue
+                    else:
+                        st.warning(f"⚠️ {file.name} has different size - reprocessing...")
                 
-                # Check if already processed
-                if file.name not in st.session_state.processed_ifc_files:
-                    with st.spinner(f"Processing {file.name}..."):
-                        try:
-                            # Save uploaded file temporarily
-                            with tempfile.NamedTemporaryFile(delete=False, suffix='.ifc') as temp_file:
-                                temp_file.write(file.read())
-                                temp_file_path = temp_file.name
-                            
-                            # Convert IFC to JSON
-                            converter = IFCToJSONConverter(temp_file_path)
-                            json_data = converter.extract_to_dict()
-                            
-                            # Store in session state
-                            st.session_state.processed_ifc_files[file.name] = {
-                                "json_data": json_data,
-                                "file_size": file.size,
-                                "processed_at": str(datetime.now())
-                            }
-                            
-                            # Create processed files directory if it doesn't exist
-                            processed_dir = Path("data/processed_ifc")
-                            processed_dir.mkdir(parents=True, exist_ok=True)
-                            
-                            # Save JSON to persistent storage
-                            json_file_path = processed_dir / f"{file.name}.json"
-                            with open(json_file_path, 'w', encoding='utf-8') as f:
-                                json.dump(json_data, f, indent=2, ensure_ascii=False)
-                            
-                            # Cleanup temporary file
-                            os.unlink(temp_file_path)
-                            
-                            st.success(f"✅ Processed {file.name} → {json_file_path}")
-                            
-                            # Show summary of extracted elements
-                            st.json({
-                                "project": json_data["file_info"]["project_name"],
-                                "total_elements": json_data["file_info"]["total_elements"],
-                                "spaces": len(json_data.get("spaces", [])),
-                                "walls": len(json_data.get("walls", [])),
-                                "doors": len(json_data.get("doors", [])),
-                                "slabs": len(json_data.get("slabs", [])),
-                                "stairs": len(json_data.get("stairs", []))
-                            })
-                            
-                        except Exception as e:
-                            st.error(f"❌ Error processing {file.name}: {str(e)}")
-                else:
-                    st.info(f"✅ {file.name} already processed")
-                    
-                    # Show summary from session state
-                    data = st.session_state.processed_ifc_files[file.name]["json_data"]
-                    st.json({
-                        "project": data["file_info"]["project_name"],
-                        "total_elements": data["file_info"]["total_elements"],
-                        "spaces": len(data.get("spaces", [])),
-                        "walls": len(data.get("walls", [])),
-                        "doors": len(data.get("doors", [])),
-                        "slabs": len(data.get("slabs", [])),
-                        "stairs": len(data.get("stairs", []))
-                    })
+                # Process new or modified file
+                with st.spinner(f"Processing {file.name}..."):
+                    try:
+                        # Save uploaded file temporarily
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.ifc') as temp_file:
+                            temp_file.write(file.read())
+                            temp_file_path = temp_file.name
+                        
+                        # Convert IFC to JSON
+                        converter = IFCToJSONConverter(temp_file_path)
+                        json_data = converter.extract_to_dict()
+                        
+                        # Store in session state
+                        st.session_state.processed_ifc_files[file.name] = {
+                            "json_data": json_data,
+                            "file_size": file.size,
+                            "original_file_size": file.size,
+                            "processed_at": str(datetime.now()),
+                            "cached": False
+                        }
+                        
+                        # Create processed files directory if it doesn't exist
+                        processed_dir = Path("data/processed_ifc")
+                        processed_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        # Save JSON to persistent storage
+                        json_file_path = processed_dir / f"{file.name}.json"
+                        with open(json_file_path, 'w', encoding='utf-8') as f:
+                            json.dump(json_data, f, indent=2, ensure_ascii=False)
+                        
+                        # Cleanup temporary file
+                        os.unlink(temp_file_path)
+                        
+                        # Show single consolidated status line for new files
+                        show_ifc_file_status(file.name, st.session_state.processed_ifc_files[file.name], "processed")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error processing {file.name}: {str(e)}")
+
+def show_ifc_file_status(filename, data, status_type):
+    """Display a single consolidated status line for IFC files."""
+    json_data = data["json_data"]
+    
+    # Format file size
+    file_size_mb = data.get("original_file_size", data.get("file_size", 0)) / (1024 * 1024)
+    size_str = f"{file_size_mb:.1f}MB"
+    
+    # Get project info for quick display
+    project_name = json_data["file_info"]["project_name"]
+    total_elements = json_data["file_info"]["total_elements"]
+    
+    # Status indicators
+    if status_type == "cached":
+        status_icon = "🔄"
+        status_text = "Using cached version"
+    elif status_type == "processed":
+        status_icon = "✅"
+        status_text = "Processed successfully"
+    else:
+        status_icon = "📄"
+        status_text = "Ready"
+    
+    # Single line with all info and expandable details
+    col1, col2, col3 = st.columns([3, 1, 1])
+    
+    with col1:
+        st.markdown(f"**{status_icon} {filename}**")
+    
+    with col2:
+        st.caption(f"{size_str}")
+    
+    with col3:
+        st.caption(f"{status_text}")
+    
+    # Optional expandable details
+    with st.expander(f"📊 Project: {project_name} ({total_elements} elements)", expanded=False):
+        summary_data = {
+            "project": project_name,
+            "total_elements": total_elements,
+            "spaces": len(json_data.get("spaces", [])),
+            "walls": len(json_data.get("walls", [])),
+            "doors": len(json_data.get("doors", [])),
+            "slabs": len(json_data.get("slabs", [])),
+            "stairs": len(json_data.get("stairs", []))
+        }
+        st.json(summary_data)
+
+def show_ifc_file_summary(filename, data):
+    """Display summary information for an IFC file (used for cached file listing)."""
+    st.write(f"📄 {filename}")
+    
+    # Add cache indicator
+    cache_status = "🔄 Cached" if data.get('cached') else "🆕 New"
+    processed_time = data.get('processed_at', 'Unknown')
+    
+    with st.expander(f"{cache_status} - Processed: {processed_time}", expanded=False):
+        json_data = data["json_data"]
+        summary_data = {
+            "project": json_data["file_info"]["project_name"],
+            "total_elements": json_data["file_info"]["total_elements"],
+            "spaces": len(json_data.get("spaces", [])),
+            "walls": len(json_data.get("walls", [])),
+            "doors": len(json_data.get("doors", [])),
+            "slabs": len(json_data.get("slabs", [])),
+            "stairs": len(json_data.get("stairs", []))
+        }
+        st.json(summary_data)
+
+def clear_ifc_cache():
+    """Clear all cached IFC files."""
+    try:
+        processed_dir = Path("data/processed_ifc")
+        if processed_dir.exists():
+            for json_file in processed_dir.glob("*.json"):
+                json_file.unlink()
+        
+        # Clear session state
+        st.session_state.processed_ifc_files = {}
+        
+        st.success("✅ Cache cleared successfully")
+        st.rerun()
+        
+    except Exception as e:
+        st.error(f"❌ Error clearing cache: {str(e)}")
 
 def show_legal_docs_upload_section():
     """Display legal documents upload section."""
@@ -665,12 +790,8 @@ def generate_streaming_response(prompt):
                         unique_messages.reverse()  # Back to chronological order
                         
                         for msg in unique_messages:
-                            if msg["level"] == "ERROR":
-                                st.error(msg['message'])
-                            elif msg["level"] == "WARNING":
-                                st.warning(msg['message'])
-                            else:
-                                st.caption(msg['message'])
+                            # Display all messages as normal text without color styling
+                            st.caption(msg['message'])
     
     # Initial update
     update_log_display()

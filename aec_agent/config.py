@@ -31,10 +31,19 @@ class LLMProvider(Enum):
 class LLMConfig:
     """Large Language Model configuration section."""
     
-    # === MODEL SELECTION ===
+    # === PRIMARY MODEL SELECTION ===
     provider: LLMProvider = LLMProvider.OPENAI
-    model_name: str = "gpt-4o-mini"  # Primary model for reasoning
+    model_name: str = "gpt-5-mini"  # Primary model for reasoning
     fallback_model: Optional[str] = "gpt-3.5-turbo"  # Fallback if primary fails
+    
+    # === COMPONENT-SPECIFIC MODEL SELECTION ===
+    # All components use the primary model by default, but can be overridden
+    goal_decomposer_model: Optional[str] = None  # None = use model_name
+    tool_planner_model: Optional[str] = None     # None = use model_name
+    validator_model: Optional[str] = None         # None = use model_name
+    replanner_model: Optional[str] = None       # None = use model_name
+    progress_evaluator_model: Optional[str] = None  # None = use model_name
+    summarization_model: Optional[str] = None   # None = use model_name (for memory)
     
     # === MODEL PARAMETERS ===
     temperature: float = 0.1  # Lower = more deterministic (0.0-2.0)
@@ -42,6 +51,23 @@ class LLMConfig:
     top_p: float = 1.0        # Nucleus sampling parameter
     frequency_penalty: float = 0.0  # Penalize frequent tokens
     presence_penalty: float = 0.0   # Penalize present tokens
+    
+    # === COMPONENT-SPECIFIC PARAMETERS ===
+    # Component-specific temperature overrides (None = use default temperature)
+    goal_decomposer_temperature: Optional[float] = None  # Default: 0.1
+    tool_planner_temperature: Optional[float] = None    # Default: 0.1
+    validator_temperature: Optional[float] = None        # Default: 0.1
+    replanner_temperature: Optional[float] = None       # Default: 0.2 (slightly higher for creativity)
+    progress_evaluator_temperature: Optional[float] = None  # Default: 0.1
+    summarization_temperature: Optional[float] = None    # Default: 0.1
+    
+    # Component-specific max_tokens overrides
+    goal_decomposer_max_tokens: int = 2000
+    tool_planner_max_tokens: int = 1000
+    validator_max_tokens: int = 1000
+    replanner_max_tokens: int = 2000
+    progress_evaluator_max_tokens: int = 1500
+    summarization_max_tokens: int = 500
     
     # === CONTEXT MANAGEMENT ===
     context_window: int = 128000  # Model's context window size
@@ -58,6 +84,43 @@ class LLMConfig:
     retry_delay: float = 1.0      # Base delay between retries (seconds)
     exponential_backoff: bool = True  # Use exponential backoff
     timeout_per_call: float = 30.0   # Timeout per individual call
+    
+    # === HELPER METHODS ===
+    def get_component_model(self, component: str) -> str:
+        """Get the model name for a specific component."""
+        model_map = {
+            "goal_decomposer": self.goal_decomposer_model or self.model_name,
+            "tool_planner": self.tool_planner_model or self.model_name,
+            "validator": self.validator_model or self.model_name,
+            "replanner": self.replanner_model or self.model_name,
+            "progress_evaluator": self.progress_evaluator_model or self.model_name,
+            "summarization": self.summarization_model or self.model_name,
+        }
+        return model_map.get(component, self.model_name)
+    
+    def get_component_temperature(self, component: str) -> float:
+        """Get the temperature for a specific component."""
+        temp_map = {
+            "goal_decomposer": self.goal_decomposer_temperature if self.goal_decomposer_temperature is not None else self.temperature,
+            "tool_planner": self.tool_planner_temperature if self.tool_planner_temperature is not None else self.temperature,
+            "validator": self.validator_temperature if self.validator_temperature is not None else self.temperature,
+            "replanner": self.replanner_temperature if self.replanner_temperature is not None else 0.2,  # Default 0.2 for creativity
+            "progress_evaluator": self.progress_evaluator_temperature if self.progress_evaluator_temperature is not None else self.temperature,
+            "summarization": self.summarization_temperature if self.summarization_temperature is not None else self.temperature,
+        }
+        return temp_map.get(component, self.temperature)
+    
+    def get_component_max_tokens(self, component: str) -> int:
+        """Get the max_tokens for a specific component."""
+        tokens_map = {
+            "goal_decomposer": self.goal_decomposer_max_tokens,
+            "tool_planner": self.tool_planner_max_tokens,
+            "validator": self.validator_max_tokens,
+            "replanner": self.replanner_max_tokens,
+            "progress_evaluator": self.progress_evaluator_max_tokens,
+            "summarization": self.summarization_max_tokens,
+        }
+        return tokens_map.get(component, self.max_tokens)
 
 
 @dataclass
@@ -387,7 +450,7 @@ class AgentConfig:
         return cls(
             profile=AgentProfile.DEVELOPMENT,
             llm=LLMConfig(
-                model_name="gpt-4o-mini",  # Faster, cheaper model for development
+                model_name="gpt-5-mini",  # Faster, cheaper model for development
                 temperature=0.1,
                 max_retries=5,             # More retries for debugging
             ),
@@ -454,7 +517,7 @@ class AgentConfig:
         return cls(
             profile=AgentProfile.STAGING,
             llm=LLMConfig(
-                model_name="gpt-4o-mini",
+                model_name="gpt-5-mini",
                 temperature=0.1,
                 max_retries=3,
             ),
@@ -596,7 +659,7 @@ def get_example_configs() -> Dict[str, AgentConfig]:
         ),
         
         "balanced": AgentConfig(
-            llm=LLMConfig(model_name="gpt-4o-mini", temperature=0.1),
+            llm=LLMConfig(model_name="gpt-5-mini", temperature=0.1),
             reasoning=ReasoningConfig(max_iterations=15, max_execution_time=180.0),
             guardrails=GuardrailConfig(max_replanning_events=5)
         ),

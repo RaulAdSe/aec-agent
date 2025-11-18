@@ -5,7 +5,7 @@ This module provides multi-layer validation of tool execution results
 and overall progress toward goals.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass
 
 from .reasoning_utils import ReasoningUtils, Task, TaskStatus, ExecutionResult
@@ -19,6 +19,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import json
+
+if TYPE_CHECKING:
+    from ..config import AgentConfig
 
 
 @dataclass
@@ -44,19 +47,32 @@ class ResultValidator:
     3. Progress validation - Confirm steps advance toward goal
     """
     
-    def __init__(self, llm=None):
-        """Initialize the result validator."""
+    def __init__(self, llm=None, config: Optional['AgentConfig'] = None):
+        """Initialize the result validator.
+        
+        Args:
+            llm: Optional pre-configured LLM instance (takes precedence)
+            config: Optional AgentConfig to use for model configuration
+        """
         self.logger = ReasoningUtils.setup_logger(__name__)
         
         # Setup LLM for intelligent validation
-        if llm is None:
+        if llm is not None:
+            self.llm = llm
+        elif config is not None:
+            # Use config to create LLM
             self.llm = ChatOpenAI(
-                model="gpt-4o-mini",
+                model=config.llm.get_component_model("validator"),
+                temperature=config.llm.get_component_temperature("validator"),
+                max_tokens=config.llm.get_component_max_tokens("validator")
+            )
+        else:
+            # Fallback to defaults (for backward compatibility)
+            self.llm = ChatOpenAI(
+                model="gpt-5-mini",
                 temperature=0.1,
                 max_tokens=1000
             )
-        else:
-            self.llm = llm
     
     @traceable(name="result_validation", metadata={"component": "validator"})
     def validate_execution(self, task: Task, execution_result: ExecutionResult) -> Dict[str, Any]:

@@ -551,14 +551,15 @@ class ReasoningAgent:
     
     def _setup_reasoning_components(self):
         """Initialize all reasoning components."""
-        # Initialize individual components with LLM support
-        self.goal_decomposer = GoalDecomposer(llm=self.llm)
-        self.tool_planner = ToolPlanner(llm=self.llm)
+        # Initialize individual components with config (components will use config to create LLMs)
+        # Passing config allows all components to use centralized model configuration
+        self.goal_decomposer = GoalDecomposer(config=self.config)
+        self.tool_planner = ToolPlanner(config=self.config)
         self.executor = ToolExecutor(
             tool_registry=self.tool_registry,
             timeout=60.0
         )
-        self.validator = ResultValidator(llm=self.llm)
+        self.validator = ResultValidator(config=self.config)
         
         # Create the main reasoning controller
         self.reasoning_controller = ReasoningController(
@@ -566,6 +567,7 @@ class ReasoningAgent:
             tool_planner=self.tool_planner,
             executor=self.executor,
             validator=self.validator,
+            config=self.config,
             max_iterations=self.max_iterations,
             max_execution_time=self.max_execution_time,
             llm=self.llm
@@ -688,7 +690,7 @@ class ReasoningAgent:
 
 
 def create_reasoning_agent(
-    model_name: str = "gpt-4o-mini",
+    model_name: str = "gpt-5-mini",
     temperature: float = 0.1,
     verbose: bool = True,
     enable_memory: bool = True,
