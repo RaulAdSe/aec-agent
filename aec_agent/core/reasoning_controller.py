@@ -15,6 +15,7 @@ from .executor import ToolExecutor
 from .validator import ResultValidator
 from .llm_guardrails import GuardrailConfig, ExecutionGuardrail, GuardrailViolationError
 from .task_graph import TaskGraph
+from .recovery_system import RecoverySystem
 from ..config import AgentConfig
 
 # Import LangSmith tracing
@@ -90,6 +91,13 @@ class ReasoningController:
         
         self.logger = ReasoningUtils.setup_logger(__name__)
         self.state: Optional[ReasoningState] = None
+        
+        # Initialize recovery system
+        self.recovery_system = RecoverySystem(
+            goal_decomposer=goal_decomposer,
+            tool_planner=tool_planner,
+            llm=llm
+        )
     
     @traceable(name="autonomous_reasoning_process", metadata={"component": "reasoning_controller"})
     def reason(self, goal: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -313,6 +321,60 @@ class ReasoningController:
             }
         )
         
+        # Handle tool execution failures with recovery system
+        if not result.success and result.error_message:
+            self.logger.warning(f"Tool execution failed for '{tool_name}': {result.error_message}")
+            
+            try:
+                # Analyze the tool failure
+                failure_analysis = self.recovery_system.analyze_failure(
+                    task=task,
+                    error_message=result.error_message,
+                    execution_context={
+                        "goal": self.state.goal,
+                        "tool_name": tool_name,
+                        "context": self.state.context,
+                        "execution_result": result
+                    }
+                )
+                
+                self.logger.info(f"Tool failure analysis: {failure_analysis.failure_type.value}")
+                
+                # Attempt recovery for tool failures
+                recovery_attempt = self.recovery_system.attempt_recovery(
+                    task=task,
+                    failure_analysis=failure_analysis,
+                    available_tools=list(self.executor.tool_registry.keys()),
+                    task_graph=self.state.task_graph
+                )
+                
+                if recovery_attempt.success and recovery_attempt.modified_task:
+                    self.logger.info(f"Attempting tool recovery with strategy: {recovery_attempt.strategy}")
+                    
+                    # Retry with modified task if recovery suggests changes
+                    if recovery_attempt.modified_task.tool_sequence != task.tool_sequence:
+                        # Use the recovered tool sequence
+                        recovered_tool = recovery_attempt.modified_task.tool_sequence[0] if recovery_attempt.modified_task.tool_sequence else tool_name
+                        
+                        self.logger.info(f"Retrying with recovered tool: {recovered_tool}")
+                        result = self.executor.execute_tool(
+                            tool_name=recovered_tool,
+                            task=recovery_attempt.modified_task,
+                            context={
+                                "goal": self.state.goal, 
+                                "iteration": self.state.iteration,
+                                **self.state.context
+                            }
+                        )
+                        
+                        if result.success:
+                            self.logger.info(f"Tool recovery successful with {recovered_tool}")
+                        else:
+                            self.logger.warning(f"Tool recovery attempt failed")
+                
+            except Exception as e:
+                self.logger.error(f"Error in tool recovery for task '{task.name}': {e}")
+        
         # Update context based on tool execution results
         if result.success:
             if tool_name == "load_building_data":
@@ -419,21 +481,151 @@ class ReasoningController:
         return False
     
     def _handle_task_failure(self, task: Task, validation_result: Dict[str, Any]) -> bool:
-        """Try to handle task failure and recover."""
-        # Check if replanning is recommended and allowed by guardrails
-        if validation_result.get("should_replan", False):
-            try:
-                self.execution_guardrail.record_replanning_event()
-                self.logger.info(f"Triggering replanning for failed task: {task.name}")
-                # TODO: Implement actual replanning logic using Replanner component
+        """Try to handle task failure and recover using the recovery system."""
+        try:
+            # Analyze the failure using the recovery system
+            failure_analysis = self.recovery_system.analyze_failure(
+                task=task,
+                error_message=validation_result.get("message", "Task validation failed"),
+                execution_context={
+                    "goal": self.state.goal,
+                    "task_graph": self.state.task_graph,
+                    "context": self.state.context,
+                    "validation_result": validation_result
+                }
+            )
+            
+            self.logger.info(f"Failure analysis for task '{task.name}': {failure_analysis.failure_type.value}")
+            
+            # Attempt recovery
+            recovery_attempt = self.recovery_system.attempt_recovery(
+                task=task,
+                failure_analysis=failure_analysis,
+                available_tools=list(self.executor.tool_registry.keys()),
+                task_graph=self.state.task_graph
+            )
+            
+            if recovery_attempt.success:
+                self.logger.info(f"Recovery successful for task '{task.name}': {recovery_attempt.strategy}")
+                
+                # Apply recovery actions
+                if recovery_attempt.modified_task:
+                    # Update task with recovered version
+                    self.state.task_graph.update_task(recovery_attempt.modified_task)
+                    self.logger.info(f"Updated task with recovery modifications")
+                
+                if recovery_attempt.strategy == "replan":
+                    # Check if this requires goal-level replanning
+                    if recovery_attempt.get("requires_goal_replanning", False):
+                        try:
+                            self.execution_guardrail.record_replanning_event()
+                            self.logger.info(f"Triggering goal-level replanning due to planning error")
+                            
+                            # Trigger full goal replanning
+                            return self._trigger_goal_replanning(recovery_attempt.get("failed_task_context", {}))
+                            
+                        except GuardrailViolationError as e:
+                            self.logger.error(f"Goal replanning guardrail violation: {e}")
+                            return False
+                            
+                    elif validation_result.get("should_replan", False):
+                        # Check guardrails for task-level replanning
+                        try:
+                            self.execution_guardrail.record_replanning_event()
+                            self.logger.info(f"Triggering task replanning for failed task: {task.name}")
+                            # Mark for task-level replanning - the main reasoning loop will handle it
+                            return True
+                        except GuardrailViolationError as e:
+                            self.logger.error(f"Task replanning guardrail violation: {e}")
+                            return False
+                
+                # For other recovery strategies, retry the task
                 return True
-            except GuardrailViolationError as e:
-                self.logger.error(f"Replanning guardrail violation: {e}")
+                
+            else:
+                self.logger.warning(f"Recovery failed for task '{task.name}': {recovery_attempt.reason}")
+                
+                # Check if task can be gracefully degraded
+                if self.recovery_system.can_gracefully_degrade(task, failure_analysis):
+                    self.logger.info(f"Attempting graceful degradation for task '{task.name}'")
+                    
+                    # Create degraded response
+                    degraded_response = self.recovery_system.create_degraded_response(task, failure_analysis)
+                    
+                    # Store degraded response in task metadata for later use in response synthesis
+                    task.metadata["degraded_response"] = degraded_response
+                    
+                    # Mark task as completed with degradation
+                    self.state.task_graph.update_task_status(task.id, TaskStatus.COMPLETED)
+                    self.state.completed_tasks += 1
+                    
+                    self.logger.info(f"Task '{task.name}' gracefully degraded")
+                    return True
+                
                 return False
-        
-        # For now, just mark as failed without replanning
-        self.logger.warning(f"Task failed without recovery: {task.name}")
-        return False
+                
+        except Exception as e:
+            self.logger.error(f"Error in recovery system for task '{task.name}': {e}")
+            return False
+    
+    @traceable(name="trigger_goal_replanning", metadata={"component": "reasoning_controller"})
+    def _trigger_goal_replanning(self, failed_task_context: Dict[str, Any]) -> bool:
+        """Trigger full goal replanning when fundamental planning errors are detected."""
+        try:
+            self.logger.info("Initiating goal-level replanning due to planning failures")
+            
+            # Clear failed and blocked tasks to allow fresh planning
+            failed_tasks = []
+            for task_id, task in list(self.state.task_graph.tasks.items()):
+                if task.status in [TaskStatus.FAILED, TaskStatus.BLOCKED]:
+                    failed_tasks.append(task)
+                    del self.state.task_graph.tasks[task_id]
+            
+            # Provide context about why replanning was triggered
+            replanning_context = {
+                **self.state.context,
+                "replanning_triggered": True,
+                "failed_task_info": failed_task_context,
+                "previous_failures": [
+                    {
+                        "name": task.name,
+                        "description": task.description,
+                        "status": task.status.value
+                    } for task in failed_tasks
+                ]
+            }
+            
+            # Re-decompose the goal with enhanced context
+            self.logger.info(f"Re-decomposing goal: {self.state.goal}")
+            decomposition_result = self.goal_decomposer.decompose_goal(
+                self.state.goal, 
+                replanning_context
+            )
+            
+            if decomposition_result.get("success", False):
+                new_tasks = decomposition_result.get("tasks", [])
+                self.logger.info(f"Goal replanning created {len(new_tasks)} new tasks")
+                
+                # Add new tasks to task graph
+                for task in new_tasks:
+                    self.state.task_graph.add_task(task)
+                
+                # Reset task status counters
+                self.state.failed_tasks = 0
+                self.state.completed_tasks = len([
+                    t for t in self.state.task_graph.tasks.values() 
+                    if t.status == TaskStatus.COMPLETED
+                ])
+                
+                self.logger.info("Goal replanning completed successfully")
+                return True
+            else:
+                self.logger.error(f"Goal replanning failed: {decomposition_result.get('message')}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error during goal replanning: {e}")
+            return False
     
     def _finalize_results(self, execution_results: List[ExecutionResult]) -> Dict[str, Any]:
         """Create final results summary."""
@@ -522,6 +714,9 @@ class ReasoningController:
         try:
             # Prepare tool results summary for LLM
             tool_results = []
+            degraded_responses = []
+            
+            # Collect regular tool outputs
             for output in outputs:
                 tool_name = output.get('tool', 'unknown')
                 tool_output = output.get('output', {})
@@ -534,19 +729,41 @@ class ReasoningController:
                         'type': type(data).__name__
                     })
             
+            # Collect degraded responses from completed tasks
+            for task in self.state.task_graph.tasks.values():
+                if (task.status == TaskStatus.COMPLETED and 
+                    "degraded_response" in task.metadata):
+                    degraded_resp = task.metadata["degraded_response"]
+                    degraded_responses.append({
+                        'task': task.name,
+                        'message': degraded_resp.get('message', ''),
+                        'partial_data': degraded_resp.get('partial_data', {})
+                    })
+            
             # Create LLM prompt for response synthesis
+            results_section = ""
+            if tool_results:
+                results_section = f"""Analysis results:
+{chr(10).join([f"- {result['tool']}: {result['result']}" for result in tool_results[:5]])}"""
+            
+            degraded_section = ""
+            if degraded_responses:
+                degraded_section = f"""
+Partial results (some tasks had limitations):
+{chr(10).join([f"- {resp['task']}: {resp['message']}" for resp in degraded_responses[:3]])}"""
+            
             prompt = f"""Based on the user's question and the analysis results below, generate a concise, helpful response that directly answers what the user wanted to know.
 
 Original goal: {self.state.goal}
 
-Analysis results:
-{chr(10).join([f"- {result['tool']}: {result['result']}" for result in tool_results[:5]])}
+{results_section}{degraded_section}
 
 Generate a natural, conversational response that:
 1. Directly answers the user's question
-2. Includes specific results/numbers when available
-3. Is concise (1-2 sentences maximum)
-4. Avoids technical jargon
+2. Includes specific results/numbers when available  
+3. Acknowledges any limitations or partial results honestly
+4. Is concise (1-2 sentences maximum)
+5. Avoids technical jargon
 
 Response:"""
 
