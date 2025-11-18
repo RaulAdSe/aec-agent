@@ -77,6 +77,7 @@ class ReasoningController:
         # Store commonly used values for convenience
         self.max_iterations = self.config.reasoning.max_iterations
         self.max_execution_time = self.config.reasoning.max_execution_time
+        self.llm = llm  # Store LLM for response synthesis
         
         # Initialize execution guardrails
         if guardrail_config is not None:
@@ -372,12 +373,48 @@ class ReasoningController:
         if not blocked_tasks:
             return False
         
-        # For now, just convert blocked to pending and retry
-        # TODO: More sophisticated dependency resolution
-        for task in blocked_tasks[:1]:  # Try one at a time
-            self.state.task_graph.update_task_status(task.id, TaskStatus.PENDING)
-            self.logger.info(f"Retrying blocked task: {task.name}")
-            return True
+        # Check if any blocked task can be unblocked by examining failed dependencies
+        for task in blocked_tasks:
+            # Get failed dependencies
+            failed_dependencies = []
+            ready_dependencies = []
+            
+            for dep_id in task.dependencies:
+                dep_task = self.state.task_graph.tasks.get(dep_id)
+                if dep_task:
+                    if dep_task.status == TaskStatus.FAILED:
+                        failed_dependencies.append(dep_task)
+                    elif dep_task.status == TaskStatus.COMPLETED:
+                        ready_dependencies.append(dep_task)
+            
+            # If task has no dependencies or all dependencies are satisfied, unblock it
+            if not task.dependencies or len(ready_dependencies) == len(task.dependencies):
+                self.state.task_graph.update_task_status(task.id, TaskStatus.PENDING)
+                self.logger.info(f"Unblocked task with satisfied dependencies: {task.name}")
+                return True
+            
+            # If critical dependencies failed, try to skip this task or create alternative
+            if failed_dependencies:
+                # For conversational queries or non-critical tasks, just mark as skipped
+                if (task.metadata.get("is_conversational", False) or 
+                    task.metadata.get("is_greeting", False) or 
+                    task.priority.value > 2):  # LOW priority
+                    self.state.task_graph.update_task_status(task.id, TaskStatus.COMPLETED)
+                    self.logger.info(f"Skipped non-critical task with failed dependencies: {task.name}")
+                    return True
+                else:
+                    self.logger.warning(f"Task {task.name} blocked by failed critical dependencies: {[d.name for d in failed_dependencies]}")
+        
+        # If no tasks could be unblocked, check if we should stop
+        all_remaining_blocked = all(
+            task.status in [TaskStatus.BLOCKED, TaskStatus.FAILED] 
+            for task in self.state.task_graph.tasks.values() 
+            if task.status != TaskStatus.COMPLETED
+        )
+        
+        if all_remaining_blocked:
+            self.logger.warning("All remaining tasks are blocked or failed. Stopping execution.")
+            return False
         
         return False
     
@@ -432,9 +469,12 @@ class ReasoningController:
             }
         }
         
+        # Generate intelligent response based on user intent and execution results
+        intelligent_response = self._generate_intelligent_response(success, outputs)
+        
         return {
             "status": "success" if success else "partial",
-            "message": "Goal achieved" if success else "Goal partially achieved",
+            "message": intelligent_response,
             "summary": summary,
             "outputs": outputs,
             "tasks": [
@@ -456,3 +496,106 @@ class ReasoningController:
                 for result in execution_results
             ]
         }
+    
+    def _generate_intelligent_response(self, success: bool, outputs: List[Dict[str, Any]]) -> str:
+        """Generate intelligent response based on user intent and execution results."""
+        try:
+            # Check for simple conversational responses first
+            for output in outputs:
+                if output.get('tool') == 'simple_response':
+                    tool_output = output.get('output', {})
+                    if isinstance(tool_output, dict) and 'message' in tool_output:
+                        return tool_output['message']
+            
+            # For technical queries, use LLM to synthesize response
+            if outputs and success:
+                return self._synthesize_technical_response(outputs)
+            else:
+                return self._get_fallback_response(success, outputs)
+                
+        except Exception as e:
+            self.logger.error(f"Failed to generate intelligent response: {e}")
+            return "Goal achieved" if success else "Goal partially achieved"
+    
+    def _synthesize_technical_response(self, outputs: List[Dict[str, Any]]) -> str:
+        """Use LLM to synthesize a natural response based on tool outputs."""
+        try:
+            # Prepare tool results summary for LLM
+            tool_results = []
+            for output in outputs:
+                tool_name = output.get('tool', 'unknown')
+                tool_output = output.get('output', {})
+                
+                if isinstance(tool_output, dict) and 'data' in tool_output:
+                    data = tool_output['data']
+                    tool_results.append({
+                        'tool': tool_name,
+                        'result': str(data)[:200],  # Limit to avoid token overflow
+                        'type': type(data).__name__
+                    })
+            
+            # Create LLM prompt for response synthesis
+            prompt = f"""Based on the user's question and the analysis results below, generate a concise, helpful response that directly answers what the user wanted to know.
+
+Original goal: {self.state.goal}
+
+Analysis results:
+{chr(10).join([f"- {result['tool']}: {result['result']}" for result in tool_results[:5]])}
+
+Generate a natural, conversational response that:
+1. Directly answers the user's question
+2. Includes specific results/numbers when available
+3. Is concise (1-2 sentences maximum)
+4. Avoids technical jargon
+
+Response:"""
+
+            # Use the same LLM instance as the reasoning system
+            response = self.llm.invoke(prompt)
+            
+            # Extract and clean the response
+            if hasattr(response, 'content'):
+                synthesized = response.content.strip()
+            else:
+                synthesized = str(response).strip()
+            
+            # Ensure response is reasonable length
+            if len(synthesized) > 300:
+                synthesized = synthesized[:297] + "..."
+            
+            return synthesized if synthesized else "I've completed the analysis successfully."
+            
+        except Exception as e:
+            self.logger.error(f"LLM response synthesis failed: {e}")
+            return self._extract_direct_response(outputs)
+    
+    def _extract_direct_response(self, outputs: List[Dict[str, Any]]) -> str:
+        """Extract direct response from tool outputs as fallback."""
+        for output in outputs:
+            tool_name = output.get('tool', '')
+            tool_output = output.get('output', {})
+            
+            if isinstance(tool_output, dict) and 'data' in tool_output:
+                data = tool_output['data']
+                
+                # Handle different common tool types
+                if 'distance' in tool_name and isinstance(data, (int, float)):
+                    return f"The distance is {data:.2f} units."
+                elif 'area' in tool_name and isinstance(data, (int, float)):
+                    return f"The calculated area is {data:.2f} square units."
+                elif 'elements' in tool_name and isinstance(data, list):
+                    return f"Found {len(data)} elements in the building."
+                elif 'load' in tool_name and isinstance(data, dict):
+                    return "Building data loaded successfully and is ready for analysis."
+        
+        return "Analysis completed successfully."
+    
+    def _get_fallback_response(self, success: bool, outputs: List[Dict[str, Any]]) -> str:
+        """Get appropriate fallback response when synthesis fails."""
+        if not success:
+            return "I've processed your request but couldn't complete all analysis tasks. Please try asking a more specific question."
+        
+        if not outputs:
+            return "I've processed your request but couldn't generate specific results. Please ensure your building model is loaded properly."
+        
+        return "Analysis completed successfully."

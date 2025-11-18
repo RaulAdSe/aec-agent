@@ -8,8 +8,11 @@ import os
 import json
 import tempfile
 import time
+import logging
+import re
 from datetime import datetime
 from pathlib import Path
+from typing import List, Dict, Any, Optional
 from aec_agent.utils.ifc_to_json import IFCToJSONConverter
 from services.pdf_rag_manager import PDFRAGManager
 from services.session_manager import SessionManager
@@ -18,6 +21,203 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+
+class StreamlitLogHandler(logging.Handler):
+    """Log handler that captures user-friendly progress messages for Streamlit display."""
+    
+    # Messages to filter out (too technical/debug)
+    FILTERED_PATTERNS = [
+        r'context after',
+        r'updated context',
+        r'execution guardrail',
+        r'iteration \d+',
+        r'progress:',
+        r'graph metrics',
+        r'task graph',
+        r'validation passed',
+        r'output validation',
+        r'execution time',
+        r'completed in \d+',
+        r'\.\d+s',
+        r'\.\d+ms',
+    ]
+    
+    # Tool name mappings for cleaner display
+    TOOL_NAMES = {
+        'load_building_data': 'Load building data',
+        'get_all_elements': 'Get elements',
+        'get_element_properties': 'Get properties',
+        'query_elements': 'Query elements',
+        'calculate_distances': 'Calculate distances',
+        'calculate_areas': 'Calculate areas',
+        'find_related_elements': 'Find related',
+        'validate_compliance_rule': 'Validate compliance',
+        'search_compliance_documents': 'Search documents',
+        'document_findings': 'Document findings',
+        'simple_response': 'Generate response'
+    }
+    
+    def __init__(self):
+        super().__init__()
+        self.setLevel(logging.INFO)
+        self.messages: List[Dict[str, Any]] = []
+        self.last_component = None
+    
+    def emit(self, record: logging.LogRecord):
+        """Capture log message and format it for user display."""
+        try:
+            message = record.getMessage()
+            
+            # Skip filtered messages
+            if self._should_filter(message):
+                return
+            
+            # Convert to user-friendly message
+            user_message = self._convert_to_user_friendly(message, record.name)
+            if not user_message:
+                return
+            
+            # Extract component for grouping
+            component = self._extract_component(record.name)
+            
+            # Store formatted message
+            formatted_message = {
+                "level": record.levelname,
+                "component": component,
+                "message": user_message,
+                "raw_message": message
+            }
+            
+            # Only add if different from last message (avoid duplicates)
+            if not self.messages or formatted_message["message"] != self.messages[-1]["message"]:
+                self.messages.append(formatted_message)
+                self.last_component = component
+            
+            # Keep only last 20 messages to avoid clutter
+            if len(self.messages) > 20:
+                self.messages = self.messages[-20:]
+                
+        except Exception:
+            pass  # Ignore errors in logging handler
+    
+    def _should_filter(self, message: str) -> bool:
+        """Check if message should be filtered out."""
+        message_lower = message.lower()
+        for pattern in self.FILTERED_PATTERNS:
+            if re.search(pattern, message_lower):
+                return True
+        return False
+    
+    def _convert_to_user_friendly(self, message: str, logger_name: str) -> Optional[str]:
+        """Convert technical log message to user-friendly format with task/tool info."""
+        message_lower = message.lower()
+        
+        # Starting reasoning
+        if 'starting reasoning' in message_lower:
+            return 'Analyzing your question...'
+        
+        # Goal decomposition - extract task count if available
+        if 'decomposing goal' in message_lower:
+            return 'Breaking down into steps...'
+        
+        # Task execution - show task name
+        if 'executing task' in message_lower:
+            task_match = re.search(r"task\s+['\"]([^'\"]+)['\"]|task:\s*([^,\.]+)", message_lower)
+            if task_match:
+                task_name = (task_match.group(1) or task_match.group(2)).strip()
+                # Clean up task name
+                task_name = task_name.replace('_', ' ').title()
+                if len(task_name) > 40:
+                    task_name = task_name[:37] + '...'
+                return f'Task: {task_name}'
+        
+        # Tool planning - show what's being planned
+        if 'planning tools' in message_lower:
+            task_match = re.search(r"task:\s*['\"]?([^'\"]+)['\"]?", message_lower)
+            if task_match:
+                task_name = task_match.group(1).strip()
+                task_name = task_name.replace('_', ' ').title()
+                if len(task_name) > 35:
+                    task_name = task_name[:32] + '...'
+                return f'Planning: {task_name}'
+            return 'Planning tools...'
+        
+        # Tool execution - show tool name
+        if 'executing tool' in message_lower:
+            tool_match = re.search(r"tool\s+['\"]([^'\"]+)['\"]", message_lower)
+            if tool_match:
+                tool_key = tool_match.group(1)
+                tool_display = self.TOOL_NAMES.get(tool_key, tool_key.replace('_', ' ').title())
+                
+                # Try to extract task name for context
+                task_match = re.search(r"task\s+['\"]([^'\"]+)['\"]|for task ['\"]([^'\"]+)['\"]", message_lower)
+                if task_match:
+                    task_name = (task_match.group(1) or task_match.group(2)).strip()
+                    task_name = task_name.replace('_', ' ').title()
+                    if len(task_name) > 25:
+                        task_name = task_name[:22] + '...'
+                    return f'Tool: {tool_display} ({task_name})'
+                return f'Tool: {tool_display}'
+        
+        # Tool completed
+        if 'tool' in message_lower and 'executed successfully' in message_lower:
+            tool_match = re.search(r"tool\s+['\"]([^'\"]+)['\"]", message_lower)
+            if tool_match:
+                tool_key = tool_match.group(1)
+                tool_display = self.TOOL_NAMES.get(tool_key, tool_key.replace('_', ' ').title())
+                return f'Completed: {tool_display}'
+        
+        # Reasoning completed
+        if 'reasoning completed' in message_lower:
+            return 'Analysis complete'
+        
+        # Skip other technical messages
+        return None
+    
+    def _extract_component(self, logger_name: str) -> str:
+        """Extract clean component name from logger name."""
+        parts = logger_name.split('.')
+        component = parts[-1] if parts else logger_name
+        component = component.replace('_', ' ').title()
+        
+        name_map = {
+            'Reasoning Controller': 'Controller',
+            'Goal Decomposer': 'Decomposer',
+            'Tool Planner': 'Planner',
+            'Tool Executor': 'Executor',
+            'Result Validator': 'Validator',
+            'Reasoning Agent': 'Agent'
+        }
+        
+        return name_map.get(component, component)
+    
+    def get_messages(self) -> List[Dict[str, Any]]:
+        """Get all captured messages."""
+        return self.messages.copy()
+    
+    def clear(self):
+        """Clear captured messages."""
+        self.messages.clear()
+
+
+def setup_streamlit_logging():
+    """Set up logging to capture messages for Streamlit display."""
+    # Initialize log handler in session state if not exists
+    if 'log_handler' not in st.session_state:
+        st.session_state.log_handler = StreamlitLogHandler()
+    
+    # Get root logger and add our handler
+    root_logger = logging.getLogger()
+    
+    # Remove existing StreamlitLogHandler if any
+    root_logger.handlers = [h for h in root_logger.handlers if not isinstance(h, StreamlitLogHandler)]
+    
+    # Add our handler
+    root_logger.addHandler(st.session_state.log_handler)
+    root_logger.setLevel(logging.INFO)
+    
+    return st.session_state.log_handler
 
 def get_llm_insight(action, context):
     """Get LLM-generated insight about what the agent is doing."""
@@ -78,6 +278,9 @@ def main():
     if "pdf_rag_manager" not in st.session_state:
         st.session_state.pdf_rag_manager = PDFRAGManager()
     if "reasoning_agent" not in st.session_state:
+        # Set up logging before creating agent
+        setup_streamlit_logging()
+        
         # Initialize the actual ReAct agent with 3-layer memory management
         st.session_state.reasoning_agent = create_agent(
             model_name="gpt-4o-mini",
@@ -314,7 +517,7 @@ def show_chat_interface():
             with st.chat_message(message["role"]):
                 if message["role"] == "assistant" and "thinking_steps" in message:
                     # Show thinking process for past messages
-                    with st.expander("🧠 Thinking process", expanded=True):
+                    with st.expander("Thinking process", expanded=True):
                         for step in message["thinking_steps"]:
                             st.markdown(f"**{step['action']}** - {step['description']}")
                 st.markdown(message["content"])
@@ -344,154 +547,387 @@ def show_chat_interface():
         save_current_session()
 
 def generate_streaming_response(prompt):
-    """Generate streaming response with LLM-powered insights."""
+    """Generate streaming response with real-time agent log display."""
     thinking_steps = []
     
-    # Create containers for progress indicators
-    progress_container = st.empty()
-    thinking_container = st.empty()
-    response_container = st.empty()
+    # Set up logging to capture agent messages
+    log_handler = setup_streamlit_logging()
+    log_handler.clear()  # Clear previous messages
     
-    # Step 1: Analyzing user input
-    with progress_container:
-        st.info("🧠 **Analyzing your question...**")
+    # Create containers for live log display
+    status_container = st.empty()
+    log_container = st.empty()
     
-    # Generate dynamic insight about question analysis
-    analysis_insight = get_llm_insight(
-        "Analyzing Question", 
-        prompt[:100], 
-    )
+    # Function to update log display immediately when called
+    def update_log_display():
+        messages = log_handler.get_messages()
+        
+        if messages:
+            # Update status in real-time
+            latest = messages[-1]
+            status_text = latest["message"]
+            
+            # Show current status
+            is_complete = "complete" in status_text.lower() or "error" in status_text.lower()
+            
+            with status_container.container():
+                if is_complete:
+                    st.info(status_text)
+                else:
+                    # Show with spinner for active processing
+                    with st.spinner(status_text):
+                        pass
+            
+            # Update detailed log view
+            with log_container.container():
+                if len(messages) > 1:
+                    with st.expander("View progress", expanded=False):
+                        # Show only unique messages (deduplicate)
+                        seen = set()
+                        unique_messages = []
+                        for msg in reversed(messages[-15:]):  # Last 15, reversed
+                            msg_key = msg["message"]
+                            if msg_key not in seen:
+                                seen.add(msg_key)
+                                unique_messages.append(msg)
+                        unique_messages.reverse()  # Back to chronological order
+                        
+                        for msg in unique_messages:
+                            if msg["level"] == "ERROR":
+                                st.error(msg['message'])
+                            elif msg["level"] == "WARNING":
+                                st.warning(msg['message'])
+                            else:
+                                st.caption(msg['message'])
     
-    thinking_steps.append({
-        "action": "🧠 Analyzing Question",
-        "description": analysis_insight
-    })
+    # Initial update
+    update_log_display()
     
-    with thinking_container:
-        st.markdown(f"🧠 **{analysis_insight}**")
-    time.sleep(0.6)
+    # Hook into the log handler to update display immediately when new messages arrive
+    original_emit = log_handler.emit
+    def emit_with_update(record):
+        original_emit(record)
+        # Update display immediately when new log arrives
+        update_log_display()
     
-    # Step 2: Check available data sources
-    processed_files = st.session_state.processed_ifc_files
-    uploaded_pdfs = st.session_state.uploaded_pdfs
+    # Replace emit method to auto-update
+    log_handler.emit = emit_with_update
     
-    with progress_container:
-        st.info("🔍 **Checking available data sources...**")
+    try:
+        # Generate the actual response (this will generate logs)
+        # Each log will trigger an immediate display update
+        response = generate_detailed_response(prompt, thinking_steps, None)
+    finally:
+        # Restore original emit
+        log_handler.emit = original_emit
     
-    data_sources = []
-    if processed_files:
-        data_sources.append(f"{len(processed_files)} IFC building model(s)")
-    if uploaded_pdfs:
-        data_sources.append(f"{len(uploaded_pdfs)} legal document(s)")
+    # Final update to show all messages
+    update_log_display()
     
-    # Generate dynamic insight about data sources
-    data_context = f"Found: {', '.join(data_sources) if data_sources else 'No uploaded files'}"
-    data_insight = get_llm_insight(
-        "Data Source Check",
-        data_context,
-    )
-    
-    thinking_steps.append({
-        "action": "🔍 Data Source Check",
-        "description": data_insight
-    })
-    
-    with thinking_container:
-        st.markdown(f"🔍 **{data_insight}**")
-    time.sleep(0.5)
-    
-    # Step 3: Determine which tools to use
-    with progress_container:
-        st.info("🔧 **Selecting analysis tools...**")
-    
-    tools_to_use = []
-    if any(keyword in prompt.lower() for keyword in ["ifc", "building", "model", "space", "door", "stair", "wall"]):
-        tools_to_use.append("IFC Building Data Analyzer")
-    if any(keyword in prompt.lower() for keyword in ["regulation", "code", "compliance", "legal", "standard"]):
-        tools_to_use.append("Legal Document Search")
-    
-    # Generate dynamic insight about tool selection
-    tool_context = f"For query about {prompt[:50]}, selected: {', '.join(tools_to_use) if tools_to_use else 'general knowledge'}"
-    tool_insight = get_llm_insight(
-        "Tool Selection",
-        tool_context,
-    )
-    
-    thinking_steps.append({
-        "action": "🔧 Tool Selection", 
-        "description": tool_insight
-    })
-    
-    with thinking_container:
-        st.markdown(f"🔧 **{tool_insight}**")
-    time.sleep(0.7)
-    
-    # Step 4: Execute analysis based on prompt type
-    with progress_container:
-        st.info("⚡ **Analyzing building data...**")
-    
-    # Generate specific analysis insight
-    analysis_context = f"Analyzing {prompt} with available data: {data_context}"
-    analysis_insight = get_llm_insight(
-        "Building Analysis",
-        analysis_context,
-    )
-    
-    with thinking_container:
-        st.markdown(f"⚡ **{analysis_insight}**")
-    time.sleep(0.9)
-    
-    # Generate the actual response with dynamic insights
-    response = generate_detailed_response(prompt, thinking_steps)
-    
-    # Step 5: Finalizing response
-    with progress_container:
-        st.info("📝 **Preparing your analysis...**")
-    
-    # Generate final insight
-    final_insight = get_llm_insight(
-        "Response Preparation",
-        f"Compiling comprehensive analysis for: {prompt[:50]}",
-    )
-    
-    thinking_steps.append({
-        "action": "📝 Response Generation",
-        "description": final_insight
-    })
-    
-    with thinking_container:
-        st.markdown(f"📝 **{final_insight}**")
-    time.sleep(0.5)
-    
-    # Clear progress indicators and show final response
-    progress_container.empty()
-    thinking_container.empty()
+    # Convert log messages to thinking steps for history
+    messages = log_handler.get_messages()
+    for msg in messages:
+        if msg["level"] in ["INFO", "DEBUG"] and msg["component"] != "Other":
+            thinking_steps.append({
+                "action": msg['component'],
+                "description": msg['message']
+            })
     
     return response, thinking_steps
 
-def generate_detailed_response(prompt, thinking_steps):
+def _format_tool_output(tool_name, tool_output):
+    """Format tool output into user-readable response using generic logic."""
+    if not isinstance(tool_output, dict):
+        return None
+    
+    # First check if tool has a direct message
+    if 'message' in tool_output and tool_output['message']:
+        return tool_output['message']
+    
+    # Then check for valuable data
+    if 'data' not in tool_output:
+        return None
+        
+    data = tool_output['data']
+    tool_display_name = tool_name.replace('_', ' ').title()
+    
+    # Handle different data types with generic logic
+    if isinstance(data, (int, float)) and data != 0:
+        # Special formatting for measurement tools
+        if 'distance' in tool_name:
+            result = f"Distance calculation result: {data:.3f} units"
+        elif 'area' in tool_name:
+            result = f"Area calculation result: {data:.2f} square units"
+        else:
+            result = f"{tool_display_name} result: {data}"
+        
+        # Add details from logs if available
+        if 'logs' in tool_output and tool_output['logs']:
+            for log in tool_output['logs']:
+                if isinstance(log, str) and any(keyword in log.lower() for keyword in [
+                    'calculated', 'distance between', 'area of', 'result'
+                ]):
+                    result += f"\n\nDetails: {log}"
+                    break
+        
+        return result
+    
+    elif isinstance(data, str) and data.strip():
+        return f"{tool_display_name}: {data}"
+    
+    elif isinstance(data, list):
+        if not data:
+            return f"No items found by {tool_display_name.lower()}."
+        
+        # Handle element lists with type grouping
+        if tool_name == 'get_all_elements' and all(isinstance(item, dict) for item in data[:3]):
+            element_types = {}
+            for element in data[:10]:
+                element_type = element.get('type', 'Unknown')
+                element_types[element_type] = element_types.get(element_type, 0) + 1
+            
+            result = f"Found {len(data)} elements in the building model:\n"
+            for elem_type, count in element_types.items():
+                result += f"- {elem_type}: {count} element(s)\n"
+            
+            # Add examples
+            if data:
+                result += f"\nExample elements:\n"
+                for i, element in enumerate(data[:3]):
+                    elem_id = element.get('id', 'N/A')
+                    elem_type = element.get('type', 'Unknown')
+                    elem_name = element.get('name', 'Unnamed')
+                    result += f"{i+1}. {elem_type}: {elem_name} (ID: {elem_id})\n"
+            
+            return result.strip()
+        
+        # Generic list handling
+        elif all(isinstance(item, (str, int, float)) for item in data[:3]):
+            # Simple list
+            display_items = data[:5]
+            more_text = f" (and {len(data)-5} more)" if len(data) > 5 else ""
+            return f"{tool_display_name}: {', '.join(map(str, display_items))}{more_text}"
+        else:
+            return f"{tool_display_name}: Found {len(data)} items"
+    
+    elif isinstance(data, dict):
+        if not data:
+            return f"{tool_display_name}: No data available."
+        
+        # Handle building data summary
+        if tool_name == 'load_building_data':
+            summary_parts = []
+            for category, items in data.items():
+                if isinstance(items, list):
+                    summary_parts.append(f"{category}: {len(items)} items")
+                elif isinstance(items, dict):
+                    summary_parts.append(f"{category}: data loaded")
+            
+            if summary_parts:
+                return f"Building data loaded successfully:\n" + "\n".join(f"- {part}" for part in summary_parts)
+        
+        # Handle calculation dictionaries
+        elif any(keyword in tool_name for keyword in ['calculate', 'distance', 'area']):
+            formatted_items = []
+            for key, value in data.items():
+                if isinstance(value, (int, float)):
+                    if 'distance' in tool_name:
+                        formatted_items.append(f"{key}: {value:.3f} units")
+                    elif 'area' in tool_name:
+                        formatted_items.append(f"{key}: {value:.2f} square units")
+                    else:
+                        formatted_items.append(f"{key}: {value}")
+                elif isinstance(value, str) and value:
+                    formatted_items.append(f"{key}: {value}")
+            
+            if formatted_items:
+                return f"{tool_display_name} results:\n" + "\n".join(formatted_items)
+        
+        # Generic dict handling
+        else:
+            formatted_items = []
+            for key, value in data.items():
+                if isinstance(value, (int, float)):
+                    formatted_items.append(f"  {key}: {value}")
+                elif isinstance(value, str) and value:
+                    formatted_items.append(f"  {key}: {value}")
+            
+            if formatted_items:
+                return f"{tool_display_name} results:\n" + "\n".join(formatted_items)
+    
+    # Fallback for any other data type
+    return f"{tool_display_name}: {str(data)}"
+
+def _synthesize_goal_response(user_prompt, reasoning_result):
+    """Synthesize a goal-focused response based on user intent and tool results."""
+    
+    # Extract key information from tool outputs
+    tool_data = {}
+    if 'outputs' in reasoning_result:
+        for output in reasoning_result['outputs']:
+            tool_name = output.get('tool')
+            tool_output = output.get('output', {})
+            
+            if isinstance(tool_output, dict) and 'data' in tool_output:
+                tool_data[tool_name] = tool_output['data']
+                
+                # Also capture logs for additional context
+                if 'logs' in tool_output:
+                    tool_data[f"{tool_name}_logs"] = tool_output['logs']
+    
+    # Analyze user intent and synthesize appropriate response
+    prompt_lower = user_prompt.lower()
+    
+    # Distance/measurement queries
+    if any(word in prompt_lower for word in ['distance', 'far', 'how far', 'between']):
+        if 'calculate_distances' in tool_data:
+            distance = tool_data['calculate_distances']
+            if isinstance(distance, (int, float)):
+                # Look for context in logs
+                context = ""
+                if 'calculate_distances_logs' in tool_data:
+                    for log in tool_data['calculate_distances_logs']:
+                        if 'distance between' in log.lower():
+                            context = f" {log.split('distance between')[-1].strip()}"
+                            break
+                
+                return f"The distance between the elements is {distance:.2f} units.{context}"
+            else:
+                return f"Distance calculation completed with result: {distance}"
+        else:
+            return "I couldn't calculate the distance. Please ensure the building model is loaded and specify which elements you want to measure between."
+    
+    # Area calculation queries
+    elif any(word in prompt_lower for word in ['area', 'size', 'square']):
+        if 'calculate_areas' in tool_data:
+            area = tool_data['calculate_areas']
+            if isinstance(area, (int, float)):
+                return f"The calculated area is {area:.2f} square units."
+            else:
+                return f"Area calculation completed: {area}"
+        else:
+            return "I couldn't calculate the area. Please ensure the building model is loaded and specify which areas you want to calculate."
+    
+    # Element/door/wall listing queries
+    elif any(word in prompt_lower for word in ['show', 'list', 'all', 'doors', 'walls', 'elements', 'find']):
+        if 'get_all_elements' in tool_data:
+            elements = tool_data['get_all_elements']
+            if isinstance(elements, list) and elements:
+                element_type = "elements"
+                if 'door' in prompt_lower:
+                    element_type = "doors"
+                elif 'wall' in prompt_lower:
+                    element_type = "walls"
+                
+                # Count by type if possible
+                type_counts = {}
+                for element in elements[:20]:  # Sample first 20
+                    elem_type = element.get('type', 'Unknown') if isinstance(element, dict) else 'Unknown'
+                    type_counts[elem_type] = type_counts.get(elem_type, 0) + 1
+                
+                response = f"Found {len(elements)} {element_type} in the building."
+                if type_counts and len(type_counts) > 1:
+                    type_summary = ", ".join([f"{count} {etype}" for etype, count in list(type_counts.items())[:3]])
+                    response += f" Types include: {type_summary}."
+                
+                # Add a few examples if available
+                if elements and isinstance(elements[0], dict):
+                    examples = []
+                    for element in elements[:3]:
+                        name = element.get('name', 'Unnamed')
+                        if name != 'Unnamed':
+                            examples.append(name)
+                    if examples:
+                        response += f" Examples: {', '.join(examples)}."
+                
+                return response
+            else:
+                return f"No {element_type} found in the building model."
+        else:
+            return "I couldn't retrieve the building elements. Please ensure the building model is loaded properly."
+    
+    # Building data/loading queries
+    elif any(word in prompt_lower for word in ['load', 'building', 'data', 'model', 'file']):
+        if 'load_building_data' in tool_data:
+            building_data = tool_data['load_building_data']
+            if isinstance(building_data, dict):
+                categories = []
+                for category, items in building_data.items():
+                    if isinstance(items, list) and items:
+                        categories.append(f"{len(items)} {category}")
+                    elif items:
+                        categories.append(category)
+                
+                if categories:
+                    return f"Building model loaded successfully. Available data: {', '.join(categories[:5])}."
+                else:
+                    return "Building model loaded but appears to be empty."
+            else:
+                return "Building data has been loaded and is ready for analysis."
+        else:
+            return "I couldn't load the building data. Please check that a valid IFC file is available."
+    
+    # Generic technical analysis
+    else:
+        # Look for any successful tool executions
+        successful_tools = [tool for tool, data in tool_data.items() if not tool.endswith('_logs') and data]
+        
+        if successful_tools:
+            if len(successful_tools) == 1:
+                tool_name = successful_tools[0].replace('_', ' ')
+                return f"I've completed the {tool_name} analysis. The task has been processed successfully."
+            else:
+                return f"I've completed the analysis using {len(successful_tools)} different tools. All requested tasks have been processed."
+        else:
+            # Check if we have task completion info
+            if 'summary' in reasoning_result:
+                summary = reasoning_result['summary']
+                completed = summary.get('completed_tasks', 0)
+                total = summary.get('total_tasks', 0)
+                
+                if completed > 0:
+                    return f"I've processed your request and completed {completed} out of {total} analysis tasks."
+            
+            return "I've processed your request, but couldn't generate specific results. Please try asking a more specific question about the building analysis."
+
+def generate_detailed_response(prompt, thinking_steps, log_update_callback=None):
     """Generate response using the ReAct agent with tool reasoning and streaming insights."""
     try:
+        # Set up logging if callback provided
+        if log_update_callback:
+            log_handler = setup_streamlit_logging()
+        
         # Use the actual ReasoningAgent instead of hardcoded logic
         agent = st.session_state.reasoning_agent
         
-        # Add context about available data to the agent and set session context
-        if st.session_state.processed_ifc_files:
-            # Add building data to agent's session context
-            for filename, data in st.session_state.processed_ifc_files.items():
-                agent.set_session_goal(
-                    goal=f"Available building model: {filename}",
-                    context=f"IFC data loaded with {data['json_data']['file_info']['total_elements']} elements"
-                )
+        # Track active files in the agent's memory system
+        processed_files_dict = st.session_state.get('processed_ifc_files', {})
+        if processed_files_dict:
+            # Track each processed IFC file as active in the agent's memory
+            for filename, data in processed_files_dict.items():
+                # Create the JSON file path that was saved during processing
+                json_file_path = f"data/processed_ifc/{filename}.json"
+                
+                # Track this file as active in the agent's memory system
+                if hasattr(agent, 'memory_manager') and agent.memory_manager:
+                    agent.memory_manager.track_active_file(json_file_path)
+            
+            # Set session goal with available building data context
+            available_files = list(processed_files_dict.keys())
+            agent.set_session_goal(
+                goal=f"Available building model: {available_files[0]}",
+                context=f"Building data available with {len(available_files)} processed IFC file(s)"
+            )
         
         # Create enhanced prompt with available data context
         context_info = []
-        if st.session_state.processed_ifc_files:
-            ifc_files = list(st.session_state.processed_ifc_files.keys())
+        if processed_files_dict:
+            ifc_files = list(processed_files_dict.keys())
             context_info.append(f"Available building models: {', '.join(ifc_files)}")
             
-        if st.session_state.uploaded_pdfs:
-            pdf_files = list(st.session_state.uploaded_pdfs.keys())
+        uploaded_pdfs_dict = st.session_state.get('uploaded_pdfs', {})
+        if uploaded_pdfs_dict:
+            pdf_files = list(uploaded_pdfs_dict.keys())
             context_info.append(f"Available documents: {', '.join(pdf_files)}")
         
         if context_info:
@@ -499,64 +935,34 @@ def generate_detailed_response(prompt, thinking_steps):
         else:
             enhanced_prompt = f"{prompt}\n\nNote: No files uploaded yet. Please upload IFC building models or PDF documents first."
         
-        # Add agent thinking step
-        agent_insight = get_llm_insight("Agent Reasoning", f"Autonomous analysis of: {prompt[:50]}")
-        thinking_steps.append({
-            "action": "🤖 ReAct Agent",
-            "description": agent_insight
-        })
-        
-        # Execute the agent with the enhanced prompt
+        # Execute the agent with the enhanced prompt (logs will be captured automatically)
+        # The callback will be called periodically during execution if provided
         result = agent.process_goal(enhanced_prompt)
+        
+        # Update log display after agent execution
+        if log_update_callback:
+            log_update_callback()
         
         # Extract REAL agent reasoning steps for transparency
         if isinstance(result, dict) and 'reasoning_result' in result:
             reasoning = result['reasoning_result']
             
-            # Add actual agent reasoning steps to thinking_steps
-            if 'summary' in reasoning:
-                summary = reasoning['summary']
-                
-                # Show goal decomposition
-                if 'goal_analysis' in summary:
-                    thinking_steps.append({
-                        "action": "🎯 Goal Decomposition",
-                        "description": f"Broke down query into {len(summary.get('planned_tasks', []))} actionable tasks"
-                    })
-                
-                # Show completed tasks
-                if 'completed_tasks' in summary:
-                    for task in summary['completed_tasks'][:3]:  # Show first 3 tasks
-                        thinking_steps.append({
-                            "action": f"✅ {task.get('name', 'Task')}",
-                            "description": task.get('result', 'Task completed')[:60] + '...'
-                        })
-                
-                # Show failed tasks
-                if 'failed_tasks' in summary:
-                    for task in summary['failed_tasks'][:2]:  # Show failed attempts
-                        thinking_steps.append({
-                            "action": f"⚠️ {task.get('name', 'Task')}",
-                            "description": f"Task blocked: {task.get('error', 'Unknown issue')[:50]}"
-                        })
-                
-                # Show tools used
-                if 'tools_used' in summary:
-                    tools = summary['tools_used']
-                    if tools:
-                        thinking_steps.append({
-                            "action": "🔧 Tools Executed",
-                            "description": f"Used {len(tools)} tools: {', '.join(tools[:3])}"
-                        })
+            # Log messages are already captured by StreamlitLogHandler
+            # No need to manually extract thinking steps here
             
-            # Extract final response
+            # Extract final response - The agent now handles intelligent response synthesis internally
             response = reasoning.get('message', 'No response generated')
-            if 'summary' in reasoning and 'final_answer' in reasoning['summary']:
-                response = reasoning['summary']['final_answer']
-            elif 'summary' in reasoning and 'completed_tasks' in reasoning['summary']:
-                completed = reasoning['summary']['completed_tasks']
-                if completed:
-                    response = f"Analysis complete! Executed {len(completed)} tasks.\n\n" + response
+            
+            # Only apply fallback logic if the response is actually generic
+            if response in ['Goal achieved', 'Goal partially achieved', 'No response generated']:
+                if 'summary' in reasoning and 'final_answer' in reasoning['summary']:
+                    response = reasoning['summary']['final_answer']
+                elif 'summary' in reasoning and isinstance(reasoning['summary'].get('completed_tasks'), list):
+                    completed = reasoning['summary']['completed_tasks']
+                    if completed:
+                        response = f"Analysis complete! Executed {len(completed)} tasks. Please ask a more specific question about the building analysis results."
+                else:
+                    response = "I've processed your request but couldn't generate a specific response. Please try asking a more specific question about the building analysis."
         else:
             response = str(result)
             
@@ -681,22 +1087,32 @@ def delete_session(session_id: str):
 
 def save_current_session():
     """Save the current session state."""
-    if "current_session_id" in st.session_state:
-        session_data = {
-            "session_id": st.session_state.current_session_id,
-            "title": "Chat Session",  # Will be auto-generated based on first message
-            "messages": st.session_state.messages,
-            "processed_ifc_files": st.session_state.processed_ifc_files,
-            "uploaded_pdfs": st.session_state.uploaded_pdfs
-        }
-        
-        # Auto-generate title if this is the first save and we have messages
-        if st.session_state.messages:
-            current_session = st.session_state.session_manager.load_session(st.session_state.current_session_id)
-            if current_session and current_session.get("title") in ["Chat Session", "New Chat"] or "New Chat" in current_session.get("title", ""):
-                st.session_state.session_manager.auto_generate_title(st.session_state.current_session_id)
-        
-        st.session_state.session_manager.save_session(st.session_state.current_session_id, session_data)
+    try:
+        if "current_session_id" in st.session_state and hasattr(st.session_state, 'session_manager'):
+            session_data = {
+                "session_id": st.session_state.current_session_id,
+                "title": "Chat Session",  # Will be auto-generated based on first message
+                "messages": getattr(st.session_state, 'messages', []),
+                "processed_ifc_files": getattr(st.session_state, 'processed_ifc_files', {}),
+                "uploaded_pdfs": getattr(st.session_state, 'uploaded_pdfs', {})
+            }
+            
+            # Auto-generate title if this is the first save and we have messages
+            if st.session_state.messages:
+                try:
+                    current_session = st.session_state.session_manager.load_session(st.session_state.current_session_id)
+                    if current_session:
+                        current_title = current_session.get("title", "")
+                        if current_title in ["Chat Session", "New Chat"] or "New Chat" in current_title:
+                            st.session_state.session_manager.auto_generate_title(st.session_state.current_session_id)
+                except Exception as e:
+                    # If title generation fails, just continue without it
+                    print(f"Warning: Could not auto-generate title: {e}")
+            
+            st.session_state.session_manager.save_session(st.session_state.current_session_id, session_data)
+    except Exception as e:
+        # If session saving fails, log the error but don't crash the app
+        print(f"Warning: Could not save session: {e}")
 
 
 if __name__ == "__main__":

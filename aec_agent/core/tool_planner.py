@@ -45,12 +45,11 @@ class ToolPlanner:
         # Tool dependency mapping
         self.tool_dependencies = {
             "get_all_elements": ["load_building_data"],
-            "get_element_properties": ["load_building_data"],
+            "get_all_properties": ["load_building_data"],
             "query_elements": ["load_building_data"],
-            "calculate_distances": ["load_building_data"],
-            "calculate_areas": ["load_building_data"],
-            "find_related_elements": ["load_building_data"],
-            "validate_compliance_rule": ["load_building_data", "search_compliance_documents"]
+            "calculate": ["load_building_data"],
+            "find_related": ["load_building_data"],
+            "validate_rule": ["load_building_data", "search_compliance_documents"]
         }
         
         # Tool capability descriptions with detailed parameter specifications
@@ -254,6 +253,21 @@ class ToolPlanner:
     "recommendations": ["Doors are optimally spaced", "No accessibility concerns identified"]
 })'''
                 ]
+            },
+            "simple_response": {
+                "purpose": "Handle simple queries, greetings, and basic conversational responses",
+                "input": "String: Simple query or greeting",
+                "output": "Dict with status, message (friendly response), and data",
+                "parameters": {
+                    "query": "Required string: The simple query or greeting to respond to"
+                },
+                "prerequisites": ["None - can be used for any simple query"],
+                "good_for": ["greetings", "simple queries", "conversational responses", "basic interactions"],
+                "examples": [
+                    'simple_response("hello")',
+                    'simple_response("hola")',
+                    'simple_response("thank you")'
+                ]
             }
         }
         
@@ -273,6 +287,18 @@ class ToolPlanner:
         self.logger.info(f"Planning tools for task: {task.name}")
         
         try:
+            # Handle conversational queries directly without LLM planning
+            if (task.metadata.get("is_conversational", False) or 
+                task.metadata.get("is_greeting", False) or 
+                task.metadata.get("method") == "simple_query_handler"):
+                self.logger.info(f"Detected conversational query task, using simple_response tool")
+                return {
+                    "success": True,
+                    "tool_sequence": ["simple_response"],
+                    "method": "conversational_response",
+                    "metadata": {"is_conversational": True, "simple_response": True}
+                }
+            
             # Check if we have execution history context for enhanced planning
             execution_context = context.get("execution_context", {})
             has_execution_history = bool(execution_context.get("recent_execution_steps", []))
@@ -366,12 +392,19 @@ CRITICAL WORKFLOW REQUIREMENTS:
 1. Building data MUST be loaded first before any other building-related operations
 2. Element IDs MUST be obtained from get_all_elements() or query_elements() before using them in other tools
 3. Property paths MUST be discovered using get_element_properties() before filtering or validation
-4. Distance calculations require specific element IDs or coordinates
+4. **DISTANCE CALCULATIONS**: For ANY task involving distances, measurements, or finding closest elements, you MUST use "calculate" tool
 5. Documentation should be the final step after analysis
 
+MANDATORY DISTANCE DETECTION:
+If the task name or description contains ANY of these words or phrases:
+- "distance", "distances", "far", "close", "closest", "nearest", "between"
+- "from [X] to [Y]", "how far", "measure", "calculate distance"
+- "find closest", "find nearest", "identify closest"
+→ YOU MUST SELECT "calculate" TOOL
+
 PARAMETER REQUIREMENTS:
-- calculate_distances requires: element1_id="id1", element2_id="id2" OR point1=[x,y], point2=[x,y]
-- calculate_areas requires: element_ids=["id1", "id2"], calculation_type="area" (or "volume")
+- calculate requires: operation="distance_between_elements", element1_id="id1", element2_id="id2" OR operation="distance_2d", point1=[x,y], point2=[x,y]
+- calculate requires: operation="area_sum", element_ids=["id1", "id2"] (for areas/volumes)
 - get_all_elements requires: element_type="doors" (or "spaces", "walls", etc.)
 - document_findings requires: structured content dict with title, type, sections, summary, recommendations
 
@@ -381,22 +414,32 @@ SELECTION RULES:
 1. Return ONLY the tool name (e.g., "get_all_elements")
 2. Choose the tool that DIRECTLY accomplishes the task with proper parameters
 3. Consider prerequisites - if task needs element IDs, ensure they can be obtained first
-4. For distance calculations, ALWAYS use "calculate_distances"
-5. For area/volume calculations, use "calculate_areas"
+4. **CRITICAL**: For ANY distance-related task, ALWAYS use "calculate" - NEVER use "get_all_elements"
+5. For area/volume calculations, use "calculate"
 6. For documentation/formatting results, ALWAYS use "document_findings"
-7. If task requires discovering available properties, use "get_element_properties"
+7. If task requires discovering available properties, use "get_all_properties"
 8. If no tool can accomplish the task, return "none"
+
+DISTANCE CALCULATION RULES (MANDATORY):
+- ANY task containing words: "distance", "distances", "far", "close", "closest", "between", "from...to" → "calculate"
+- "Calculate distances from X to Y" → "calculate" (NOT get_all_elements)
+- "Find closest/nearest" → "calculate" (NOT get_all_elements)
+- "How far is..." → "calculate" (NOT get_all_elements)
+- "Distance between..." → "calculate" (NOT get_all_elements)
 
 COMMON TASK PATTERNS:
 - "Load data" → "load_building_data"
 - "Get all [elements]" → "get_all_elements"
-- "Calculate distance/distances" → "calculate_distances"
-- "Measure distance" → "calculate_distances"
-- "Calculate areas/volumes" → "calculate_areas"
-- "Find properties" → "get_element_properties"
+- "Calculate distance/distances" → "calculate"
+- "Calculate distances from X to Y" → "calculate"
+- "Find closest/nearest" → "calculate"
+- "How far is..." → "calculate"
+- "Measure distance" → "calculate"
+- "Calculate areas/volumes" → "calculate"
+- "Find properties" → "get_all_properties"
 - "Filter elements" → "query_elements"
 - "Document/format/present results" → "document_findings"
-- "Check compliance" → "validate_compliance_rule"
+- "Check compliance" → "validate_rule"
 - "Search regulations" → "search_compliance_documents"
 """),
             ("human", """Task: {task_name}
@@ -421,14 +464,29 @@ Select the best tool:""")
             
             # Validate the tool exists
             available_tools = [
-                "load_building_data", "get_all_elements", "get_element_properties",
-                "query_elements", "calculate_distances", "calculate_areas", "find_related_elements", 
-                "validate_compliance_rule", "search_compliance_documents", "document_findings"
+                "load_building_data", "get_all_elements", "get_all_properties",
+                "query_elements", "calculate", "find_related", 
+                "validate_rule", "search_compliance_documents", "document_findings"
             ]
             
+            # Tool aliases for backward compatibility
+            tool_aliases = {
+                "find_related_elements": "find_related",
+                "get_element_properties": "get_all_properties", 
+                "validate_compliance_rule": "validate_rule",
+                "calculate_distances": "calculate",
+                "calculate_areas": "calculate"
+            }
+            
+            # Check direct match first
             if tool_name in available_tools:
                 self.logger.info(f"LLM selected tool '{tool_name}' for task '{task.name}'")
                 return [tool_name]
+            # Check aliases
+            elif tool_name in tool_aliases:
+                actual_tool = tool_aliases[tool_name]
+                self.logger.info(f"LLM selected aliased tool '{tool_name}' -> '{actual_tool}' for task '{task.name}'")
+                return [actual_tool]
             elif tool_name == "none":
                 self.logger.warning(f"LLM indicated no suitable tool for task '{task.name}'")
                 return None
@@ -553,9 +611,9 @@ Select the best tool considering execution history:""")
             
             # Validate the tool exists
             available_tools = [
-                "load_building_data", "get_all_elements", "get_element_properties",
-                "query_elements", "calculate_distances", "calculate_areas", "find_related_elements", 
-                "validate_compliance_rule", "search_compliance_documents", "document_findings"
+                "load_building_data", "get_all_elements", "get_all_properties",
+                "query_elements", "calculate", "find_related", 
+                "validate_rule", "search_compliance_documents", "document_findings"
             ]
             
             if tool_name in available_tools:

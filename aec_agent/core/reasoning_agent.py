@@ -183,14 +183,14 @@ class ReasoningAgent:
         self.tool_registry = {
             "load_building_data": self._create_building_data_wrapper(),
             "get_all_elements": get_all_elements,
-            "get_element_properties": get_all_properties,
+            "get_all_properties": get_all_properties,
             "query_elements": self._create_query_wrapper(),
-            "calculate_distances": self._create_distances_wrapper(),
-            "calculate_areas": self._create_areas_wrapper(),
-            "find_related_elements": self._create_related_wrapper(),
-            "validate_compliance_rule": self._create_validation_wrapper(),
+            "calculate": self._create_calculate_wrapper(),
+            "find_related": self._create_related_wrapper(),
+            "validate_rule": self._create_validation_wrapper(),
             "search_compliance_documents": search_compliance_docs,
-            "document_findings": self._create_documentation_wrapper()
+            "document_findings": self._create_documentation_wrapper(),
+            "simple_response": self._create_simple_response_wrapper()
         }
     
     def _create_building_data_wrapper(self):
@@ -258,12 +258,12 @@ class ReasoningAgent:
                     }
                 }
                 
-                self.memory_manager.set_building_data_context(path, context_data)
-                self.memory_manager.track_active_file(path)
+                self.memory_manager.set_building_data_context(file_path, context_data)
+                self.memory_manager.track_active_file(file_path)
                 
                 self.memory_manager.record_tool_execution(
                     tool_name="load_building_data",
-                    arguments={"path": path},
+                    arguments={"path": file_path},
                     success=True,
                     result_summary=f"Loaded building data: {context_data['total_elements']} elements"
                 )
@@ -508,6 +508,43 @@ class ReasoningAgent:
                 return {
                     "status": "error",
                     "message": f"Documentation failed: {str(e)}"
+                }
+        
+        return wrapper
+    
+    def _create_simple_response_wrapper(self):
+        """Create wrapper for simple responses to greetings and basic queries."""
+        def wrapper(input_str: str) -> Dict[str, Any]:
+            try:
+                # Extract the original query from the input
+                query = input_str if isinstance(input_str, str) else str(input_str)
+                
+                # Generate appropriate response based on query type
+                query_lower = query.lower().strip()
+                
+                if any(greeting in query_lower for greeting in ["hello", "hi", "hola", "hey"]):
+                    response = "Hello! I'm your AEC Compliance Agent. I can help you analyze building models, check compliance with regulations, and answer questions about your uploaded IFC files and documents. How can I assist you today?"
+                elif any(thanks in query_lower for thanks in ["thank", "thanks"]):
+                    response = "You're welcome! Let me know if you have any other questions about building compliance or analysis."
+                elif query_lower in ["yes", "no", "ok", "okay"]:
+                    response = "I understand. Is there anything specific about building compliance or your uploaded files that you'd like me to analyze?"
+                else:
+                    # Generic response for other simple queries
+                    response = f"I received your query: '{query}'. I'm here to help with AEC compliance analysis. Please feel free to ask about building codes, regulations, or upload IFC building models for analysis."
+                
+                return {
+                    "status": "success",
+                    "message": response,
+                    "data": {
+                        "response_type": "simple_greeting_response",
+                        "original_query": query
+                    }
+                }
+                
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "message": f"Simple response failed: {str(e)}"
                 }
         
         return wrapper
