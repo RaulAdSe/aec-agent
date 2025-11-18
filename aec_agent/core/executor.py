@@ -564,14 +564,14 @@ class ToolExecutor:
         
         # Priority order: try to match element type in description to context data
         if "stair" in desc_lower:
-            # Look for stair elements
+            # Look for stair elements - return first stair ID if available
             if "stairs_data" in context and context["stairs_data"]:
                 elements = context["stairs_data"]
                 if isinstance(elements, list) and elements and elements[0].get("id"):
                     return elements[0]["id"]
         
         elif "door" in desc_lower:
-            # Look for door elements
+            # Look for door elements  
             if "doors_data" in context and context["doors_data"]:
                 elements = context["doors_data"]
                 if isinstance(elements, list) and elements and elements[0].get("id"):
@@ -591,14 +591,16 @@ class ToolExecutor:
                 if isinstance(elements, list) and elements and elements[0].get("id"):
                     return elements[0]["id"]
         
-        # Fallback: look for any elements in context
-        for key, value in context.items():
-            if key.endswith("_data") and isinstance(value, list) and value:
-                if isinstance(value[0], dict) and value[0].get("id"):
-                    return value[0]["id"]
+        # Find first available element from any loaded data
+        for element_type in ["stairs_data", "doors_data", "walls_data", "spaces_data", "slabs_data"]:
+            if element_type in context and context[element_type]:
+                elements = context[element_type]
+                if isinstance(elements, list) and elements and elements[0].get("id"):
+                    return elements[0]["id"]
         
-        # Last resort: return a placeholder that indicates the issue
-        return "NO_ELEMENT_ID_IN_CONTEXT"
+        # This indicates the agent workflow has a bug - context should always have element data at this point
+        available_keys = [k for k in context.keys() if k.endswith("_data")]
+        raise ValueError(f"No element data found in context for task: {description}. Available data keys: {available_keys}. Context loading may have failed.")
     
     def _extract_search_query(self, task: Task) -> str:
         """Extract search query from task description."""
