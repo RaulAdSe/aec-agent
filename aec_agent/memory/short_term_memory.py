@@ -31,7 +31,7 @@ class ShortTermMemoryConfig(BaseModel):
     
     window_size: int = Field(default=10, description="Number of recent messages to keep in buffer")
     max_token_limit: int = Field(default=2000, description="Maximum tokens for summary memory")
-    model_name: str = Field(default="gpt-4o-mini", description="Model for summarization")
+    model_name: str = Field(default="gpt-5-mini", description="Model for summarization")
     temperature: float = Field(default=0.1, description="Temperature for summarization")
     
     # Summarization settings

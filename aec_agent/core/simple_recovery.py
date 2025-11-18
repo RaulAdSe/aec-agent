@@ -13,6 +13,19 @@ from .reasoning_utils import Task, ExecutionResult, ReasoningUtils
 from langsmith import traceable
 
 
+# Smart tool alternatives for contextual recovery
+SMART_TOOL_ALTERNATIVES = {
+    "find_related": {
+        "spatial": ["query_elements", "get_all_properties"],
+        "relationship": ["calculate_distances", "query_elements"]
+    },
+    "validate_rule": {
+        "stair_compliance": ["search_compliance_documents", "calculate"],
+        "door_compliance": ["search_compliance_documents", "get_all_properties"]
+    }
+}
+
+
 @dataclass
 class RecoveryResult:
     """Simple result from recovery attempt."""
@@ -85,6 +98,25 @@ class SimpleRecovery:
         self.decision_maker = RecoveryDecisionMaker(llm)
         self.logger = ReasoningUtils.setup_logger(__name__)
     
+    def get_contextual_alternative(self, failed_tool: str, task_description: str, error_message: str) -> str:
+        """Get smart alternative based on context and error."""
+        
+        # Handle specific known failures
+        if "spatial" in error_message and "not implemented" in error_message:
+            return "calculate_distances"  # Can compute spatial relationships
+        
+        if "stair_compliance" in error_message and "not implemented" in error_message:
+            return "search_compliance_documents"  # Get compliance rules first
+        
+        # Use tool-specific alternatives
+        alternatives = SMART_TOOL_ALTERNATIVES.get(failed_tool, {})
+        for error_key, alt_tools in alternatives.items():
+            if error_key in error_message or error_key in task_description.lower():
+                return alt_tools[0]
+        
+        # Safer default than load_building_data
+        return "query_elements"
+    
     def recover(self, task: Task, error_result: ExecutionResult, context: Dict[str, Any]) -> RecoveryResult:
         """Main recovery entry point - simple and clean."""
         
@@ -95,13 +127,16 @@ class SimpleRecovery:
             context=context
         )
         
+        # Add error message to context for tool selection
+        context_with_error = {**context, 'error_message': error_result.error_message}
+        
         # Execute the strategy
         if strategy == "retry_with_different_input":
-            return self._retry_with_different_input(task, context, error_result.error_message)
+            return self._retry_with_different_input(task, context_with_error, error_result.error_message)
         elif strategy == "try_different_tool":
-            return self._try_different_tool(task, context)
+            return self._try_different_tool(task, context_with_error)
         elif strategy == "replan_goal":
-            return self._replan_goal(task, context, error_result.error_message)
+            return self._replan_goal(task, context_with_error, error_result.error_message)
         else:  # skip_gracefully or unknown
             return self._skip_gracefully(task, error_result.error_message)
     
@@ -157,18 +192,24 @@ class SimpleRecovery:
         available_tools = context.get('available_tools', [])
         current_tool = task.tool_sequence[0] if task.tool_sequence else None
         
-        # Find alternative tools (improved logic)
-        alternatives = [t for t in available_tools if t != current_tool]
+        # Get contextual alternative based on task and error
+        error_message = context.get('error_message', '')
+        alt_tool = self.get_contextual_alternative(
+            failed_tool=current_tool or "unknown",
+            task_description=task.description,
+            error_message=error_message
+        )
         
-        if not alternatives:
-            return RecoveryResult(
-                success=False,
-                strategy="try_different_tool",
-                message="No alternative tools available"
-            )
-        
-        # Use first alternative
-        alt_tool = alternatives[0]
+        # Fallback to generic alternatives if contextual choice isn't available
+        if alt_tool not in available_tools:
+            alternatives = [t for t in available_tools if t != current_tool]
+            if not alternatives:
+                return RecoveryResult(
+                    success=False,
+                    strategy="try_different_tool", 
+                    message="No alternative tools available"
+                )
+            alt_tool = alternatives[0]
         modified_task = Task(
             id=task.id + "_alt_tool",
             name=task.name,

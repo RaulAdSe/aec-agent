@@ -11,7 +11,7 @@ from .config import AgentConfig
 
 
 def create_agent(
-    model_name: str = "gpt-4o-mini",
+    model_name: str = "gpt-5-mini",
     temperature: float = 0.1,
     verbose: bool = True,
     enable_memory: bool = True,

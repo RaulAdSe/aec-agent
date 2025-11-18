@@ -6,7 +6,7 @@ including short-term, session, and execution memory summarization settings.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -22,9 +22,9 @@ class SummarizationConfig:
     short_term_strategy: str = "async"  # sync, async, background
     session_strategy: str = "rule_based"  # rule_based, llm, hybrid
     
-    # Model settings
-    summarization_model: str = "gpt-4o-mini"
-    summarization_temperature: float = 0.1
+    # Model settings (can be overridden by AgentConfig)
+    summarization_model: Optional[str] = None  # None = use from AgentConfig.llm.summarization_model
+    summarization_temperature: Optional[float] = None  # None = use from AgentConfig.llm.summarization_temperature
     summarization_max_tokens: int = 500
     
     # Retention settings

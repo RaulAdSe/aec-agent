@@ -5,7 +5,7 @@ This module evaluates whether the original goal has been achieved based on
 accumulated execution context, task completion, and discovered information.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass
 
 from .reasoning_utils import ReasoningUtils, Task, TaskStatus
@@ -19,6 +19,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import json
+
+if TYPE_CHECKING:
+    from ..config import AgentConfig
 
 
 @dataclass
@@ -42,19 +45,32 @@ class ProgressEvaluator:
     execution context, task completion status, and accumulated evidence.
     """
     
-    def __init__(self, llm=None):
-        """Initialize the progress evaluator."""
+    def __init__(self, llm=None, config: Optional['AgentConfig'] = None):
+        """Initialize the progress evaluator.
+        
+        Args:
+            llm: Optional pre-configured LLM instance (takes precedence)
+            config: Optional AgentConfig to use for model configuration
+        """
         self.logger = ReasoningUtils.setup_logger(__name__)
         
         # Setup LLM for intelligent progress evaluation
-        if llm is None:
+        if llm is not None:
+            self.llm = llm
+        elif config is not None:
+            # Use config to create LLM
             self.llm = ChatOpenAI(
-                model="gpt-4o-mini",
+                model=config.llm.get_component_model("progress_evaluator"),
+                temperature=config.llm.get_component_temperature("progress_evaluator"),
+                max_tokens=config.llm.get_component_max_tokens("progress_evaluator")
+            )
+        else:
+            # Fallback to defaults (for backward compatibility)
+            self.llm = ChatOpenAI(
+                model="gpt-5-mini",
                 temperature=0.1,  # Low temperature for consistent evaluation
                 max_tokens=1500
             )
-        else:
-            self.llm = llm
         
     
     @traceable(name="evaluate_goal_progress", metadata={"component": "progress_evaluator"})

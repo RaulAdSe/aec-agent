@@ -55,9 +55,12 @@ class SummarizationService:
         # Initialize LLM if needed
         if self.config.enable_short_term_summarization:
             try:
+                # Use config values or fall back to defaults
+                model = self.config.summarization_model or "gpt-5-mini"
+                temperature = self.config.summarization_temperature if self.config.summarization_temperature is not None else 0.1
                 self._llm = ChatOpenAI(
-                    model=self.config.summarization_model,
-                    temperature=self.config.summarization_temperature,
+                    model=model,
+                    temperature=temperature,
                     max_tokens=self.config.summarization_max_tokens
                 )
             except Exception as e:

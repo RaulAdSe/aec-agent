@@ -511,9 +511,23 @@ class ToolExecutor:
     
     def _prepare_relationship_input(self, task: Task, context: Dict[str, Any]) -> str:
         """Prepare JSON input for find_related_elements tool."""
+        # Try to extract element ID from context data
+        element_id = self._extract_element_id_from_context(context, task.description)
+        
+        # Determine relationship type from task description
+        desc = task.description.lower()
+        relationship_type = "adjacent"  # default
+        
+        if "spatial" in desc or "space" in desc:
+            relationship_type = "spatial"
+        elif "connect" in desc:
+            relationship_type = "connected"
+        elif "adjacent" in desc:
+            relationship_type = "adjacent"
+        
         return json.dumps({
-            "element_id": "element_to_be_determined",
-            "relationship_type": "adjacent",
+            "element_id": element_id,
+            "relationship_type": relationship_type,
             "parameters": {}
         })
     
@@ -521,20 +535,72 @@ class ToolExecutor:
         """Prepare JSON input for validate_compliance_rule tool."""
         desc = task.description.lower()
         
+        # Determine rule type from task description
         if any(term in desc for term in ["fire", "emergency"]):
             rule_type = "fire_safety"
         elif any(term in desc for term in ["accessibility", "ada"]):
             rule_type = "accessibility"
         elif any(term in desc for term in ["structural", "load"]):
             rule_type = "structural"
+        elif any(term in desc for term in ["stair", "step"]):
+            rule_type = "stair_compliance"
+        elif any(term in desc for term in ["door"]):
+            rule_type = "door_compliance"
         else:
             rule_type = "general"
         
+        # Try to extract element ID from context data
+        element_id = self._extract_element_id_from_context(context, desc)
+        
         return json.dumps({
             "rule_type": rule_type,
-            "element_id": "element_to_be_determined", 
+            "element_id": element_id,
             "criteria": {"extracted_from": task.description}
         })
+    
+    def _extract_element_id_from_context(self, context: Dict[str, Any], description: str) -> str:
+        """Extract appropriate element ID from context based on task description."""
+        desc_lower = description.lower()
+        
+        # Priority order: try to match element type in description to context data
+        if "stair" in desc_lower:
+            # Look for stair elements - return first stair ID if available
+            if "stairs_data" in context and context["stairs_data"]:
+                elements = context["stairs_data"]
+                if isinstance(elements, list) and elements and elements[0].get("id"):
+                    return elements[0]["id"]
+        
+        elif "door" in desc_lower:
+            # Look for door elements  
+            if "doors_data" in context and context["doors_data"]:
+                elements = context["doors_data"]
+                if isinstance(elements, list) and elements and elements[0].get("id"):
+                    return elements[0]["id"]
+        
+        elif "wall" in desc_lower:
+            # Look for wall elements
+            if "walls_data" in context and context["walls_data"]:
+                elements = context["walls_data"]
+                if isinstance(elements, list) and elements and elements[0].get("id"):
+                    return elements[0]["id"]
+        
+        elif "space" in desc_lower:
+            # Look for space elements
+            if "spaces_data" in context and context["spaces_data"]:
+                elements = context["spaces_data"]
+                if isinstance(elements, list) and elements and elements[0].get("id"):
+                    return elements[0]["id"]
+        
+        # Find first available element from any loaded data
+        for element_type in ["stairs_data", "doors_data", "walls_data", "spaces_data", "slabs_data"]:
+            if element_type in context and context[element_type]:
+                elements = context[element_type]
+                if isinstance(elements, list) and elements and elements[0].get("id"):
+                    return elements[0]["id"]
+        
+        # This indicates the agent workflow has a bug - context should always have element data at this point
+        available_keys = [k for k in context.keys() if k.endswith("_data")]
+        raise ValueError(f"No element data found in context for task: {description}. Available data keys: {available_keys}. Context loading may have failed.")
     
     def _extract_search_query(self, task: Task) -> str:
         """Extract search query from task description."""

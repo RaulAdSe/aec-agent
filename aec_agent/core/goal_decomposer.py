@@ -18,6 +18,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import os
+from ..config import AgentConfig
 
 
 class GoalDecomposer:
@@ -27,19 +28,32 @@ class GoalDecomposer:
     Uses LLM-based reasoning with AEC domain knowledge for intelligent task decomposition.
     """
     
-    def __init__(self, llm: ChatOpenAI = None):
-        """Initialize the goal decomposer."""
+    def __init__(self, llm: ChatOpenAI = None, config: Optional[AgentConfig] = None):
+        """Initialize the goal decomposer.
+        
+        Args:
+            llm: Optional pre-configured LLM instance (takes precedence)
+            config: Optional AgentConfig to use for model configuration
+        """
         self.logger = ReasoningUtils.setup_logger(__name__)
         
         # Setup LLM for reasoning
-        if llm is None:
+        if llm is not None:
+            self.llm = llm
+        elif config is not None:
+            # Use config to create LLM
             self.llm = ChatOpenAI(
-                model="gpt-4o-mini",
+                model=config.llm.get_component_model("goal_decomposer"),
+                temperature=config.llm.get_component_temperature("goal_decomposer"),
+                max_tokens=config.llm.get_component_max_tokens("goal_decomposer")
+            )
+        else:
+            # Fallback to defaults (for backward compatibility)
+            self.llm = ChatOpenAI(
+                model="gpt-5-mini",
                 temperature=0.1,
                 max_tokens=2000
             )
-        else:
-            self.llm = llm
         
         # AEC-specific task patterns
         self.aec_patterns = {
@@ -162,6 +176,25 @@ class GoalDecomposer:
                 "error": ReasoningUtils.extract_error_info(e)
             }
     
+    def _create_compliance_dependencies(self, tasks: List[Task]) -> List[Task]:
+        """Fix compliance workflow to have proper dependency structure."""
+        
+        # Find key tasks
+        load_task = next((t for t in tasks if "load" in t.name.lower()), None)
+        compliance_search = next((t for t in tasks if "compliance" in t.name.lower() and "search" in t.name.lower()), None)
+        validation_task = next((t for t in tasks if "validate" in t.name.lower()), None)
+        
+        if load_task and compliance_search:
+            # Compliance search should only depend on data loading
+            compliance_search.dependencies = [load_task.id]
+        
+        if validation_task and compliance_search:
+            # Validation needs compliance search results
+            if compliance_search.id not in validation_task.dependencies:
+                validation_task.dependencies.append(compliance_search.id)
+        
+        return tasks
+
     @traceable(name="llm_goal_decomposition")
     def _llm_decompose_goal(self, goal: str, context: Dict[str, Any]) -> Optional[List[Task]]:
         """Use LLM to intelligently decompose goals into tasks."""
@@ -183,7 +216,7 @@ Available tools for task execution:
 
 Context information: {context}
 
-Break down the goal into 3-6 specific tasks that:
+Break down the goal into 3-8 specific tasks that:
 1. Follow logical dependencies (load data before analysis)
 2. Are concrete and actionable
 3. **Each task must be achievable with exactly ONE tool call** - this is a critical constraint
@@ -194,6 +227,11 @@ Break down the goal into 3-6 specific tasks that:
 - ❌ Bad: "Get all doors and calculate their distances" (requires 2 tools: get_all_elements + calculate_distances)
 - ✅ Good: "Get all door elements" → Task 1 (uses get_all_elements)
            "Calculate distances between doors" → Task 2 (uses calculate_distances, depends on Task 1)
+
+**COMPLIANCE WORKFLOW PATTERN**: For compliance checking goals, ALWAYS create separate tasks:
+- ✅ Good: "Search compliance documents for stair requirements" → Task N (uses search_compliance_documents)
+           "Validate stairs against compliance rules" → Task N+1 (uses validate_rule, depends on Task N)
+- ❌ Bad: "Get compliance rules for stairs" (unclear which tool to use)
 
 Return ONLY a JSON list of task objects like this:
 [
@@ -250,7 +288,7 @@ Priority levels: HIGH, MEDIUM, LOW"""),
                     if file_path:
                         metadata["file_path"] = file_path
                 
-                # Create task with dependencies
+                # Create task with basic linear dependencies first
                 task = Task(
                     id=task_id,
                     name=task_info.get("name", f"Task {i+1}"),
@@ -262,6 +300,9 @@ Priority levels: HIGH, MEDIUM, LOW"""),
                 
                 tasks.append(task)
                 prev_task_id = task_id
+            
+            # Fix dependencies for compliance workflows
+            tasks = self._create_compliance_dependencies(tasks)
             
             self.logger.info(f"LLM successfully decomposed goal into {len(tasks)} tasks")
             return tasks
@@ -302,7 +343,7 @@ Priority levels: HIGH, MEDIUM, LOW"""),
         for i, name in enumerate(task_names):
             task_id = str(uuid.uuid4())
             
-            # Create task with appropriate dependencies
+            # Create task with basic linear dependencies first
             task = Task(
                 id=task_id,
                 name=name,
@@ -318,6 +359,9 @@ Priority levels: HIGH, MEDIUM, LOW"""),
             
             tasks.append(task)
             prev_task_id = task_id
+        
+        # Fix dependencies for compliance workflows
+        tasks = self._create_compliance_dependencies(tasks)
         
         return tasks
     

@@ -412,6 +412,8 @@ class ReasoningController:
                         element_type = "spaces"
                     elif "wall" in task.description.lower():
                         element_type = "walls"
+                    elif "stair" in task.description.lower():
+                        element_type = "stairs"
                     
                     if element_type and result.output.get("data"):
                         self.state.context[f"{element_type}_data"] = result.output["data"]
@@ -444,6 +446,11 @@ class ReasoningController:
         
         return len(completed_tasks) == len(self.state.task_graph.tasks)
     
+    def _is_compliance_critical(self, task: Task) -> bool:
+        """Identify compliance-critical tasks that should never be skipped."""
+        critical_keywords = ["compliance", "search", "validate", "load", "building"]
+        return any(keyword in task.name.lower() for keyword in critical_keywords)
+
     def _handle_blocked_tasks(self) -> bool:
         """Try to unblock tasks that are waiting for dependencies."""
         blocked_tasks = self.state.task_graph.get_blocked_tasks()
@@ -476,7 +483,7 @@ class ReasoningController:
                 # For conversational queries or non-critical tasks, just mark as skipped
                 if (task.metadata.get("is_conversational", False) or 
                     task.metadata.get("is_greeting", False) or 
-                    task.priority.value > 2):  # LOW priority
+                    (task.priority.value > 2 and not self._is_compliance_critical(task))):
                     self.state.task_graph.update_task_status(task.id, TaskStatus.COMPLETED)
                     self.logger.info(f"Skipped non-critical task with failed dependencies: {task.name}")
                     return True

@@ -48,6 +48,8 @@ class TaskGraph:
         
         if tasks:
             self.add_tasks(tasks)
+            # Auto-mark optional tasks based on common patterns
+            self.auto_mark_optional_tasks()
     
     def add_task(self, task: Task) -> bool:
         """
@@ -256,6 +258,45 @@ class TaskGraph:
             del self.tasks[task_id]
         
         return redundant
+    
+    def mark_task_optional(self, task_id: str):
+        """Mark task as optional - failure won't block dependents."""
+        task = self.tasks.get(task_id)
+        if task:
+            task.metadata["optional"] = True
+            self.logger.info(f"Marked task as optional: {task.name}")
+            
+    def handle_optional_task_failure(self, failed_task_id: str):
+        """Remove optional task dependencies when task fails."""
+        failed_task = self.tasks.get(failed_task_id)
+        
+        if failed_task and failed_task.metadata.get("optional", False):
+            # Find tasks that depend on this failed optional task
+            for task in self.tasks.values():
+                if failed_task_id in task.dependencies:
+                    task.dependencies.remove(failed_task_id)
+                    self.logger.info(f"Removed optional dependency {failed_task_id} from {task.name}")
+                    # Unblock if no other dependencies 
+                    if task.status == TaskStatus.BLOCKED and self._all_dependencies_met(task):
+                        task.status = TaskStatus.PENDING
+                        self.logger.info(f"Unblocked task: {task.name}")
+                        
+    def _all_dependencies_met(self, task: Task) -> bool:
+        """Check if all dependencies for a task are met."""
+        for dep_id in task.dependencies:
+            dep_task = self.tasks.get(dep_id)
+            if not dep_task or dep_task.status != TaskStatus.COMPLETED:
+                return False
+        return True
+                    
+    def auto_mark_optional_tasks(self):
+        """Automatically identify and mark optional tasks."""
+        optional_keywords = ["spatial", "relationship", "chart", "visualization", "graph"]
+        
+        for task in self.tasks.values():
+            task_text = f"{task.name.lower()} {task.description.lower()}"
+            if any(keyword in task_text for keyword in optional_keywords):
+                self.mark_task_optional(task.id)
     
     def get_graph_metrics(self) -> GraphMetrics:
         """Get comprehensive metrics about the graph state."""
