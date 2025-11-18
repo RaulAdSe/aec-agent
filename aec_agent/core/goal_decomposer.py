@@ -89,6 +89,39 @@ class GoalDecomposer:
         self.logger.info(f"Decomposing goal: {goal}")
         
         try:
+            # Intelligent query classification: Use LLM to decide if this needs technical analysis
+            core_query = goal.strip()
+            
+            # Remove common Streamlit context additions
+            if "\n\nNote:" in core_query:
+                core_query = core_query.split("\n\nNote:")[0].strip()
+            
+            # Use LLM to intelligently classify the query
+            is_simple_query = self._is_conversational_query(core_query, context)
+            
+            if is_simple_query:
+                # For conversational queries, create a single simple response task
+                task_id = str(uuid.uuid4())
+                simple_task = Task(
+                    id=task_id,
+                    name="Handle conversational query",
+                    description=f"Provide conversational response to: {core_query}",
+                    priority=Priority.HIGH,
+                    dependencies=[],
+                    metadata={
+                        "method": "simple_query_handler",
+                        "original_goal": core_query,
+                        "is_conversational": True,
+                        "core_query": core_query
+                    }
+                )
+                
+                return {
+                    "success": True,
+                    "tasks": [simple_task],
+                    "method": "conversational_response",
+                    "message": f"Handling as conversational query: {core_query}"
+                }
             # First try LLM-based decomposition for intelligent analysis
             llm_tasks = self._llm_decompose_goal(goal, context)
             if llm_tasks:
@@ -141,11 +174,11 @@ Your job is to break down complex building analysis goals into specific, actiona
 Available tools for task execution:
 - load_building_data: Load IFC JSON building data files
 - get_all_elements: Get all elements of a specific type (spaces, doors, walls, etc.)
-- get_element_properties: Get detailed properties of specific elements  
+- get_all_properties: Get detailed properties of specific elements  
 - query_elements: Filter elements with specific criteria (JSON input)
-- calculate_metrics: Perform calculations (areas, volumes, counts, etc.)
-- find_related_elements: Find spatial relationships between elements
-- validate_compliance_rule: Check elements against compliance rules
+- calculate: Perform calculations (distances, areas, volumes, counts, etc.)
+- find_related: Find spatial relationships between elements
+- validate_rule: Check elements against compliance rules
 - search_compliance_documents: Search building codes and regulations
 
 Context information: {context}
@@ -322,3 +355,70 @@ Priority levels: HIGH, MEDIUM, LOW"""),
             if '.json' in word or 'data/' in word:
                 return word.strip('",.')
         return None
+    
+    @traceable(name="query_classification")
+    def _is_conversational_query(self, query: str, context: Dict[str, Any]) -> bool:
+        """
+        Use LLM to intelligently classify if a query is conversational vs technical.
+        
+        Args:
+            query: The user's query
+            context: Current context for additional information
+            
+        Returns:
+            True if this is a conversational query, False if it needs technical analysis
+        """
+        
+        # Create classification prompt
+        classification_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are an expert at classifying user queries for an AEC (Architecture, Engineering, Construction) compliance agent.
+
+Your job is to determine if a user query is:
+1. CONVERSATIONAL: Greetings, social interaction, thanks, general questions about capabilities
+2. TECHNICAL: Requires building analysis, compliance checking, data extraction, calculations
+
+CONVERSATIONAL examples:
+- "Hello", "Hi", "Buenos días", "Good morning" 
+- "Thank you", "Thanks", "Gracias"
+- "How are you?", "What can you do?"
+- "Goodbye", "See you later", "Adiós"
+- "Yes", "No", "OK", "Great!"
+- General capability questions like "What kind of analysis can you do?"
+
+TECHNICAL examples:
+- "Show me all doors"
+- "Check fire safety compliance"
+- "Calculate distances between elements"
+- "Where are the exits?"
+- "Load building data"
+- "Analyze accessibility requirements"
+- Questions about specific building elements, properties, or compliance
+
+Context: The agent has access to building models and compliance documents.
+
+Respond with ONLY "CONVERSATIONAL" or "TECHNICAL" - nothing else."""),
+            ("human", "Query: {query}")
+        ])
+        
+        try:
+            # Execute classification
+            chain = classification_prompt | self.llm | StrOutputParser()
+            response = chain.invoke({"query": query})
+            
+            classification = response.strip().upper()
+            
+            if classification == "CONVERSATIONAL":
+                self.logger.info(f"Classified as conversational: {query}")
+                return True
+            elif classification == "TECHNICAL":
+                self.logger.info(f"Classified as technical: {query}")
+                return False
+            else:
+                # If unclear response, default to technical to be safe
+                self.logger.warning(f"Unclear classification '{classification}' for query '{query}', defaulting to technical")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Query classification failed: {e}, defaulting to technical")
+            # If classification fails, default to technical analysis to be safe
+            return False

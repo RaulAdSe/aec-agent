@@ -141,21 +141,20 @@ class ToolExecutor:
         elif tool_name == "get_all_elements":
             return self._extract_element_type(task)
             
+        elif tool_name == "get_all_properties":
+            return self._prepare_properties_input(task, context)
+            
         elif tool_name == "query_elements":
             return self._prepare_query_input(task, context)
             
-        elif tool_name == "calculate_distances":
-            distance_params = self._prepare_distance_input(task, context)
-            return json.dumps(distance_params)
+        elif tool_name == "calculate":
+            calc_params = self._prepare_calculation_input(task, context)
+            return json.dumps(calc_params)
             
-        elif tool_name == "calculate_areas":
-            area_params = self._prepare_area_input(task, context)
-            return json.dumps(area_params)
-            
-        elif tool_name == "find_related_elements":
+        elif tool_name == "find_related":
             return self._prepare_relationship_input(task, context)
             
-        elif tool_name == "validate_compliance_rule":
+        elif tool_name == "validate_rule":
             return self._prepare_validation_input(task, context)
             
         elif tool_name == "search_compliance_documents":
@@ -164,6 +163,10 @@ class ToolExecutor:
         elif tool_name == "document_findings":
             doc_params = self._prepare_documentation_input(task, context)
             return json.dumps(doc_params)
+            
+        elif tool_name == "simple_response":
+            # Extract the original query from the task
+            return task.metadata.get("original_goal", task.description)
             
         else:
             # No generic fallback - fail explicitly for unknown tools
@@ -387,17 +390,77 @@ class ToolExecutor:
             
         return content
     
-    def _prepare_distance_input(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Prepare input for calculate_distances tool - focused on distance calculations only."""
+    def _prepare_properties_input(self, task: Task, context: Dict[str, Any]) -> str:
+        """Prepare input for get_all_properties tool - needs an element_id."""
+        desc = task.description.lower()
+        
+        # Try to get element data from context
+        doors_data = context.get("doors_data", [])
+        stairs_data = context.get("stairs_data", [])
+        
+        # Determine element type from task description
+        if any(word in desc for word in ["door", "doors"]):
+            if doors_data:
+                # Use first door element
+                door_id = doors_data[0].get("id") if doors_data[0] else None
+                if door_id:
+                    return door_id
+                    
+        elif any(word in desc for word in ["stair", "stairs"]):
+            if stairs_data:
+                # Use first stair element
+                stair_id = stairs_data[0].get("id") if stairs_data[0] else None
+                if stair_id:
+                    return stair_id
+        
+        # Try to extract element ID from description
+        words = desc.split()
+        for word in words:
+            # Look for ID-like patterns
+            if any(char.isdigit() for char in word) and any(char.isalpha() for char in word):
+                return word.strip(',.()[]')
+        
+        # Default - return a placeholder that indicates we need an element ID
+        return "ELEMENT_ID_REQUIRED"
+    
+    def _prepare_calculation_input(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare input for calculate tool - handles distance, area, and volume calculations."""
+        desc = task.description.lower()
+        
+        # Determine calculation type based on description
+        if any(term in desc for term in ["distance", "far", "between", "apart"]):
+            return self._prepare_distance_calculation(task, context)
+        elif any(term in desc for term in ["area", "volume", "square", "cubic", "m2", "m3"]):
+            return self._prepare_area_calculation(task, context)
+        else:
+            # Default to distance if unclear
+            return self._prepare_distance_calculation(task, context)
+    
+    def _prepare_distance_calculation(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare distance calculation parameters."""
         desc = task.description.lower()
         
         # Check if we have door data in context from previous operations  
         doors_data = context.get("doors_data", [])
-        if doors_data and len(doors_data) >= 2:
-            # We have door data - set up pairwise distance calculation for first two doors
+        stairs_data = context.get("stairs_data", [])
+        
+        # Handle door-to-stair distance
+        if doors_data and stairs_data:
+            door_ids = [door.get("id") for door in doors_data if door.get("id")]
+            stair_ids = [stair.get("id") for stair in stairs_data if stair.get("id")]
+            if door_ids and stair_ids:
+                return {
+                    "operation": "distance_between_elements",
+                    "element1_id": door_ids[0],  # First door
+                    "element2_id": stair_ids[0]  # First stair
+                }
+        
+        # Handle door-to-door distance
+        elif doors_data and len(doors_data) >= 2:
             door_ids = [door.get("id") for door in doors_data if door.get("id")]
             if len(door_ids) >= 2:
                 return {
+                    "operation": "distance_between_elements",
                     "element1_id": door_ids[0],
                     "element2_id": door_ids[1]
                 }
@@ -412,25 +475,22 @@ class ToolExecutor:
         
         if len(possible_ids) >= 2:
             return {
+                "operation": "distance_between_elements",
                 "element1_id": possible_ids[0],
                 "element2_id": possible_ids[1]
             }
         
         # Default - indicate that element IDs are needed
         return {
+            "operation": "distance_between_elements",
             "element1_id": "ELEMENT_ID_REQUIRED",
             "element2_id": "ELEMENT_ID_REQUIRED",
             "note": "Element IDs must be obtained from get_all_elements first"
         }
     
-    def _prepare_area_input(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Prepare input for calculate_areas tool - focused on area/volume calculations only."""
+    def _prepare_area_calculation(self, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare area/volume calculation parameters."""
         desc = task.description.lower()
-        
-        # Determine if this is area or volume calculation
-        calculation_type = "area"  # Default
-        if any(term in desc for term in ["volume", "cubic", "m3", "cubic meters"]):
-            calculation_type = "volume"
         
         # Try to get element data from context
         spaces_data = context.get("spaces_data", [])
@@ -438,14 +498,14 @@ class ToolExecutor:
             element_ids = [space.get("id") for space in spaces_data if space.get("id")]
             if element_ids:
                 return {
-                    "element_ids": element_ids,
-                    "calculation_type": calculation_type
+                    "operation": "area_sum",
+                    "element_ids": element_ids
                 }
         
         # Default - indicate that element IDs are needed
         return {
+            "operation": "area_sum",
             "element_ids": ["ELEMENT_IDS_REQUIRED"],
-            "calculation_type": calculation_type,
             "note": "Element IDs must be obtained from get_all_elements first"
         }
     
